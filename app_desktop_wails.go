@@ -21,6 +21,7 @@ type wailsDesktopController struct {
 	lastOverlaySkip   bool
 	lastOverlayLang   string
 	lastOverlayText   string
+	lastOverlayTheme  string
 	lastRuntimeTick   time.Time
 	smoothedNextEye   int
 	smoothedNextStand int
@@ -77,7 +78,7 @@ func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
 			settings := app.engine.GetSettings()
 			state := app.engine.GetRuntimeState(now)
 			c.syncStatusBar(state, settings, gapMs)
-			c.syncOverlay(ctx, state)
+			c.syncOverlay(ctx, state, settings)
 		}
 	}
 }
@@ -148,21 +149,22 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 	}
 }
 
-func (c *wailsDesktopController) syncOverlay(ctx context.Context, state config.RuntimeState) {
+func (c *wailsDesktopController) syncOverlay(ctx context.Context, state config.RuntimeState, settings config.Settings) {
 	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting" && state.OverlayEnabled
 	overlaySkipAllowed := overlayActive && state.OverlaySkipAllowed && state.CurrentSession != nil && state.CurrentSession.CanSkip
 	language := c.lastLanguage
+	theme := resolveEffectiveTheme(settings.UI.Theme)
 	overlayText := ""
 	if overlayActive && state.CurrentSession != nil {
 		overlayText = overlayCountdownText(language, state.CurrentSession.RemainingSec)
 	}
 
 	if c.overlay.IsNative() {
-		needsUpdate := overlayActive != c.lastOverlayActive || overlaySkipAllowed != c.lastOverlaySkip || language != c.lastOverlayLang || overlayText != c.lastOverlayText
+		needsUpdate := overlayActive != c.lastOverlayActive || overlaySkipAllowed != c.lastOverlaySkip || language != c.lastOverlayLang || overlayText != c.lastOverlayText || theme != c.lastOverlayTheme
 		if needsUpdate {
-			diag.Logf("desktop.overlay native active=%t allow_skip=%t text=%q", overlayActive, overlaySkipAllowed, overlayText)
+			diag.Logf("desktop.overlay native active=%t allow_skip=%t text=%q theme=%s", overlayActive, overlaySkipAllowed, overlayText, theme)
 			if overlayActive {
-				c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText)
+				c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, theme)
 			} else {
 				c.overlay.Hide()
 			}
@@ -171,6 +173,7 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state config.R
 		c.lastOverlaySkip = overlaySkipAllowed
 		c.lastOverlayLang = language
 		c.lastOverlayText = overlayText
+		c.lastOverlayTheme = theme
 		return
 	}
 
@@ -189,6 +192,7 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state config.R
 	c.lastOverlaySkip = overlaySkipAllowed
 	c.lastOverlayLang = language
 	c.lastOverlayText = overlayText
+	c.lastOverlayTheme = theme
 }
 
 func (c *wailsDesktopController) logErr(ctx context.Context, err error) {

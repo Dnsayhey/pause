@@ -27,7 +27,6 @@ export const enUS = {
   intervalSec: 'Interval (sec)',
   breakSec: 'Break (sec)',
   sectionSettings: 'Settings',
-  overlayEnabled: 'Overlay enforcement enabled',
   overlaySkipAllowed: 'Allow skip during break',
   timerMode: 'Timer mode',
   timerModeIdlePause: 'Idle pause',

@@ -17,6 +17,7 @@ static BOOL pauseOverlayVisible;
 static BOOL pauseOverlayAllowSkip;
 static NSString *pauseOverlaySkipButtonTitle;
 static NSString *pauseOverlayCountdownText;
+static NSString *pauseOverlayTheme;
 static const NSTimeInterval pauseOverlayFadeDuration = 2.0;
 
 @interface PauseOverlayHandler : NSObject
@@ -46,7 +47,49 @@ static void PauseOverlayEnsureHandler(void) {
     }
 }
 
-static NSButton *PauseOverlayBuildSkipButton(NSString *title) {
+static BOOL PauseOverlayThemeIsDark(NSString *theme) {
+    if (theme == nil) {
+        return YES;
+    }
+    return [[theme lowercaseString] isEqualToString:@"dark"];
+}
+
+static NSColor *PauseOverlayBackgroundColorForTheme(NSString *theme) {
+    if (PauseOverlayThemeIsDark(theme)) {
+        return [NSColor colorWithSRGBRed:0.0 green:0.0 blue:0.0 alpha:1.0];
+    }
+    return [NSColor colorWithSRGBRed:1.0 green:1.0 blue:1.0 alpha:1.0];
+}
+
+static NSColor *PauseOverlayCountdownColorForTheme(NSString *theme) {
+    if (PauseOverlayThemeIsDark(theme)) {
+        return [NSColor colorWithSRGBRed:0.90 green:0.91 blue:0.93 alpha:1.0];
+    }
+    return [NSColor colorWithSRGBRed:0.08 green:0.08 blue:0.08 alpha:1.0];
+}
+
+static NSColor *PauseOverlayButtonBackgroundColorForTheme(NSString *theme) {
+    if (PauseOverlayThemeIsDark(theme)) {
+        return [NSColor colorWithSRGBRed:0.13 green:0.14 blue:0.16 alpha:0.98];
+    }
+    return [NSColor colorWithSRGBRed:0.96 green:0.96 blue:0.96 alpha:0.98];
+}
+
+static NSColor *PauseOverlayButtonBorderColorForTheme(NSString *theme) {
+    if (PauseOverlayThemeIsDark(theme)) {
+        return [NSColor colorWithSRGBRed:0.36 green:0.37 blue:0.40 alpha:0.92];
+    }
+    return [NSColor colorWithSRGBRed:0.20 green:0.20 blue:0.20 alpha:0.22];
+}
+
+static NSColor *PauseOverlayButtonTextColorForTheme(NSString *theme) {
+    if (PauseOverlayThemeIsDark(theme)) {
+        return [NSColor colorWithSRGBRed:0.92 green:0.93 blue:0.95 alpha:1.0];
+    }
+    return [NSColor colorWithSRGBRed:0.08 green:0.08 blue:0.08 alpha:1.0];
+}
+
+static NSButton *PauseOverlayBuildSkipButton(NSString *title, NSString *theme) {
     NSButton *button = [NSButton buttonWithTitle:title target:pauseOverlayHandler action:@selector(onSkipButtonClick:)];
     [button setBezelStyle:NSBezelStyleRegularSquare];
     [button setBordered:NO];
@@ -57,10 +100,10 @@ static NSButton *PauseOverlayBuildSkipButton(NSString *title) {
     [button.layer setCornerRadius:10.0];
     [button.layer setBorderWidth:1.0];
     [button.layer setMasksToBounds:YES];
-    [button.layer setBackgroundColor:[[NSColor colorWithSRGBRed:0.86 green:0.88 blue:0.90 alpha:0.98] CGColor]];
-    [button.layer setBorderColor:[[NSColor colorWithSRGBRed:0.73 green:0.76 blue:0.80 alpha:0.92] CGColor]];
+    [button.layer setBackgroundColor:[PauseOverlayButtonBackgroundColorForTheme(theme) CGColor]];
+    [button.layer setBorderColor:[PauseOverlayButtonBorderColorForTheme(theme) CGColor]];
     NSDictionary *attrs = @{
-        NSForegroundColorAttributeName: [NSColor colorWithSRGBRed:0.18 green:0.19 blue:0.21 alpha:1.0],
+        NSForegroundColorAttributeName: PauseOverlayButtonTextColorForTheme(theme),
         NSFontAttributeName: [NSFont systemFontOfSize:14 weight:NSFontWeightSemibold]
     };
     NSAttributedString *styledTitle = [[[NSAttributedString alloc] initWithString:title attributes:attrs] autorelease];
@@ -89,13 +132,13 @@ static void PauseOverlayUpdateCountdownTextOnMain(NSString *countdownText) {
     }
 }
 
-static NSWindow *PauseOverlayBuildWindowForScreen(NSScreen *screen, BOOL allowSkip, NSString *skipButtonTitle, NSString *countdownText, NSTextField **outCountdownLabel) {
+static NSWindow *PauseOverlayBuildWindowForScreen(NSScreen *screen, BOOL allowSkip, NSString *skipButtonTitle, NSString *countdownText, NSString *theme, NSTextField **outCountdownLabel) {
     NSRect screenFrame = [screen frame];
     NSRect initialRect = NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height);
     NSWindow *window = [[NSWindow alloc] initWithContentRect:initialRect styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     [window setFrame:screenFrame display:NO];
     [window setOpaque:YES];
-    [window setBackgroundColor:[NSColor colorWithSRGBRed:0.945098 green:0.945098 blue:0.945098 alpha:1.0]];
+    [window setBackgroundColor:PauseOverlayBackgroundColorForTheme(theme)];
     [window setHasShadow:NO];
     [window setIgnoresMouseEvents:NO];
     [window setLevel:NSScreenSaverWindowLevel];
@@ -109,7 +152,7 @@ static NSWindow *PauseOverlayBuildWindowForScreen(NSScreen *screen, BOOL allowSk
     if (contentView != nil) {
         countdownLabel = [NSTextField labelWithString:(countdownText != nil ? countdownText : @"")];
         [countdownLabel setFont:[NSFont monospacedDigitSystemFontOfSize:30 weight:NSFontWeightMedium]];
-        [countdownLabel setTextColor:[NSColor colorWithSRGBRed:0.28 green:0.28 blue:0.28 alpha:1.0]];
+        [countdownLabel setTextColor:PauseOverlayCountdownColorForTheme(theme)];
         [countdownLabel setAlignment:NSTextAlignmentCenter];
         [countdownLabel setLineBreakMode:NSLineBreakByTruncatingTail];
         [countdownLabel setTranslatesAutoresizingMaskIntoConstraints:NO];
@@ -118,7 +161,7 @@ static NSWindow *PauseOverlayBuildWindowForScreen(NSScreen *screen, BOOL allowSk
 
     if (allowSkip) {
         if (contentView != nil) {
-            NSButton *skipButton = PauseOverlayBuildSkipButton(skipButtonTitle);
+            NSButton *skipButton = PauseOverlayBuildSkipButton(skipButtonTitle, theme);
             [contentView addSubview:skipButton];
 
             [NSLayoutConstraint activateConstraints:@[
@@ -151,6 +194,10 @@ static void PauseOverlayHideOnMain(void) {
     if (pauseOverlayCountdownText != nil) {
         [pauseOverlayCountdownText release];
         pauseOverlayCountdownText = nil;
+    }
+    if (pauseOverlayTheme != nil) {
+        [pauseOverlayTheme release];
+        pauseOverlayTheme = nil;
     }
     if (pauseOverlayCountdownLabels != nil) {
         [pauseOverlayCountdownLabels release];
@@ -189,9 +236,10 @@ void PauseBreakOverlayInit(void) {
     });
 }
 
-void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText) {
+void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *theme) {
     NSString *skipTitle = skipButtonTitle ? [NSString stringWithUTF8String:skipButtonTitle] : @"Emergency Skip";
     NSString *countdown = countdownText ? [NSString stringWithUTF8String:countdownText] : @"";
+    NSString *overlayTheme = theme ? [NSString stringWithUTF8String:theme] : @"dark";
     BOOL shouldAllowSkip = allowSkip != 0;
 
     PauseOverlayRunOnMain(^{
@@ -199,7 +247,8 @@ void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const cha
         BOOL sameScreenCount = pauseOverlayVisible && pauseOverlayWindows != nil && screens != nil && [pauseOverlayWindows count] == [screens count];
         BOOL sameSkipSetting = pauseOverlayVisible && (pauseOverlayAllowSkip == shouldAllowSkip);
         BOOL sameTitle = (pauseOverlaySkipButtonTitle == nil && skipTitle == nil) || [pauseOverlaySkipButtonTitle isEqualToString:skipTitle];
-        if (sameScreenCount && sameSkipSetting && sameTitle) {
+        BOOL sameTheme = (pauseOverlayTheme == nil && overlayTheme == nil) || [pauseOverlayTheme isEqualToString:overlayTheme];
+        if (sameScreenCount && sameSkipSetting && sameTitle && sameTheme) {
             PauseOverlayUpdateCountdownTextOnMain(countdown);
             return;
         }
@@ -216,11 +265,12 @@ void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const cha
         pauseOverlayAllowSkip = shouldAllowSkip;
         pauseOverlaySkipButtonTitle = [skipTitle copy];
         pauseOverlayCountdownText = [countdown copy];
+        pauseOverlayTheme = [overlayTheme copy];
 
         for (NSUInteger i = 0; i < [screens count]; i++) {
             NSScreen *screen = [screens objectAtIndex:i];
             NSTextField *countdownLabel = nil;
-            NSWindow *window = PauseOverlayBuildWindowForScreen(screen, shouldAllowSkip, skipTitle, countdown, &countdownLabel);
+            NSWindow *window = PauseOverlayBuildWindowForScreen(screen, shouldAllowSkip, skipTitle, countdown, overlayTheme, &countdownLabel);
             if (window == nil) {
                 continue;
             }

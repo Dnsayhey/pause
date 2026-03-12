@@ -31,6 +31,7 @@ type TimerSettings struct {
 type UISettings struct {
 	ShowTrayCountdown bool   `json:"showTrayCountdown"`
 	Language          string `json:"language"`
+	Theme             string `json:"theme"`
 }
 
 type StartupSettings struct {
@@ -72,6 +73,7 @@ type TimerSettingsPatch struct {
 type UISettingsPatch struct {
 	ShowTrayCountdown *bool   `json:"showTrayCountdown,omitempty"`
 	Language          *string `json:"language,omitempty"`
+	Theme             *string `json:"theme,omitempty"`
 }
 
 type StartupSettingsPatch struct {
@@ -146,6 +148,7 @@ func DefaultSettings() Settings {
 		UI: UISettings{
 			ShowTrayCountdown: true,
 			Language:          UILanguageAuto,
+			Theme:             UIThemeAuto,
 		},
 		Startup: StartupSettings{
 			LaunchAtLogin: false,
@@ -155,6 +158,7 @@ func DefaultSettings() Settings {
 
 func (s Settings) Normalize() Settings {
 	d := DefaultSettings()
+	s.Enforcement.OverlayEnabled = true
 
 	if s.Eye.IntervalSec <= 0 {
 		s.Eye.IntervalSec = d.Eye.IntervalSec
@@ -180,6 +184,10 @@ func (s Settings) Normalize() Settings {
 	s.UI.Language = NormalizeUILanguage(s.UI.Language)
 	if s.UI.Language == "" {
 		s.UI.Language = d.UI.Language
+	}
+	s.UI.Theme = NormalizeUITheme(s.UI.Theme)
+	if s.UI.Theme == "" {
+		s.UI.Theme = d.UI.Theme
 	}
 
 	return s
@@ -212,9 +220,7 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 		}
 	}
 	if p.Enforcement != nil {
-		if p.Enforcement.OverlayEnabled != nil {
-			s.Enforcement.OverlayEnabled = *p.Enforcement.OverlayEnabled
-		}
+		// v1 policy: overlay enforcement is always enabled.
 		if p.Enforcement.OverlaySkipAllowed != nil {
 			s.Enforcement.OverlaySkipAllowed = *p.Enforcement.OverlaySkipAllowed
 		}
@@ -241,6 +247,9 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 		}
 		if p.UI.Language != nil {
 			s.UI.Language = *p.UI.Language
+		}
+		if p.UI.Theme != nil {
+			s.UI.Theme = *p.UI.Theme
 		}
 	}
 	if p.Startup != nil {

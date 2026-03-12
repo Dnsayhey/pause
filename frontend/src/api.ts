@@ -17,7 +17,7 @@ const fallbackSettings: Settings = {
   enforcement: { overlayEnabled: true, overlaySkipAllowed: true },
   sound: { enabled: true, volume: 70 },
   timer: { mode: 'idle_pause', idlePauseThresholdSec: 300 },
-  ui: { showTrayCountdown: true, language: 'auto' },
+  ui: { showTrayCountdown: true, language: 'auto', theme: 'auto' },
   startup: { launchAtLogin: false }
 };
 

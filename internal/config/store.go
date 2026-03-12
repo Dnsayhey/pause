@@ -1,11 +1,13 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 type Store struct {
@@ -70,14 +72,26 @@ func (s *Store) load() error {
 	}
 
 	settings := DefaultSettings()
-	if len(data) > 0 {
+	if len(bytes.TrimSpace(data)) > 0 {
 		if err := json.Unmarshal(data, &settings); err != nil {
-			return err
+			if err := s.backupCorruptedConfigLocked(data); err != nil {
+				return err
+			}
+			s.settings = DefaultSettings()
+			return s.saveLocked()
 		}
 	}
 
 	s.settings = settings.Normalize()
 	return nil
+}
+
+func (s *Store) backupCorruptedConfigLocked(data []byte) error {
+	dir := filepath.Dir(s.path)
+	name := filepath.Base(s.path)
+	stamp := time.Now().UTC().Format("20060102-150405")
+	backupPath := filepath.Join(dir, name+".corrupt."+stamp+".bak")
+	return os.WriteFile(backupPath, data, 0o644)
 }
 
 func (s *Store) saveLocked() error {

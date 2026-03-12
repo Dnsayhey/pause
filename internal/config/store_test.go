@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -19,6 +20,9 @@ func TestStoreCreatesDefaults(t *testing.T) {
 	}
 	if !got.Enforcement.OverlayEnabled {
 		t.Fatalf("expected overlay enabled by default")
+	}
+	if got.UI.Theme != UIThemeAuto {
+		t.Fatalf("expected default theme %q, got %q", UIThemeAuto, got.UI.Theme)
 	}
 }
 
@@ -54,12 +58,40 @@ func TestStoreUpdatePersists(t *testing.T) {
 	}
 }
 
+func TestStoreRecoversFromCorruptedConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(path, []byte("{bad json"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	got := store.Get()
+	want := DefaultSettings()
+	if got.UI.Theme != want.UI.Theme {
+		t.Fatalf("expected default theme %q after recovery, got %q", want.UI.Theme, got.UI.Theme)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(dir, "settings.json.corrupt.*.bak"))
+	if err != nil {
+		t.Fatalf("Glob() error = %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("expected 1 backup file, got %d", len(matches))
+	}
+}
+
 func TestApplyPatchNormalizesValues(t *testing.T) {
 	base := DefaultSettings()
 	badMode := "bad_mode"
 	badVolume := 999
 	badThreshold := -1
 	badLanguage := "fr-FR"
+	badTheme := "sepia"
 
 	got := base.ApplyPatch(SettingsPatch{
 		Sound: &SoundSettingsPatch{Volume: &badVolume},
@@ -69,6 +101,7 @@ func TestApplyPatchNormalizesValues(t *testing.T) {
 		},
 		UI: &UISettingsPatch{
 			Language: &badLanguage,
+			Theme:    &badTheme,
 		},
 	})
 
@@ -83,6 +116,28 @@ func TestApplyPatchNormalizesValues(t *testing.T) {
 	}
 	if got.UI.Language != base.UI.Language {
 		t.Fatalf("expected language fallback to %q, got %q", base.UI.Language, got.UI.Language)
+	}
+	if got.UI.Theme != base.UI.Theme {
+		t.Fatalf("expected theme fallback to %q, got %q", base.UI.Theme, got.UI.Theme)
+	}
+}
+
+func TestOverlayEnforcementAlwaysEnabled(t *testing.T) {
+	base := DefaultSettings()
+	base.Enforcement.OverlayEnabled = false
+	normalized := base.Normalize()
+	if !normalized.Enforcement.OverlayEnabled {
+		t.Fatalf("expected Normalize() to force overlay enabled")
+	}
+
+	overlayOff := false
+	patched := normalized.ApplyPatch(SettingsPatch{
+		Enforcement: &EnforcementSettingsPatch{
+			OverlayEnabled: &overlayOff,
+		},
+	})
+	if !patched.Enforcement.OverlayEnabled {
+		t.Fatalf("expected ApplyPatch() to keep overlay enabled")
 	}
 }
 
@@ -104,6 +159,26 @@ func TestNormalizeUILanguage(t *testing.T) {
 		got := NormalizeUILanguage(tc.input)
 		if got != tc.want {
 			t.Fatalf("NormalizeUILanguage(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizeUITheme(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{input: "", want: UIThemeAuto},
+		{input: "auto", want: UIThemeAuto},
+		{input: "light", want: UIThemeLight},
+		{input: "dark", want: UIThemeDark},
+		{input: "unknown", want: UIThemeAuto},
+	}
+
+	for _, tc := range cases {
+		got := NormalizeUITheme(tc.input)
+		if got != tc.want {
+			t.Fatalf("NormalizeUITheme(%q) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
 }

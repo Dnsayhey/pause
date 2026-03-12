@@ -9,7 +9,7 @@ package main
 #include <stdlib.h>
 
 void PauseBreakOverlayInit(void);
-void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText);
+void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *theme);
 void PauseBreakOverlayHide(void);
 void PauseBreakOverlayDestroy(void);
 */
@@ -38,17 +38,19 @@ func (darwinBreakOverlayController) Init(onSkip func()) {
 	C.PauseBreakOverlayInit()
 }
 
-func (darwinBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, countdownText string) {
+func (darwinBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, countdownText string, theme string) {
 	cTitle := C.CString(skipButtonTitle)
 	cCountdown := C.CString(countdownText)
+	cTheme := C.CString(theme)
 	defer C.free(unsafe.Pointer(cTitle))
 	defer C.free(unsafe.Pointer(cCountdown))
+	defer C.free(unsafe.Pointer(cTheme))
 
 	cAllowSkip := C.int(0)
 	if allowSkip {
 		cAllowSkip = 1
 	}
-	C.PauseBreakOverlayShow(cAllowSkip, cTitle, cCountdown)
+	C.PauseBreakOverlayShow(cAllowSkip, cTitle, cCountdown, cTheme)
 }
 
 func (darwinBreakOverlayController) Hide() {

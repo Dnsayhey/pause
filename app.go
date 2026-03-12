@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"pause/internal/config"
+	"pause/internal/diag"
 	"pause/internal/platform"
 	"pause/internal/service"
 )
@@ -54,7 +55,9 @@ func NewApp(configPath string) (*App, error) {
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	_ = a.engine.SyncPlatformSettings()
+	if err := a.engine.SyncPlatformSettings(); err != nil {
+		diag.Logf("app.startup sync_platform_settings_err=%v", err)
+	}
 	a.engine.Start(ctx)
 	if a.desktop != nil {
 		a.desktop.OnStartup(ctx, a)

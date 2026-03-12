@@ -80,7 +80,13 @@ func (e *Engine) SyncPlatformSettings() error {
 	defer e.mu.Unlock()
 
 	settings := e.store.Get()
-	return e.startupManager.SetLaunchAtLogin(settings.Startup.LaunchAtLogin)
+	// Do not re-apply launch-at-login "enabled" on every app startup.
+	// On macOS this can trigger launchd reload while the app is booting,
+	// causing slow startup and potential self-termination.
+	if settings.Startup.LaunchAtLogin {
+		return nil
+	}
+	return e.startupManager.SetLaunchAtLogin(false)
 }
 
 func (e *Engine) Start(ctx context.Context) {

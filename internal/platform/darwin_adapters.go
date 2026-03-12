@@ -144,9 +144,11 @@ func (s darwinStartupManager) SetLaunchAtLogin(enabled bool) error {
 	if err != nil {
 		return err
 	}
+	domain := fmt.Sprintf("gui/%d", os.Getuid())
 
 	if !enabled {
-		_ = exec.Command("launchctl", "unload", "-w", plistPath).Run()
+		_ = runLaunchctl("bootout", domain, plistPath)
+		_ = runLaunchctl("disable", domain+"/"+s.appID)
 		if err := os.Remove(plistPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -155,6 +157,13 @@ func (s darwinStartupManager) SetLaunchAtLogin(enabled bool) error {
 
 	execPath, err := os.Executable()
 	if err != nil {
+		return err
+	}
+	resolvedExecPath, err := filepath.EvalSymlinks(execPath)
+	if err == nil && strings.TrimSpace(resolvedExecPath) != "" {
+		execPath = resolvedExecPath
+	}
+	if err := validateStartupExecutablePath(execPath); err != nil {
 		return err
 	}
 
@@ -167,8 +176,41 @@ func (s darwinStartupManager) SetLaunchAtLogin(enabled bool) error {
 		return err
 	}
 
-	_ = exec.Command("launchctl", "unload", "-w", plistPath).Run()
-	_ = exec.Command("launchctl", "load", "-w", plistPath).Run()
+	_ = runLaunchctl("enable", domain+"/"+s.appID)
+	if err := runLaunchctl("bootstrap", domain, plistPath); err != nil && !isLaunchctlAlreadyLoadedError(err) {
+		return err
+	}
+	return nil
+}
+
+func runLaunchctl(args ...string) error {
+	cmd := exec.Command("launchctl", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			msg = err.Error()
+		}
+		return fmt.Errorf("launchctl %s failed: %s", strings.Join(args, " "), msg)
+	}
+	return nil
+}
+
+func isLaunchctlAlreadyLoadedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "already bootstrapped") || strings.Contains(msg, "already loaded")
+}
+
+func validateStartupExecutablePath(execPath string) error {
+	if strings.HasPrefix(execPath, "/Volumes/") {
+		return errors.New("Pause is running from a mounted volume; move Pause.app to /Applications and re-enable launch at login")
+	}
+	if strings.Contains(execPath, "/AppTranslocation/") {
+		return errors.New("Pause is running from App Translocation; move Pause.app to /Applications and re-enable launch at login")
+	}
 	return nil
 }
 

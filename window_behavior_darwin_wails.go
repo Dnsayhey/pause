@@ -41,6 +41,18 @@ static void PauseDisableWindowMinimize(NSWindow *window) {
     }
 }
 
+static void PauseDisableWindowZoom(NSWindow *window) {
+    if (window == nil) {
+        return;
+    }
+
+    NSButton *zoomButton = [window standardWindowButton:NSWindowZoomButton];
+    if (zoomButton != nil) {
+        [zoomButton setEnabled:NO];
+        [zoomButton setHidden:NO];
+    }
+}
+
 static void PauseConfigureWindowTitle(NSWindow *window) {
     if (window == nil) {
         return;
@@ -59,6 +71,7 @@ void PauseConfigureDesktopWindowBehavior(void) {
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
         NSWindow *window = PauseResolveMainWindow();
         PauseDisableWindowMinimize(window);
+        PauseDisableWindowZoom(window);
         PauseConfigureWindowTitle(window);
     });
 }
@@ -71,6 +84,7 @@ void PauseShowMainWindowNoActivate(void) {
         }
 
         PauseDisableWindowMinimize(window);
+        PauseDisableWindowZoom(window);
         PauseConfigureWindowTitle(window);
 
         if ([window isMiniaturized]) {
@@ -89,6 +103,7 @@ void PauseShowMainWindowActivate(void) {
         }
 
         PauseDisableWindowMinimize(window);
+        PauseDisableWindowZoom(window);
         PauseConfigureWindowTitle(window);
 
         if ([window isMiniaturized]) {

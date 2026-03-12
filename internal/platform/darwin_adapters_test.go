@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -40,6 +41,59 @@ func TestLaunchAgentPlistEscapesXML(t *testing.T) {
 	for _, c := range checks {
 		if !strings.Contains(content, c) {
 			t.Fatalf("launchAgentPlist missing %q", c)
+		}
+	}
+}
+
+func TestValidateStartupExecutablePath(t *testing.T) {
+	cases := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{
+			name:    "normal app path",
+			path:    "/Applications/Pause.app/Contents/MacOS/Pause",
+			wantErr: false,
+		},
+		{
+			name:    "mounted volume path",
+			path:    "/Volumes/Pause/Pause.app/Contents/MacOS/Pause",
+			wantErr: true,
+		},
+		{
+			name:    "app translocation path",
+			path:    "/private/var/folders/xx/AppTranslocation/ABC/Pause.app/Contents/MacOS/Pause",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range cases {
+		err := validateStartupExecutablePath(tc.path)
+		if tc.wantErr && err == nil {
+			t.Fatalf("%s: expected error, got nil", tc.name)
+		}
+		if !tc.wantErr && err != nil {
+			t.Fatalf("%s: expected no error, got %v", tc.name, err)
+		}
+	}
+}
+
+func TestIsLaunchctlAlreadyLoadedError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{name: "already bootstrapped", err: errors.New("launchctl bootstrap failed: service already bootstrapped"), want: true},
+		{name: "already loaded", err: errors.New("launchctl bootstrap failed: service already loaded"), want: true},
+		{name: "other", err: errors.New("permission denied"), want: false},
+	}
+	for _, tc := range cases {
+		got := isLaunchctlAlreadyLoadedError(tc.err)
+		if got != tc.want {
+			t.Fatalf("%s: got %v want %v", tc.name, got, tc.want)
 		}
 	}
 }

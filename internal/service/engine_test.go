@@ -315,7 +315,21 @@ func TestSyncPlatformSettingsUsesPersistedValue(t *testing.T) {
 	if err := engine.SyncPlatformSettings(); err != nil {
 		t.Fatalf("SyncPlatformSettings() error = %v", err)
 	}
-	if startup.calls != 1 || !startup.lastValue {
-		t.Fatalf("expected startup manager sync call with true")
+	if startup.calls != 0 {
+		t.Fatalf("expected no startup manager call when launchAtLogin is true")
+	}
+}
+
+func TestSyncPlatformSettingsDisablesWhenPersistedFalse(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	startup := &fakeStartupManager{}
+	engine := newTestEngine(t, idle, startup)
+
+	startup.calls = 0
+	if err := engine.SyncPlatformSettings(); err != nil {
+		t.Fatalf("SyncPlatformSettings() error = %v", err)
+	}
+	if startup.calls != 1 || startup.lastValue {
+		t.Fatalf("expected startup manager sync call with false")
 	}
 }

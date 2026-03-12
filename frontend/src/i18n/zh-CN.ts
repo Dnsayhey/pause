@@ -27,7 +27,6 @@ export const zhCN = {
   intervalSec: '间隔（秒）',
   breakSec: '休息时长（秒）',
   sectionSettings: '设置',
-  overlayEnabled: '启用遮罩强制休息',
   overlaySkipAllowed: '休息期间允许跳过',
   timerMode: '计时模式',
   timerModeIdlePause: '空闲暂停',

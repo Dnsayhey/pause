@@ -3,6 +3,8 @@ pause
 
 frontend/node_modules/
 frontend/dist/
+frontend/package.json.md5
+frontend/wailsjs/
 
 *.log
 *.tmp
@@ -11,3 +13,6 @@ frontend/dist/
 
 .agents/
 .agent/
+
+# Packaging/build outputs
+build/

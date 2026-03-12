@@ -23,6 +23,7 @@ export type Settings = {
   ui: {
     showTrayCountdown: boolean;
     language: 'auto' | 'zh-CN' | 'en-US';
+    theme: 'auto' | 'light' | 'dark';
   };
   startup: {
     launchAtLogin: boolean;
