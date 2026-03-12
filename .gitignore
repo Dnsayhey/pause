@@ -8,3 +8,6 @@ frontend/dist/
 *.tmp
 
 .codex/
+
+.agents/
+.agent/
