@@ -3,6 +3,8 @@ import type { RuntimeState, Settings, SettingsPatch } from './types';
 type Backend = {
   GetSettings: () => Promise<Settings>;
   UpdateSettings: (patch: SettingsPatch) => Promise<Settings>;
+  GetLaunchAtLogin: () => Promise<boolean>;
+  SetLaunchAtLogin: (enabled: boolean) => Promise<boolean>;
   GetRuntimeState: () => Promise<RuntimeState>;
   Pause: (mode: string, durationSec: number) => Promise<RuntimeState>;
   Resume: () => Promise<RuntimeState>;
@@ -17,11 +19,11 @@ const fallbackSettings: Settings = {
   enforcement: { overlayEnabled: true, overlaySkipAllowed: true },
   sound: { enabled: true, volume: 70 },
   timer: { mode: 'idle_pause', idlePauseThresholdSec: 300 },
-  ui: { showTrayCountdown: true, language: 'auto', theme: 'auto' },
-  startup: { launchAtLogin: false }
+  ui: { showTrayCountdown: true, language: 'auto', theme: 'auto' }
 };
 
 let devSettings = structuredClone(fallbackSettings);
+let devLaunchAtLogin = true;
 let devRuntime: RuntimeState = {
   paused: false,
   nextEyeInSec: 1200,
@@ -56,13 +58,27 @@ export async function updateSettings(patch: SettingsPatch): Promise<Settings> {
       enforcement: { ...devSettings.enforcement, ...(patch.enforcement ?? {}) },
       sound: { ...devSettings.sound, ...(patch.sound ?? {}) },
       timer: { ...devSettings.timer, ...(patch.timer ?? {}) },
-      ui: { ...devSettings.ui, ...(patch.ui ?? {}) },
-      startup: { ...devSettings.startup, ...(patch.startup ?? {}) }
+      ui: { ...devSettings.ui, ...(patch.ui ?? {}) }
     };
     devRuntime.overlaySkipAllowed = devSettings.enforcement.overlaySkipAllowed;
     return devSettings;
   }
   return backend.UpdateSettings(patch);
+}
+
+export async function getLaunchAtLogin(): Promise<boolean> {
+  const backend = getBackend();
+  if (!backend) return devLaunchAtLogin;
+  return backend.GetLaunchAtLogin();
+}
+
+export async function setLaunchAtLogin(enabled: boolean): Promise<boolean> {
+  const backend = getBackend();
+  if (!backend) {
+    devLaunchAtLogin = enabled;
+    return devLaunchAtLogin;
+  }
+  return backend.SetLaunchAtLogin(enabled);
 }
 
 export async function getRuntimeState(): Promise<RuntimeState> {

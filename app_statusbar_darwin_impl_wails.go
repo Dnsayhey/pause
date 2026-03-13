@@ -10,6 +10,7 @@ package main
 #import <dispatch/dispatch.h>
 
 extern void statusBarMenuCallbackGo(int callbackID);
+extern void statusBarDebugEventGo(int eventID);
 
 enum {
     PauseStatusBarActionBreakNow = 1,
@@ -18,6 +19,14 @@ enum {
     PauseStatusBarActionResume = 4,
     PauseStatusBarActionOpenWindow = 5,
     PauseStatusBarActionQuit = 6
+};
+
+enum {
+    PauseStatusBarDebugEventStatusItemToggleOpen = 1,
+    PauseStatusBarDebugEventStatusItemToggleClose = 2,
+    PauseStatusBarDebugEventPopoverClosed = 3,
+    PauseStatusBarDebugEventAppResignActive = 4,
+    PauseStatusBarDebugEventAppBecomeActive = 5
 };
 
 static void PauseClosePopover(void);
@@ -29,6 +38,7 @@ static void PauseStatusBarSetPausedBlinking(BOOL paused);
 static NSImage *PauseStatusBarBuildIconByName(NSString *symbolName, CGFloat pointSize);
 static void PauseStatusBarSetTitleText(NSString *text);
 static void PauseStatusBarAdjustLengthForTitle(NSString *text);
+static void PauseUpdateStatusItemTooltipVisibility(void);
 
 static const CGFloat pauseStatusItemWidthWithTime = 68.0;
 static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
@@ -39,6 +49,7 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
 - (void)onMoreClick:(id)sender;
 - (void)onMenuAbout:(id)sender;
 - (void)onMenuQuit:(id)sender;
+- (void)onAppDidBecomeActive:(NSNotification *)notification;
 - (void)onAppDidResignActive:(NSNotification *)notification;
 - (void)onBlinkTick:(NSTimer *)timer;
 @end
@@ -53,6 +64,7 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
         return;
     }
     if ([pausePopover isShown]) {
+        statusBarDebugEventGo(PauseStatusBarDebugEventStatusItemToggleClose);
         PauseClosePopover();
         return;
     }
@@ -64,14 +76,10 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
         }
     }
 
-    if (![NSApp isActive]) {
-        [[NSApplication sharedApplication] activateIgnoringOtherApps:NO];
-    }
+    statusBarDebugEventGo(PauseStatusBarDebugEventStatusItemToggleOpen);
     [pausePopover showRelativeToRect:pauseStatusItem.button.bounds ofView:pauseStatusItem.button preferredEdge:NSRectEdgeMinY];
+    PauseUpdateStatusItemTooltipVisibility();
     NSWindow *popoverWindow = pausePopover.contentViewController.view.window;
-    if (popoverWindow != nil) {
-        [popoverWindow makeKeyAndOrderFront:nil];
-    }
 
     for (NSWindow *window in windowsBefore) {
         if (window == nil || window == popoverWindow) {
@@ -131,8 +139,14 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
     statusBarMenuCallbackGo(PauseStatusBarActionQuit);
 }
 
+- (void)onAppDidBecomeActive:(NSNotification *)notification {
+    (void)notification;
+    statusBarDebugEventGo(PauseStatusBarDebugEventAppBecomeActive);
+}
+
 - (void)onAppDidResignActive:(NSNotification *)notification {
     (void)notification;
+    statusBarDebugEventGo(PauseStatusBarDebugEventAppResignActive);
     PauseClosePopover();
 }
 
@@ -160,6 +174,7 @@ NSButton *pauseMoreButton;
 NSString *pauseAboutMenuTitle;
 NSString *pauseQuitMenuTitle;
 NSString *pauseMoreButtonTip;
+NSString *pauseStatusTooltipText;
 id pauseLocalMonitor;
 id pauseGlobalMonitor;
 PauseStatusBarHandler *pauseStatusHandler;
@@ -322,8 +337,10 @@ static void PauseRemovePopoverAutoClose(void) {
 static void PauseClosePopover(void) {
     if (pausePopover != nil && [pausePopover isShown]) {
         [pausePopover close];
+        statusBarDebugEventGo(PauseStatusBarDebugEventPopoverClosed);
     }
     PauseRemovePopoverAutoClose();
+    PauseUpdateStatusItemTooltipVisibility();
 }
 
 static void PauseInstallPopoverAutoClose(void) {
@@ -354,6 +371,19 @@ static void PauseInstallPopoverAutoClose(void) {
             PauseClosePopover();
         });
     }];
+}
+
+static void PauseUpdateStatusItemTooltipVisibility(void) {
+    if (pauseStatusItem == nil || pauseStatusItem.button == nil) {
+        return;
+    }
+    if (pausePopover != nil && [pausePopover isShown]) {
+        [pauseStatusItem.button setToolTip:nil];
+        return;
+    }
+    if (pauseStatusTooltipText != nil) {
+        [pauseStatusItem.button setToolTip:pauseStatusTooltipText];
+    }
 }
 
 static void BuildPopoverContent(void) {
@@ -505,10 +535,12 @@ void PauseStatusBarInit(void) {
         [pauseStatusItem.button setImagePosition:NSImageLeft];
         [pauseStatusItem.button setImageScaling:NSImageScaleProportionallyDown];
         [pauseStatusItem.button setImage:pauseStatusIcon];
-        [pauseStatusItem.button setToolTip:@"Pause break reminder"];
+        pauseStatusTooltipText = [@"Pause break reminder" copy];
+        [pauseStatusItem.button setToolTip:pauseStatusTooltipText];
         [pauseStatusItem.button setTarget:pauseStatusHandler];
         [pauseStatusItem.button setAction:@selector(onStatusItemClick:)];
         [pauseStatusItem.button sendActionOn:(NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp)];
+        [[NSNotificationCenter defaultCenter] addObserver:pauseStatusHandler selector:@selector(onAppDidBecomeActive:) name:NSApplicationDidBecomeActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:pauseStatusHandler selector:@selector(onAppDidResignActive:) name:NSApplicationDidResignActiveNotification object:nil];
 
         BuildPopoverContent();
@@ -573,7 +605,12 @@ void PauseStatusBarSetLocaleStrings(
         if (pauseStatusItem == nil) {
             return;
         }
-        [pauseStatusItem.button setToolTip:tooltipText];
+        if (pauseStatusTooltipText != nil) {
+            [pauseStatusTooltipText release];
+            pauseStatusTooltipText = nil;
+        }
+        pauseStatusTooltipText = [tooltipText copy];
+        PauseUpdateStatusItemTooltipVisibility();
         if (pausePopoverTitleLabel != nil) {
             [pausePopoverTitleLabel setStringValue:popoverTitleText];
         }
@@ -648,6 +685,9 @@ void PauseStatusBarDestroy(void) {
         if (pauseMoreButtonTip != nil) {
             [pauseMoreButtonTip release];
         }
+        if (pauseStatusTooltipText != nil) {
+            [pauseStatusTooltipText release];
+        }
 
         pauseStatusItem = nil;
         pausePopover = nil;
@@ -665,6 +705,7 @@ void PauseStatusBarDestroy(void) {
         pauseAboutMenuTitle = nil;
         pauseQuitMenuTitle = nil;
         pauseMoreButtonTip = nil;
+        pauseStatusTooltipText = nil;
         pauseLocalMonitor = nil;
         pauseGlobalMonitor = nil;
         pauseStatusHandler = nil;

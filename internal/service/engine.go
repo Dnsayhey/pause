@@ -29,7 +29,6 @@ type Engine struct {
 	session   *session.Manager
 
 	idleProvider   platform.IdleProvider
-	notifier       platform.Notifier
 	soundPlayer    platform.SoundPlayer
 	startupManager platform.StartupManager
 
@@ -47,15 +46,11 @@ type Engine struct {
 func NewEngine(
 	store *config.Store,
 	idleProvider platform.IdleProvider,
-	notifier platform.Notifier,
 	soundPlayer platform.SoundPlayer,
 	startupManager platform.StartupManager,
 ) *Engine {
 	if idleProvider == nil {
 		idleProvider = platform.NoopIdleProvider{}
-	}
-	if notifier == nil {
-		notifier = platform.NoopNotifier{}
 	}
 	if soundPlayer == nil {
 		soundPlayer = platform.NoopSoundPlayer{}
@@ -69,7 +64,6 @@ func NewEngine(
 		scheduler:      scheduler.New(),
 		session:        session.NewManager(),
 		idleProvider:   idleProvider,
-		notifier:       notifier,
 		soundPlayer:    soundPlayer,
 		startupManager: startupManager,
 	}
@@ -79,14 +73,13 @@ func (e *Engine) SyncPlatformSettings() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	settings := e.store.Get()
-	// Do not re-apply launch-at-login "enabled" on every app startup.
-	// On macOS this can trigger launchd reload while the app is booting,
-	// causing slow startup and potential self-termination.
-	if settings.Startup.LaunchAtLogin {
-		return nil
+	// First app run after config creation: attempt to enable launch-at-login once.
+	if e.store.WasCreated() {
+		if err := e.startupManager.SetLaunchAtLogin(true); err != nil {
+			return err
+		}
 	}
-	return e.startupManager.SetLaunchAtLogin(false)
+	return nil
 }
 
 func (e *Engine) Start(ctx context.Context) {
@@ -189,7 +182,6 @@ func (e *Engine) Tick(now time.Time) {
 	}
 
 	e.session.StartBreak(now, evt, settings.Enforcement.OverlaySkipAllowed)
-	_ = e.notifier.ShowReminder("Time to rest", buildReasonText(evt.Reasons, evt.BreakSec))
 	e.logTickLocked(now, settings, "event", rawDeltaSec, appliedDeltaSec, evt)
 }
 
@@ -207,12 +199,6 @@ func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, er
 		return config.Settings{}, err
 	}
 
-	if patch.Startup != nil && patch.Startup.LaunchAtLogin != nil {
-		if err := e.startupManager.SetLaunchAtLogin(next.Startup.LaunchAtLogin); err != nil {
-			_ = e.store.Set(prev)
-			return config.Settings{}, err
-		}
-	}
 	if patch.Enforcement != nil && patch.Enforcement.OverlaySkipAllowed != nil {
 		e.session.SetCanSkip(next.Enforcement.OverlaySkipAllowed)
 	}
@@ -220,6 +206,21 @@ func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, er
 	e.applySchedulePatchLocked(prev, next)
 
 	return next, nil
+}
+
+func (e *Engine) GetLaunchAtLogin() (bool, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.startupManager.GetLaunchAtLogin()
+}
+
+func (e *Engine) SetLaunchAtLogin(enabled bool) (bool, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.startupManager.SetLaunchAtLogin(enabled); err != nil {
+		return false, err
+	}
+	return e.startupManager.GetLaunchAtLogin()
 }
 
 func (e *Engine) GetRuntimeState(now time.Time) config.RuntimeState {
@@ -285,6 +286,10 @@ func (e *Engine) SkipCurrentBreak(now time.Time) (config.RuntimeState, error) {
 }
 
 func (e *Engine) StartBreakNow(now time.Time) (config.RuntimeState, error) {
+	return e.StartBreakNowForReason("", now)
+}
+
+func (e *Engine) StartBreakNowForReason(reason string, now time.Time) (config.RuntimeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -303,7 +308,7 @@ func (e *Engine) StartBreakNow(now time.Time) (config.RuntimeState, error) {
 		return config.RuntimeState{}, errors.New("break already active")
 	}
 
-	evt := buildImmediateBreakEvent(settings, e.scheduler.NextEyeInSec(settings), e.scheduler.NextStandInSec(settings))
+	evt := buildImmediateBreakEvent(settings, e.scheduler.NextEyeInSec(settings), e.scheduler.NextStandInSec(settings), reason)
 	if evt == nil {
 		return config.RuntimeState{}, errors.New("no enabled reminder rules")
 	}
@@ -314,7 +319,6 @@ func (e *Engine) StartBreakNow(now time.Time) (config.RuntimeState, error) {
 	e.tickRemainder = 0
 
 	e.session.StartBreak(now, evt, settings.Enforcement.OverlaySkipAllowed)
-	_ = e.notifier.ShowReminder("Time to rest", buildReasonText(evt.Reasons, evt.BreakSec))
 	return e.runtimeStateLocked(now, settings), nil
 }
 
@@ -413,49 +417,62 @@ func (e *Engine) applySchedulePatchLocked(prev, next config.Settings) {
 	}
 }
 
-func buildReasonText(reasons []scheduler.ReminderType, breakSec int) string {
-	if len(reasons) == 0 {
-		return ""
+func buildImmediateBreakEvent(settings config.Settings, nextEye, nextStand int, forcedReason string) *scheduler.Event {
+	reasonKey := normalizeImmediateReason(forcedReason)
+	if reasonKey == "" {
+		reasonKey = selectImmediateReason(nextEye, nextStand)
+	}
+	if reasonKey == "" {
+		return nil
 	}
 
-	label := "Eye"
-	if len(reasons) == 2 {
-		label = "Eye + Stand"
-	} else if reasons[0] == scheduler.ReminderStand {
-		label = "Stand"
+	switch reasonKey {
+	case string(scheduler.ReminderEye):
+		if !settings.Eye.Enabled || settings.Eye.BreakSec <= 0 {
+			return nil
+		}
+		return &scheduler.Event{
+			Reasons:  []scheduler.ReminderType{scheduler.ReminderEye},
+			BreakSec: settings.Eye.BreakSec,
+		}
+	case string(scheduler.ReminderStand):
+		if !settings.Stand.Enabled || settings.Stand.BreakSec <= 0 {
+			return nil
+		}
+		return &scheduler.Event{
+			Reasons:  []scheduler.ReminderType{scheduler.ReminderStand},
+			BreakSec: settings.Stand.BreakSec,
+		}
+	default:
+		return nil
 	}
-
-	return label + " break for " + (time.Duration(breakSec) * time.Second).String()
 }
 
-func buildImmediateBreakEvent(settings config.Settings, nextEye, nextStand int) *scheduler.Event {
-	reasonKeys := nextReasons(nextEye, nextStand)
-	if len(reasonKeys) == 0 {
-		return nil
+func normalizeImmediateReason(reason string) string {
+	normalized := strings.ToLower(strings.TrimSpace(reason))
+	switch normalized {
+	case string(scheduler.ReminderEye):
+		return string(scheduler.ReminderEye)
+	case string(scheduler.ReminderStand):
+		return string(scheduler.ReminderStand)
+	default:
+		return ""
 	}
+}
 
-	reasons := make([]scheduler.ReminderType, 0, len(reasonKeys))
-	breakSec := 0
-	for _, reason := range reasonKeys {
-		switch reason {
-		case string(scheduler.ReminderEye):
-			reasons = append(reasons, scheduler.ReminderEye)
-			if settings.Eye.Enabled && settings.Eye.BreakSec > breakSec {
-				breakSec = settings.Eye.BreakSec
-			}
-		case string(scheduler.ReminderStand):
-			reasons = append(reasons, scheduler.ReminderStand)
-			if settings.Stand.Enabled && settings.Stand.BreakSec > breakSec {
-				breakSec = settings.Stand.BreakSec
-			}
+func selectImmediateReason(nextEye, nextStand int) string {
+	switch {
+	case nextEye < 0 && nextStand < 0:
+		return ""
+	case nextEye >= 0 && nextStand >= 0:
+		if nextEye <= nextStand {
+			return string(scheduler.ReminderEye)
 		}
-	}
-	if len(reasons) == 0 || breakSec <= 0 {
-		return nil
-	}
-	return &scheduler.Event{
-		Reasons:  reasons,
-		BreakSec: breakSec,
+		return string(scheduler.ReminderStand)
+	case nextEye >= 0:
+		return string(scheduler.ReminderEye)
+	default:
+		return string(scheduler.ReminderStand)
 	}
 }
 

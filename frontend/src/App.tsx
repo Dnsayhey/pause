@@ -30,6 +30,8 @@ export function App() {
 
   const {
     settings,
+    launchAtLogin,
+    applyLaunchAtLogin,
     applyPatch,
     eyeIntervalMinDraft,
     setEyeIntervalMinDraft,
@@ -158,8 +160,10 @@ export function App() {
         <SystemSettingsCard
           locale={locale}
           settings={settings}
+          launchAtLogin={launchAtLogin}
           idleModeSelectValue={idleModeSelectValue}
           soundModeSelectValue={soundModeSelectValue}
+          onLaunchAtLoginChange={applyLaunchAtLogin}
           onPatch={applyPatch}
         />
 

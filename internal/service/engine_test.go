@@ -17,12 +17,18 @@ func (f *fakeIdleProvider) CurrentIdleSeconds() int { return f.idleSec }
 type fakeStartupManager struct {
 	lastValue bool
 	calls     int
+	current   bool
 }
 
 func (f *fakeStartupManager) SetLaunchAtLogin(enabled bool) error {
 	f.lastValue = enabled
 	f.calls++
+	f.current = enabled
 	return nil
+}
+
+func (f *fakeStartupManager) GetLaunchAtLogin() (bool, error) {
+	return f.current, nil
 }
 
 func newTestEngine(t *testing.T, idle *fakeIdleProvider, startup *fakeStartupManager) *Engine {
@@ -32,7 +38,7 @@ func newTestEngine(t *testing.T, idle *fakeIdleProvider, startup *fakeStartupMan
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	return NewEngine(store, idle, nil, nil, startup)
+	return NewEngine(store, idle, nil, startup)
 }
 
 func TestIdlePauseModeBoundary(t *testing.T) {
@@ -280,17 +286,17 @@ func TestStartBreakNowWhilePaused(t *testing.T) {
 	}
 }
 
-func TestLaunchAtLoginSync(t *testing.T) {
+func TestSetLaunchAtLoginSync(t *testing.T) {
 	idle := &fakeIdleProvider{}
 	startup := &fakeStartupManager{}
 	engine := newTestEngine(t, idle, startup)
 
-	enabled := true
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Startup: &config.StartupSettingsPatch{LaunchAtLogin: &enabled},
-	})
+	actual, err := engine.SetLaunchAtLogin(true)
 	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
+		t.Fatalf("SetLaunchAtLogin() error = %v", err)
+	}
+	if !actual {
+		t.Fatalf("expected launch-at-login state to be true")
 	}
 
 	if startup.calls != 1 || !startup.lastValue {
@@ -298,25 +304,17 @@ func TestLaunchAtLoginSync(t *testing.T) {
 	}
 }
 
-func TestSyncPlatformSettingsUsesPersistedValue(t *testing.T) {
+func TestSyncPlatformSettingsBootstrapsOnFirstRun(t *testing.T) {
 	idle := &fakeIdleProvider{}
 	startup := &fakeStartupManager{}
 	engine := newTestEngine(t, idle, startup)
-
-	enabled := true
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Startup: &config.StartupSettingsPatch{LaunchAtLogin: &enabled},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
 
 	startup.calls = 0
 	if err := engine.SyncPlatformSettings(); err != nil {
 		t.Fatalf("SyncPlatformSettings() error = %v", err)
 	}
-	if startup.calls != 0 {
-		t.Fatalf("expected no startup manager call when launchAtLogin is true")
+	if startup.calls != 1 || !startup.lastValue {
+		t.Fatalf("expected first-run startup sync call with true")
 	}
 }
 
@@ -329,7 +327,38 @@ func TestSyncPlatformSettingsDisablesWhenPersistedFalse(t *testing.T) {
 	if err := engine.SyncPlatformSettings(); err != nil {
 		t.Fatalf("SyncPlatformSettings() error = %v", err)
 	}
-	if startup.calls != 1 || startup.lastValue {
-		t.Fatalf("expected startup manager sync call with false")
+	if startup.calls != 1 || !startup.lastValue {
+		t.Fatalf("expected startup manager sync call with true")
+	}
+}
+
+func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	startup := &fakeStartupManager{}
+	path := filepath.Join(t.TempDir(), "settings.json")
+
+	store1, err := config.NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	engine1 := NewEngine(store1, idle, nil, startup)
+	if err := engine1.SyncPlatformSettings(); err != nil {
+		t.Fatalf("first SyncPlatformSettings() error = %v", err)
+	}
+	if startup.calls == 0 {
+		t.Fatalf("expected first run to attempt launch-at-login setup")
+	}
+
+	startup.calls = 0
+	store2, err := config.NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore(reopen) error = %v", err)
+	}
+	engine2 := NewEngine(store2, idle, nil, startup)
+	if err := engine2.SyncPlatformSettings(); err != nil {
+		t.Fatalf("second SyncPlatformSettings() error = %v", err)
+	}
+	if startup.calls != 0 {
+		t.Fatalf("expected existing config startup to read system state without re-applying")
 	}
 }

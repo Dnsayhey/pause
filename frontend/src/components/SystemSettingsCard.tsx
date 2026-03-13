@@ -5,16 +5,20 @@ import type { Settings, SettingsPatch } from '../types';
 type SystemSettingsCardProps = {
   locale: Locale;
   settings: Settings;
+  launchAtLogin: boolean;
   idleModeSelectValue: string;
   soundModeSelectValue: string;
+  onLaunchAtLoginChange: (enabled: boolean) => Promise<void>;
   onPatch: (patch: SettingsPatch) => Promise<void>;
 };
 
 export function SystemSettingsCard({
   locale,
   settings,
+  launchAtLogin,
   idleModeSelectValue,
   soundModeSelectValue,
+  onLaunchAtLoginChange,
   onPatch
 }: SystemSettingsCardProps) {
   return (
@@ -23,9 +27,9 @@ export function SystemSettingsCard({
       <div className="form-grid system-grid">
         <ToggleSwitchRow
           label={t(locale, 'launchAtLogin')}
-          checked={settings.startup.launchAtLogin}
+          checked={launchAtLogin}
           onChange={(checked) => {
-            void onPatch({ startup: { launchAtLogin: checked } });
+            void onLaunchAtLoginChange(checked);
           }}
         />
         <ToggleSwitchRow

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getSettings, updateSettings } from '../api';
+import { getLaunchAtLogin, setLaunchAtLogin, getSettings, updateSettings } from '../api';
 import type { Settings, SettingsPatch } from '../types';
 
 const EYE_DEFAULT_INTERVAL_MIN = 20;
@@ -38,6 +38,7 @@ function nearestOptionValue(value: number, options: readonly number[]): number {
 
 export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [launchAtLogin, setLaunchAtLoginState] = useState(false);
   const [eyeIntervalMinDraft, setEyeIntervalMinDraft] = useState(String(EYE_DEFAULT_INTERVAL_MIN));
   const [eyeBreakSecDraft, setEyeBreakSecDraft] = useState(String(EYE_DEFAULT_BREAK_SEC));
   const [standIntervalHourDraft, setStandIntervalHourDraft] = useState(String(STAND_DEFAULT_INTERVAL_HOUR));
@@ -48,9 +49,10 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
 
     const loadSettings = async () => {
       try {
-        const next = await getSettings();
+        const [next, startupState] = await Promise.all([getSettings(), getLaunchAtLogin()]);
         if (mounted) {
           setSettings(next);
+          setLaunchAtLoginState(startupState);
         }
       } catch (err) {
         if (mounted) {
@@ -64,6 +66,35 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
       mounted = false;
     };
   }, [setError]);
+
+  const refreshLaunchAtLoginState = useCallback(
+    async (silent = false) => {
+      try {
+        const actual = await getLaunchAtLogin();
+        setLaunchAtLoginState(actual);
+      } catch (err) {
+        if (!silent) {
+          setError(String(err));
+        }
+      }
+    },
+    [setError]
+  );
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      void refreshLaunchAtLoginState(true);
+    };
+
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refreshLaunchAtLoginState]);
 
   useEffect(() => {
     if (!settings) return;
@@ -86,6 +117,21 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
       }
     },
     [refreshRuntime, setError, settings]
+  );
+
+  const applyLaunchAtLogin = useCallback(
+    async (enabled: boolean) => {
+      setError('');
+      try {
+        const actual = await setLaunchAtLogin(enabled);
+        setLaunchAtLoginState(actual);
+      } catch (err) {
+        setError(String(err));
+        // Keep toggle state synced with real system state when mutation fails.
+        void refreshLaunchAtLoginState(true);
+      }
+    },
+    [refreshLaunchAtLoginState, setError]
   );
 
   const commitEyeIntervalDraft = useCallback(
@@ -193,6 +239,8 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
 
   return {
     settings,
+    launchAtLogin,
+    applyLaunchAtLogin,
     applyPatch,
     eyeIntervalMinDraft,
     setEyeIntervalMinDraft,

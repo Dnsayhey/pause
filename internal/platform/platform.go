@@ -23,6 +23,7 @@ type SoundPlayer interface {
 
 type StartupManager interface {
 	SetLaunchAtLogin(enabled bool) error
+	GetLaunchAtLogin() (bool, error)
 }
 
 type NoopIdleProvider struct{}
@@ -40,3 +41,6 @@ func (NoopSoundPlayer) PlayBreakEnd(_ config.SoundSettings) error { return nil }
 type NoopStartupManager struct{}
 
 func (NoopStartupManager) SetLaunchAtLogin(_ bool) error { return nil }
+func (NoopStartupManager) GetLaunchAtLogin() (bool, error) {
+	return false, nil
+}

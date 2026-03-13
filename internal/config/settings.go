@@ -34,10 +34,6 @@ type UISettings struct {
 	Theme             string `json:"theme"`
 }
 
-type StartupSettings struct {
-	LaunchAtLogin bool `json:"launchAtLogin"`
-}
-
 type Settings struct {
 	GlobalEnabled bool                `json:"globalEnabled"`
 	Eye           ReminderRule        `json:"eye"`
@@ -46,7 +42,6 @@ type Settings struct {
 	Sound         SoundSettings       `json:"sound"`
 	Timer         TimerSettings       `json:"timer"`
 	UI            UISettings          `json:"ui"`
-	Startup       StartupSettings     `json:"startup"`
 }
 
 type ReminderRulePatch struct {
@@ -76,10 +71,6 @@ type UISettingsPatch struct {
 	Theme             *string `json:"theme,omitempty"`
 }
 
-type StartupSettingsPatch struct {
-	LaunchAtLogin *bool `json:"launchAtLogin,omitempty"`
-}
-
 type SettingsPatch struct {
 	GlobalEnabled *bool                     `json:"globalEnabled,omitempty"`
 	Eye           *ReminderRulePatch        `json:"eye,omitempty"`
@@ -88,7 +79,6 @@ type SettingsPatch struct {
 	Sound         *SoundSettingsPatch       `json:"sound,omitempty"`
 	Timer         *TimerSettingsPatch       `json:"timer,omitempty"`
 	UI            *UISettingsPatch          `json:"ui,omitempty"`
-	Startup       *StartupSettingsPatch     `json:"startup,omitempty"`
 }
 
 type RuntimeState struct {
@@ -149,9 +139,6 @@ func DefaultSettings() Settings {
 			ShowTrayCountdown: true,
 			Language:          UILanguageAuto,
 			Theme:             UIThemeAuto,
-		},
-		Startup: StartupSettings{
-			LaunchAtLogin: false,
 		},
 	}
 }
@@ -252,11 +239,5 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 			s.UI.Theme = *p.UI.Theme
 		}
 	}
-	if p.Startup != nil {
-		if p.Startup.LaunchAtLogin != nil {
-			s.Startup.LaunchAtLogin = *p.Startup.LaunchAtLogin
-		}
-	}
-
 	return s.Normalize()
 }

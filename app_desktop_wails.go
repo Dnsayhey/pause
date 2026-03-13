@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
@@ -17,20 +16,28 @@ import (
 )
 
 type wailsDesktopController struct {
-	lastOverlayActive bool
-	lastOverlaySkip   bool
-	lastOverlayLang   string
-	lastOverlayText   string
-	lastOverlayTheme  string
-	lastRuntimeTick   time.Time
-	smoothedNextEye   int
-	smoothedNextStand int
-	hasSmoothedNext   bool
-	lastSmoothKey     string
-	lastLanguage      string
-	statusBar         statusBarController
-	overlay           breakOverlayController
-	startOnce         sync.Once
+	lastOverlayActive       bool
+	lastOverlaySkip         bool
+	lastOverlayLang         string
+	lastOverlayText         string
+	lastOverlayTheme        string
+	lastOverlaySessionStart time.Time
+	overlayFallbackNotified bool
+	lastRuntimeTick         time.Time
+	smoothedNextEye         int
+	smoothedNextStand       int
+	hasSmoothedNext         bool
+	lastSmoothKey           string
+	lastLanguage            string
+	statusBar               statusBarController
+	overlay                 breakOverlayController
+	startOnce               sync.Once
+}
+
+type autoReminderChoice struct {
+	reason    string
+	remaining int
+	total     int
 }
 
 func newDesktopController() desktopController {
@@ -78,7 +85,7 @@ func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
 			settings := app.engine.GetSettings()
 			state := app.engine.GetRuntimeState(now)
 			c.syncStatusBar(state, settings, gapMs)
-			c.syncOverlay(ctx, state, settings)
+			c.syncOverlay(ctx, app, state, settings)
 		}
 	}
 }
@@ -132,24 +139,33 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 	diag.Logf("desktop.action id=%d", actionID)
 	switch actionID {
 	case statusBarActionBreakNow:
-		_, err := app.StartBreakNow()
+		diag.Logf("desktop.action break_now_select_auto")
+		state := app.engine.GetRuntimeState(time.Now())
+		choice := selectAutoReminderChoice(state, app.engine.GetSettings())
+		diag.Logf("desktop.action break_now reason=%s remaining=%d", choice.reason, choice.remaining)
+		_, err := app.StartBreakNowForReason(choice.reason)
 		c.logErr(ctx, err)
 	case statusBarActionPause:
+		diag.Logf("desktop.action pause_indefinite")
 		_, err := app.Pause(service.PauseModeIndefinite, 0)
 		c.logErr(ctx, err)
 	case statusBarActionPause30:
+		diag.Logf("desktop.action pause_30m")
 		_, err := app.Pause(service.PauseModeTemporary, 30*60)
 		c.logErr(ctx, err)
 	case statusBarActionResume:
+		diag.Logf("desktop.action resume")
 		_ = app.Resume()
 	case statusBarActionOpenWindow:
+		diag.Logf("desktop.action open_window dispatch_show_main")
 		showMainWindowFromStatusBar(ctx)
 	case statusBarActionQuit:
+		diag.Logf("desktop.action quit")
 		app.Quit()
 	}
 }
 
-func (c *wailsDesktopController) syncOverlay(ctx context.Context, state config.RuntimeState, settings config.Settings) {
+func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, state config.RuntimeState, settings config.Settings) {
 	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting" && state.OverlayEnabled
 	overlaySkipAllowed := overlayActive && state.OverlaySkipAllowed && state.CurrentSession != nil && state.CurrentSession.CanSkip
 	language := c.lastLanguage
@@ -157,6 +173,13 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state config.R
 	overlayText := ""
 	if overlayActive && state.CurrentSession != nil {
 		overlayText = overlayCountdownText(language, state.CurrentSession.RemainingSec)
+		if !state.CurrentSession.StartedAt.Equal(c.lastOverlaySessionStart) {
+			c.lastOverlaySessionStart = state.CurrentSession.StartedAt
+			c.overlayFallbackNotified = false
+		}
+	} else {
+		c.lastOverlaySessionStart = time.Time{}
+		c.overlayFallbackNotified = false
 	}
 
 	if c.overlay.IsNative() {
@@ -164,7 +187,15 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state config.R
 		if needsUpdate {
 			diag.Logf("desktop.overlay native active=%t allow_skip=%t text=%q theme=%s", overlayActive, overlaySkipAllowed, overlayText, theme)
 			if overlayActive {
-				c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, theme)
+				// Keep native break overlay isolated from the main window.
+				hideMainWindowForOverlay(ctx)
+				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, theme) {
+					if !c.overlayFallbackNotified && app != nil {
+						diag.Logf("desktop.overlay native_show_failed fallback_notify=true")
+						app.SendBreakFallbackNotification(state)
+						c.overlayFallbackNotified = true
+					}
+				}
 			} else {
 				c.overlay.Hide()
 			}
@@ -235,35 +266,15 @@ func buildPauseLabel(state config.RuntimeState, language string) string {
 }
 
 func buildCountdownLabel(state config.RuntimeState, settings config.Settings, language string) string {
-	_ = settings
-
-	nextEye := state.NextEyeInSec
-	nextStand := state.NextStandInSec
-	if nextEye < 0 && nextStand < 0 {
+	choice := selectAutoReminderChoice(state, settings)
+	if choice.reason == "" {
 		if language == config.UILanguageZhCN {
 			return "下次休息：关闭"
 		}
 		return "Next break: off"
 	}
 
-	reasonText := localizeReminderReason("stand", language)
-	if nextEye >= 0 && nextStand >= 0 {
-		if int(math.Abs(float64(nextEye-nextStand))) <= 60 {
-			if language == config.UILanguageZhCN {
-				reasonText = fmt.Sprintf("%s+%s", localizeReminderReason("eye", language), localizeReminderReason("stand", language))
-			} else {
-				reasonText = "eye+stand"
-			}
-		} else if nextEye < nextStand {
-			reasonText = localizeReminderReason("eye", language)
-		} else {
-			reasonText = localizeReminderReason("stand", language)
-		}
-	} else if nextEye >= 0 {
-		reasonText = localizeReminderReason("eye", language)
-	} else {
-		reasonText = localizeReminderReason("stand", language)
-	}
+	reasonText := localizeReminderReason(choice.reason, language)
 
 	if language == config.UILanguageZhCN {
 		return fmt.Sprintf("下次休息：%s", reasonText)
@@ -368,18 +379,11 @@ func buildStatusBarTitle(state config.RuntimeState, settings config.Settings, _ 
 	}
 
 	if state.Paused {
-		nextEye := state.NextEyeInSec
-		nextStand := state.NextStandInSec
-		if nextEye < 0 && nextStand < 0 {
+		choice := selectAutoReminderChoice(state, settings)
+		if choice.reason == "" {
 			return ""
 		}
-		if nextEye >= 0 && nextStand >= 0 {
-			return formatCountdown(minInt(nextEye, nextStand))
-		}
-		if nextEye >= 0 {
-			return formatCountdown(nextEye)
-		}
-		return formatCountdown(nextStand)
+		return formatCountdown(choice.remaining)
 	}
 
 	if state.CurrentSession != nil && state.CurrentSession.Status == "resting" {
@@ -393,18 +397,11 @@ func buildStatusBarTitle(state config.RuntimeState, settings config.Settings, _ 
 		return ""
 	}
 
-	nextEye := state.NextEyeInSec
-	nextStand := state.NextStandInSec
-	if nextEye < 0 && nextStand < 0 {
+	choice := selectAutoReminderChoice(state, settings)
+	if choice.reason == "" {
 		return ""
 	}
-	if nextEye >= 0 && nextStand >= 0 {
-		return formatCountdown(minInt(nextEye, nextStand))
-	}
-	if nextEye >= 0 {
-		return formatCountdown(nextEye)
-	}
-	return formatCountdown(nextStand)
+	return formatCountdown(choice.remaining)
 }
 
 func buildStatusBarProgress(state config.RuntimeState, settings config.Settings) float64 {
@@ -426,26 +423,29 @@ func buildStatusBarProgress(state config.RuntimeState, settings config.Settings)
 }
 
 func nearestCountdownRemainingAndTotal(state config.RuntimeState, settings config.Settings) (int, int) {
-	nextEye := state.NextEyeInSec
-	nextStand := state.NextStandInSec
-	if nextEye < 0 && nextStand < 0 {
+	choice := selectAutoReminderChoice(state, settings)
+	if choice.reason == "" {
 		return 0, 0
 	}
+	return choice.remaining, choice.total
+}
 
-	if nextEye >= 0 && nextStand >= 0 {
-		if int(math.Abs(float64(nextEye-nextStand))) <= 60 {
-			return minInt(nextEye, nextStand), minInt(settings.Eye.IntervalSec, settings.Stand.IntervalSec)
+func selectAutoReminderChoice(state config.RuntimeState, settings config.Settings) autoReminderChoice {
+	nextEye := state.NextEyeInSec
+	nextStand := state.NextStandInSec
+	switch {
+	case nextEye < 0 && nextStand < 0:
+		return autoReminderChoice{}
+	case nextEye >= 0 && nextStand >= 0:
+		if nextEye <= nextStand {
+			return autoReminderChoice{reason: "eye", remaining: nextEye, total: settings.Eye.IntervalSec}
 		}
-		if nextEye < nextStand {
-			return nextEye, settings.Eye.IntervalSec
-		}
-		return nextStand, settings.Stand.IntervalSec
+		return autoReminderChoice{reason: "stand", remaining: nextStand, total: settings.Stand.IntervalSec}
+	case nextEye >= 0:
+		return autoReminderChoice{reason: "eye", remaining: nextEye, total: settings.Eye.IntervalSec}
+	default:
+		return autoReminderChoice{reason: "stand", remaining: nextStand, total: settings.Stand.IntervalSec}
 	}
-
-	if nextEye >= 0 {
-		return nextEye, settings.Eye.IntervalSec
-	}
-	return nextStand, settings.Stand.IntervalSec
 }
 
 func clampProgress(progress float64) float64 {

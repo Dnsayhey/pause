@@ -29,6 +29,8 @@ import "C"
 import (
 	"sync"
 	"unsafe"
+
+	"pause/internal/diag"
 )
 
 const (
@@ -38,6 +40,14 @@ const (
 	statusBarActionResume     = 4
 	statusBarActionOpenWindow = 5
 	statusBarActionQuit       = 6
+)
+
+const (
+	statusBarDebugEventStatusItemToggleOpen  = 1
+	statusBarDebugEventStatusItemToggleClose = 2
+	statusBarDebugEventPopoverClosed         = 3
+	statusBarDebugEventAppResignActive       = 4
+	statusBarDebugEventAppBecomeActive       = 5
 )
 
 type statusBarController interface {
@@ -62,6 +72,7 @@ func (darwinStatusBarController) Init(onAction func(actionID int)) {
 	statusBarCallbackMu.Lock()
 	statusBarCallback = onAction
 	statusBarCallbackMu.Unlock()
+	diag.Logf("statusbar.init")
 	C.PauseStatusBarInit()
 }
 
@@ -119,15 +130,60 @@ func (darwinStatusBarController) Destroy() {
 	statusBarCallbackMu.Lock()
 	statusBarCallback = nil
 	statusBarCallbackMu.Unlock()
+	diag.Logf("statusbar.destroy")
 	C.PauseStatusBarDestroy()
+}
+
+func statusBarActionName(actionID int) string {
+	switch actionID {
+	case statusBarActionBreakNow:
+		return "break_now"
+	case statusBarActionPause:
+		return "pause_indefinite"
+	case statusBarActionPause30:
+		return "pause_30m"
+	case statusBarActionResume:
+		return "resume"
+	case statusBarActionOpenWindow:
+		return "open_window"
+	case statusBarActionQuit:
+		return "quit"
+	default:
+		return "unknown"
+	}
+}
+
+func statusBarDebugEventName(eventID int) string {
+	switch eventID {
+	case statusBarDebugEventStatusItemToggleOpen:
+		return "status_item_toggle_open"
+	case statusBarDebugEventStatusItemToggleClose:
+		return "status_item_toggle_close"
+	case statusBarDebugEventPopoverClosed:
+		return "popover_closed"
+	case statusBarDebugEventAppResignActive:
+		return "app_resign_active"
+	case statusBarDebugEventAppBecomeActive:
+		return "app_become_active"
+	default:
+		return "unknown"
+	}
 }
 
 //export statusBarMenuCallbackGo
 func statusBarMenuCallbackGo(actionID C.int) {
+	action := int(actionID)
+	diag.Logf("statusbar.callback action_id=%d action=%s", action, statusBarActionName(action))
 	statusBarCallbackMu.RLock()
 	cb := statusBarCallback
 	statusBarCallbackMu.RUnlock()
 	if cb != nil {
-		cb(int(actionID))
+		cb(action)
 	}
+}
+
+//export statusBarDebugEventGo
+func statusBarDebugEventGo(eventID C.int) {
+	event := int(eventID)
+	diag.Logf("statusbar.event event_id=%d event=%s", event, statusBarDebugEventName(event))
 }

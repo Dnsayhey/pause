@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"pause/internal/config"
@@ -15,9 +17,10 @@ import (
 )
 
 type App struct {
-	ctx     context.Context
-	engine  *service.Engine
-	desktop desktopController
+	ctx      context.Context
+	engine   *service.Engine
+	notifier platform.Notifier
+	desktop  desktopController
 }
 
 type desktopController interface {
@@ -42,14 +45,14 @@ func NewApp(configPath string) (*App, error) {
 	engine := service.NewEngine(
 		store,
 		adapters.IdleProvider,
-		adapters.Notifier,
 		adapters.SoundPlayer,
 		adapters.StartupManager,
 	)
 
 	return &App{
-		engine:  engine,
-		desktop: newDesktopController(),
+		engine:   engine,
+		notifier: adapters.Notifier,
+		desktop:  newDesktopController(),
 	}, nil
 }
 
@@ -94,6 +97,51 @@ func (a *App) SkipCurrentBreak() (config.RuntimeState, error) {
 
 func (a *App) StartBreakNow() (config.RuntimeState, error) {
 	return a.engine.StartBreakNow(time.Now())
+}
+
+func (a *App) StartBreakNowForReason(reason string) (config.RuntimeState, error) {
+	return a.engine.StartBreakNowForReason(reason, time.Now())
+}
+
+func (a *App) GetLaunchAtLogin() (bool, error) {
+	return a.engine.GetLaunchAtLogin()
+}
+
+func (a *App) SetLaunchAtLogin(enabled bool) (bool, error) {
+	return a.engine.SetLaunchAtLogin(enabled)
+}
+
+func (a *App) SendBreakFallbackNotification(state config.RuntimeState) {
+	if a.notifier == nil {
+		return
+	}
+	_ = a.notifier.ShowReminder("Time to rest", buildBreakNotificationBody(state))
+}
+
+func buildBreakNotificationBody(state config.RuntimeState) string {
+	if state.CurrentSession == nil {
+		return "Break started"
+	}
+
+	parts := make([]string, 0, len(state.CurrentSession.Reasons))
+	for _, reason := range state.CurrentSession.Reasons {
+		switch strings.ToLower(strings.TrimSpace(reason)) {
+		case "eye":
+			parts = append(parts, "Eye")
+		case "stand":
+			parts = append(parts, "Stand")
+		}
+	}
+
+	label := "Break"
+	if len(parts) > 0 {
+		label = strings.Join(parts, " + ")
+	}
+
+	if state.CurrentSession.RemainingSec > 0 {
+		return fmt.Sprintf("%s break for %s", label, (time.Duration(state.CurrentSession.RemainingSec) * time.Second).String())
+	}
+	return label + " break started"
 }
 
 func defaultConfigPath() (string, error) {

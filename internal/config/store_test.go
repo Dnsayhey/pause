@@ -24,6 +24,9 @@ func TestStoreCreatesDefaults(t *testing.T) {
 	if got.UI.Theme != UIThemeAuto {
 		t.Fatalf("expected default theme %q, got %q", UIThemeAuto, got.UI.Theme)
 	}
+	if !store.WasCreated() {
+		t.Fatalf("expected WasCreated()=true when config file is newly created")
+	}
 }
 
 func TestStoreUpdatePersists(t *testing.T) {
@@ -48,6 +51,9 @@ func TestStoreUpdatePersists(t *testing.T) {
 	reloaded, err := NewStore(path)
 	if err != nil {
 		t.Fatalf("NewStore(reload) error = %v", err)
+	}
+	if reloaded.WasCreated() {
+		t.Fatalf("expected WasCreated()=false for existing config file")
 	}
 	got := reloaded.Get()
 	if got.GlobalEnabled {

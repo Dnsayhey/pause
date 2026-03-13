@@ -25,9 +25,6 @@ export type Settings = {
     language: 'auto' | 'zh-CN' | 'en-US';
     theme: 'auto' | 'light' | 'dark';
   };
-  startup: {
-    launchAtLogin: boolean;
-  };
 };
 
 export type RuntimeState = {
@@ -58,5 +55,4 @@ export type SettingsPatch = Partial<{
   sound: Partial<Settings['sound']>;
   timer: Partial<Settings['timer']>;
   ui: Partial<Settings['ui']>;
-  startup: Partial<Settings['startup']>;
 }>;

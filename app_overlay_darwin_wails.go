@@ -9,13 +9,15 @@ package main
 #include <stdlib.h>
 
 void PauseBreakOverlayInit(void);
-void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *theme);
+int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *theme);
 void PauseBreakOverlayHide(void);
 void PauseBreakOverlayDestroy(void);
 */
 import "C"
 
 import (
+	"os"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -38,7 +40,11 @@ func (darwinBreakOverlayController) Init(onSkip func()) {
 	C.PauseBreakOverlayInit()
 }
 
-func (darwinBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, countdownText string, theme string) {
+func (darwinBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, countdownText string, theme string) bool {
+	if shouldForceOverlayShowFailForDebug() {
+		return false
+	}
+
 	cTitle := C.CString(skipButtonTitle)
 	cCountdown := C.CString(countdownText)
 	cTheme := C.CString(theme)
@@ -50,7 +56,12 @@ func (darwinBreakOverlayController) Show(allowSkip bool, skipButtonTitle string,
 	if allowSkip {
 		cAllowSkip = 1
 	}
-	C.PauseBreakOverlayShow(cAllowSkip, cTitle, cCountdown, cTheme)
+	return C.PauseBreakOverlayShow(cAllowSkip, cTitle, cCountdown, cTheme) != 0
+}
+
+func shouldForceOverlayShowFailForDebug() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("PAUSE_DEBUG_OVERLAY_FAIL")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
 func (darwinBreakOverlayController) Hide() {

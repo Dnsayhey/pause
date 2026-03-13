@@ -3,7 +3,6 @@
 package platform
 
 import (
-	"errors"
 	"strings"
 	"testing"
 )
@@ -29,19 +28,6 @@ func TestApplescriptQuote(t *testing.T) {
 	}
 	if !strings.Contains(got, `\\\\`) {
 		t.Fatalf("expected backslashes escaped, got %q", got)
-	}
-}
-
-func TestLaunchAgentPlistEscapesXML(t *testing.T) {
-	content := launchAgentPlist("com.pause.app", "/tmp/pause<&>\"'.bin")
-	checks := []string{
-		"com.pause.app",
-		"/tmp/pause&lt;&amp;&gt;&quot;&apos;.bin",
-	}
-	for _, c := range checks {
-		if !strings.Contains(content, c) {
-			t.Fatalf("launchAgentPlist missing %q", c)
-		}
 	}
 }
 
@@ -79,21 +65,16 @@ func TestValidateStartupExecutablePath(t *testing.T) {
 	}
 }
 
-func TestIsLaunchctlAlreadyLoadedError(t *testing.T) {
-	cases := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "nil", err: nil, want: false},
-		{name: "already bootstrapped", err: errors.New("launchctl bootstrap failed: service already bootstrapped"), want: true},
-		{name: "already loaded", err: errors.New("launchctl bootstrap failed: service already loaded"), want: true},
-		{name: "other", err: errors.New("permission denied"), want: false},
+func TestNewDarwinAdaptersSetsHelperBundleID(t *testing.T) {
+	adapters := newDarwinAdapters("com.pause.app")
+	manager, ok := adapters.StartupManager.(darwinStartupManager)
+	if !ok {
+		t.Fatalf("expected darwinStartupManager type")
 	}
-	for _, tc := range cases {
-		got := isLaunchctlAlreadyLoadedError(tc.err)
-		if got != tc.want {
-			t.Fatalf("%s: got %v want %v", tc.name, got, tc.want)
-		}
+	if manager.appID != "com.pause.app" {
+		t.Fatalf("unexpected appID: %q", manager.appID)
+	}
+	if manager.helperBundleID != "com.pause.app.loginhelper" {
+		t.Fatalf("unexpected helper bundle id: %q", manager.helperBundleID)
 	}
 }

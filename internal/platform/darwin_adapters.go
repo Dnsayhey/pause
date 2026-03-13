@@ -36,18 +36,22 @@ type darwinNotifier struct{}
 type darwinSoundPlayer struct{}
 
 type darwinStartupManager struct {
-	appID string
+	appID          string
+	helperBundleID string
 }
+
+var errSMUnsupported = errors.New("SMAppService is unavailable")
 
 func newDarwinAdapters(appID string) Adapters {
 	if strings.TrimSpace(appID) == "" {
 		appID = "com.pause.app"
 	}
+	helperBundleID := appID + ".loginhelper"
 	return Adapters{
 		IdleProvider:   &darwinIdleProvider{},
 		Notifier:       darwinNotifier{},
 		SoundPlayer:    darwinSoundPlayer{},
-		StartupManager: darwinStartupManager{appID: appID},
+		StartupManager: darwinStartupManager{appID: appID, helperBundleID: helperBundleID},
 	}
 }
 
@@ -140,68 +144,50 @@ func (darwinSoundPlayer) PlayBreakEnd(sound config.SoundSettings) error {
 }
 
 func (s darwinStartupManager) SetLaunchAtLogin(enabled bool) error {
-	plistPath, err := launchAgentPath(s.appID)
-	if err != nil {
-		return err
-	}
-	domain := fmt.Sprintf("gui/%d", os.Getuid())
-
-	if !enabled {
-		_ = runLaunchctl("bootout", domain, plistPath)
-		_ = runLaunchctl("disable", domain+"/"+s.appID)
-		if err := os.Remove(plistPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if enabled {
+		execPath, err := os.Executable()
+		if err != nil {
 			return err
 		}
-		return nil
-	}
-
-	execPath, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	resolvedExecPath, err := filepath.EvalSymlinks(execPath)
-	if err == nil && strings.TrimSpace(resolvedExecPath) != "" {
-		execPath = resolvedExecPath
-	}
-	if err := validateStartupExecutablePath(execPath); err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(filepath.Dir(plistPath), 0o755); err != nil {
-		return err
-	}
-
-	content := launchAgentPlist(s.appID, execPath)
-	if err := os.WriteFile(plistPath, []byte(content), 0o644); err != nil {
-		return err
-	}
-
-	_ = runLaunchctl("enable", domain+"/"+s.appID)
-	if err := runLaunchctl("bootstrap", domain, plistPath); err != nil && !isLaunchctlAlreadyLoadedError(err) {
-		return err
-	}
-	return nil
-}
-
-func runLaunchctl(args ...string) error {
-	cmd := exec.Command("launchctl", args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
+		resolvedExecPath, err := filepath.EvalSymlinks(execPath)
+		if err == nil && strings.TrimSpace(resolvedExecPath) != "" {
+			execPath = resolvedExecPath
 		}
-		return fmt.Errorf("launchctl %s failed: %s", strings.Join(args, " "), msg)
+		if err := validateStartupExecutablePath(execPath); err != nil {
+			return err
+		}
+	}
+
+	if err := smSetLaunchAtLogin(s.helperBundleID, enabled); err != nil {
+		if enabled {
+			return wrapLaunchAtLoginEnableError(err)
+		}
+		return err
+	}
+
+	actual, err := smGetLaunchAtLogin(s.helperBundleID)
+	if err != nil {
+		return err
+	}
+	if actual != enabled {
+		if enabled {
+			return wrapLaunchAtLoginEnableError(nil)
+		}
+		return errors.New("launch-at-login remained enabled after disabling")
 	}
 	return nil
 }
 
-func isLaunchctlAlreadyLoadedError(err error) bool {
-	if err == nil {
-		return false
+func (s darwinStartupManager) GetLaunchAtLogin() (bool, error) {
+	return smGetLaunchAtLogin(s.helperBundleID)
+}
+
+func wrapLaunchAtLoginEnableError(cause error) error {
+	const msg = "macOS blocked enabling launch at login. Please enable Pause in System Settings > General > Login Items > Allow in the Background"
+	if cause == nil {
+		return errors.New(msg)
 	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "already bootstrapped") || strings.Contains(msg, "already loaded")
+	return fmt.Errorf("%s: %v", msg, cause)
 }
 
 func validateStartupExecutablePath(execPath string) error {
@@ -212,43 +198,4 @@ func validateStartupExecutablePath(execPath string) error {
 		return errors.New("Pause is running from App Translocation; move Pause.app to /Applications and re-enable launch at login")
 	}
 	return nil
-}
-
-func launchAgentPath(appID string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "Library", "LaunchAgents", appID+".plist"), nil
-}
-
-func launchAgentPlist(appID, execPath string) string {
-	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>%s</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>%s</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-</dict>
-</plist>
-`, xmlEscape(appID), xmlEscape(execPath))
-}
-
-func xmlEscape(v string) string {
-	replacer := strings.NewReplacer(
-		"&", "&amp;",
-		"<", "&lt;",
-		">", "&gt;",
-		"\"", "&quot;",
-		"'", "&apos;",
-	)
-	return replacer.Replace(v)
 }

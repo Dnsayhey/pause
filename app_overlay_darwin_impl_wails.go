@@ -236,11 +236,12 @@ void PauseBreakOverlayInit(void) {
     });
 }
 
-void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *theme) {
+int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *theme) {
     NSString *skipTitle = skipButtonTitle ? [NSString stringWithUTF8String:skipButtonTitle] : @"Emergency Skip";
     NSString *countdown = countdownText ? [NSString stringWithUTF8String:countdownText] : @"";
     NSString *overlayTheme = theme ? [NSString stringWithUTF8String:theme] : @"dark";
     BOOL shouldAllowSkip = allowSkip != 0;
+    __block BOOL didShow = NO;
 
     PauseOverlayRunOnMain(^{
         NSArray<NSScreen *> *screens = [NSScreen screens];
@@ -250,6 +251,7 @@ void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const cha
         BOOL sameTheme = (pauseOverlayTheme == nil && overlayTheme == nil) || [pauseOverlayTheme isEqualToString:overlayTheme];
         if (sameScreenCount && sameSkipSetting && sameTitle && sameTheme) {
             PauseOverlayUpdateCountdownTextOnMain(countdown);
+            didShow = pauseOverlayVisible;
             return;
         }
 
@@ -257,6 +259,7 @@ void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const cha
         PauseOverlayEnsureHandler();
 
         if (screens == nil || [screens count] == 0) {
+            didShow = NO;
             return;
         }
 
@@ -282,7 +285,6 @@ void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const cha
             [window release];
         }
 
-        [NSApp activateIgnoringOtherApps:YES];
         for (NSWindow *window in pauseOverlayWindows) {
             [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
                 [context setDuration:pauseOverlayFadeDuration];
@@ -291,7 +293,10 @@ void PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const cha
         }
 
         pauseOverlayVisible = ([pauseOverlayWindows count] > 0);
+        didShow = pauseOverlayVisible;
     });
+
+    return didShow ? 1 : 0;
 }
 
 void PauseBreakOverlayHide(void) {

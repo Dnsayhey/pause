@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+APP_BUNDLE_ID="com.pause.app"
+HELPER_BUNDLE_ID="${APP_BUNDLE_ID}.loginhelper"
+APP_PATH="/Applications/Pause.app"
+DATA_DIR="${HOME}/.pause"
+LEGACY_LAUNCH_AGENT_PLIST="${HOME}/Library/LaunchAgents/com.pause.app.plist"
+PREFERENCES_PLIST_NEW="${HOME}/Library/Preferences/com.pause.app.plist"
+PREFERENCES_PLIST_OLD="${HOME}/Library/Preferences/com.wails.Pause.plist"
+SAVED_STATE_NEW="${HOME}/Library/Saved Application State/com.pause.app.savedState"
+SAVED_STATE_OLD="${HOME}/Library/Saved Application State/com.wails.Pause.savedState"
+CACHE_NEW="${HOME}/Library/Caches/com.pause.app"
+CACHE_OLD="${HOME}/Library/Caches/com.wails.Pause"
+
+echo "Stopping Pause..."
+pkill -9 -x Pause 2>/dev/null || true
+pkill -9 -x PauseLoginHelper 2>/dev/null || true
+
+USER_ID="$(id -u)"
+echo "Unregistering startup items..."
+# New startup path (ServiceManagement-managed labels)
+launchctl bootout "gui/${USER_ID}/${APP_BUNDLE_ID}" 2>/dev/null || true
+launchctl disable "gui/${USER_ID}/${APP_BUNDLE_ID}" 2>/dev/null || true
+launchctl bootout "gui/${USER_ID}/${HELPER_BUNDLE_ID}" 2>/dev/null || true
+launchctl disable "gui/${USER_ID}/${HELPER_BUNDLE_ID}" 2>/dev/null || true
+# Legacy launch agent cleanup (older Pause builds)
+launchctl bootout "gui/${USER_ID}" "${LEGACY_LAUNCH_AGENT_PLIST}" 2>/dev/null || true
+launchctl disable "gui/${USER_ID}/${APP_BUNDLE_ID}" 2>/dev/null || true
+
+echo "Clearing preferences domains..."
+defaults delete "${APP_BUNDLE_ID}" >/dev/null 2>&1 || true
+defaults delete "com.wails.Pause" >/dev/null 2>&1 || true
+
+TARGETS=(
+  "${APP_PATH}"
+  "${DATA_DIR}"
+  "${LEGACY_LAUNCH_AGENT_PLIST}"
+  "${PREFERENCES_PLIST_NEW}"
+  "${PREFERENCES_PLIST_OLD}"
+  "${SAVED_STATE_NEW}"
+  "${SAVED_STATE_OLD}"
+  "${CACHE_NEW}"
+  "${CACHE_OLD}"
+)
+
+echo "Removing files..."
+for target in "${TARGETS[@]}"; do
+  if [[ -e "${target}" || -L "${target}" ]]; then
+    rm -rf "${target}"
+    echo "removed: ${target}"
+  else
+    echo "not_found: ${target}"
+  fi
+done
+
+echo "Pause uninstall complete."

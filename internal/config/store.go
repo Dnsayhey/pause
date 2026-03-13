@@ -14,6 +14,7 @@ type Store struct {
 	path     string
 	mu       sync.RWMutex
 	settings Settings
+	created  bool
 }
 
 func NewStore(path string) (*Store, error) {
@@ -30,6 +31,12 @@ func NewStore(path string) (*Store, error) {
 
 func (s *Store) Path() string {
 	return s.path
+}
+
+func (s *Store) WasCreated() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.created
 }
 
 func (s *Store) Get() Settings {
@@ -66,6 +73,7 @@ func (s *Store) load() error {
 				return err
 			}
 			s.settings = DefaultSettings()
+			s.created = true
 			return s.saveLocked()
 		}
 		return err
