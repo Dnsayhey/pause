@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"pause/internal/config"
@@ -17,10 +18,11 @@ import (
 )
 
 type App struct {
-	ctx      context.Context
-	engine   *service.Engine
-	notifier platform.Notifier
-	desktop  desktopController
+	ctx           context.Context
+	engine        *service.Engine
+	notifier      platform.Notifier
+	desktop       desktopController
+	quitRequested atomic.Bool
 }
 
 type desktopController interface {
@@ -92,7 +94,15 @@ func (a *App) Resume() config.RuntimeState {
 }
 
 func (a *App) SkipCurrentBreak() (config.RuntimeState, error) {
-	return a.engine.SkipCurrentBreak(time.Now())
+	return a.skipCurrentBreakWithMode(service.SkipModeNormal)
+}
+
+func (a *App) skipCurrentBreakEmergency() (config.RuntimeState, error) {
+	return a.skipCurrentBreakWithMode(service.SkipModeEmergency)
+}
+
+func (a *App) skipCurrentBreakWithMode(mode service.SkipMode) (config.RuntimeState, error) {
+	return a.engine.SkipCurrentBreak(time.Now(), mode)
 }
 
 func (a *App) StartBreakNow() (config.RuntimeState, error) {

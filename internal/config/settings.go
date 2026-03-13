@@ -14,7 +14,6 @@ type ReminderRule struct {
 }
 
 type EnforcementSettings struct {
-	OverlayEnabled     bool `json:"overlayEnabled"`
 	OverlaySkipAllowed bool `json:"overlaySkipAllowed"`
 }
 
@@ -51,7 +50,6 @@ type ReminderRulePatch struct {
 }
 
 type EnforcementSettingsPatch struct {
-	OverlayEnabled     *bool `json:"overlayEnabled,omitempty"`
 	OverlaySkipAllowed *bool `json:"overlaySkipAllowed,omitempty"`
 }
 
@@ -96,7 +94,6 @@ type RuntimeState struct {
 	LastTickActive     bool              `json:"lastTickActive"`
 	CurrentIdleSec     int               `json:"currentIdleSec"`
 	ShowTrayCountdown  bool              `json:"showTrayCountdown"`
-	OverlayEnabled     bool              `json:"overlayEnabled"`
 	OverlaySkipAllowed bool              `json:"overlaySkipAllowed"`
 	OverlayNative      bool              `json:"overlayNative"`
 }
@@ -124,7 +121,6 @@ func DefaultSettings() Settings {
 			BreakSec:    5 * 60,
 		},
 		Enforcement: EnforcementSettings{
-			OverlayEnabled:     true,
 			OverlaySkipAllowed: true,
 		},
 		Sound: SoundSettings{
@@ -145,7 +141,6 @@ func DefaultSettings() Settings {
 
 func (s Settings) Normalize() Settings {
 	d := DefaultSettings()
-	s.Enforcement.OverlayEnabled = true
 
 	if s.Eye.IntervalSec <= 0 {
 		s.Eye.IntervalSec = d.Eye.IntervalSec
@@ -207,7 +202,6 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 		}
 	}
 	if p.Enforcement != nil {
-		// v1 policy: overlay enforcement is always enabled.
 		if p.Enforcement.OverlaySkipAllowed != nil {
 			s.Enforcement.OverlaySkipAllowed = *p.Enforcement.OverlaySkipAllowed
 		}

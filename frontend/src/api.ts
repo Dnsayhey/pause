@@ -16,7 +16,7 @@ const fallbackSettings: Settings = {
   globalEnabled: true,
   eye: { enabled: true, intervalSec: 1200, breakSec: 20 },
   stand: { enabled: true, intervalSec: 3600, breakSec: 300 },
-  enforcement: { overlayEnabled: true, overlaySkipAllowed: true },
+  enforcement: { overlaySkipAllowed: true },
   sound: { enabled: true, volume: 70 },
   timer: { mode: 'idle_pause', idlePauseThresholdSec: 300 },
   ui: { showTrayCountdown: true, language: 'auto', theme: 'auto' }
@@ -31,7 +31,6 @@ let devRuntime: RuntimeState = {
   globalEnabled: true,
   timerMode: 'idle_pause',
   currentIdleSec: 0,
-  overlayEnabled: true,
   overlaySkipAllowed: true,
   overlayNative: false
 };

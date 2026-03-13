@@ -9,7 +9,6 @@ export type Settings = {
   eye: ReminderRule;
   stand: ReminderRule;
   enforcement: {
-    overlayEnabled: boolean;
     overlaySkipAllowed: boolean;
   };
   sound: {
@@ -42,7 +41,6 @@ export type RuntimeState = {
   globalEnabled: boolean;
   timerMode: string;
   currentIdleSec: number;
-  overlayEnabled: boolean;
   overlaySkipAllowed: boolean;
   overlayNative: boolean;
 };

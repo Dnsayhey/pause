@@ -17,7 +17,13 @@ APP_VERSION="1.0.0"
 cd "${ROOT_DIR}"
 
 echo "[1/4] Building ${APP_NAME}.app"
-wails build -platform darwin/universal -clean -skipbindings -tags wails
+if command -v wails >/dev/null 2>&1; then
+  WAILS_CMD=(wails)
+else
+  echo "wails not found in PATH, using 'go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2'"
+  WAILS_CMD=(go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2)
+fi
+"${WAILS_CMD[@]}" build -platform darwin/universal -clean -skipbindings -tags wails
 
 if [[ ! -d "${APP_BUNDLE}" ]]; then
   echo "ERROR: app bundle not found: ${APP_BUNDLE}" >&2

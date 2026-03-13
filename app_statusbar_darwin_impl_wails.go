@@ -10,7 +10,6 @@ package main
 #import <dispatch/dispatch.h>
 
 extern void statusBarMenuCallbackGo(int callbackID);
-extern void statusBarDebugEventGo(int eventID);
 
 enum {
     PauseStatusBarActionBreakNow = 1,
@@ -19,14 +18,6 @@ enum {
     PauseStatusBarActionResume = 4,
     PauseStatusBarActionOpenWindow = 5,
     PauseStatusBarActionQuit = 6
-};
-
-enum {
-    PauseStatusBarDebugEventStatusItemToggleOpen = 1,
-    PauseStatusBarDebugEventStatusItemToggleClose = 2,
-    PauseStatusBarDebugEventPopoverClosed = 3,
-    PauseStatusBarDebugEventAppResignActive = 4,
-    PauseStatusBarDebugEventAppBecomeActive = 5
 };
 
 static void PauseClosePopover(void);
@@ -49,7 +40,6 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
 - (void)onMoreClick:(id)sender;
 - (void)onMenuAbout:(id)sender;
 - (void)onMenuQuit:(id)sender;
-- (void)onAppDidBecomeActive:(NSNotification *)notification;
 - (void)onAppDidResignActive:(NSNotification *)notification;
 - (void)onBlinkTick:(NSTimer *)timer;
 @end
@@ -64,7 +54,6 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
         return;
     }
     if ([pausePopover isShown]) {
-        statusBarDebugEventGo(PauseStatusBarDebugEventStatusItemToggleClose);
         PauseClosePopover();
         return;
     }
@@ -76,10 +65,15 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
         }
     }
 
-    statusBarDebugEventGo(PauseStatusBarDebugEventStatusItemToggleOpen);
+    if (![NSApp isActive]) {
+        [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
+    }
     [pausePopover showRelativeToRect:pauseStatusItem.button.bounds ofView:pauseStatusItem.button preferredEdge:NSRectEdgeMinY];
     PauseUpdateStatusItemTooltipVisibility();
     NSWindow *popoverWindow = pausePopover.contentViewController.view.window;
+    if (popoverWindow != nil) {
+        [popoverWindow makeKeyAndOrderFront:nil];
+    }
 
     for (NSWindow *window in windowsBefore) {
         if (window == nil || window == popoverWindow) {
@@ -139,14 +133,8 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
     statusBarMenuCallbackGo(PauseStatusBarActionQuit);
 }
 
-- (void)onAppDidBecomeActive:(NSNotification *)notification {
-    (void)notification;
-    statusBarDebugEventGo(PauseStatusBarDebugEventAppBecomeActive);
-}
-
 - (void)onAppDidResignActive:(NSNotification *)notification {
     (void)notification;
-    statusBarDebugEventGo(PauseStatusBarDebugEventAppResignActive);
     PauseClosePopover();
 }
 
@@ -337,7 +325,6 @@ static void PauseRemovePopoverAutoClose(void) {
 static void PauseClosePopover(void) {
     if (pausePopover != nil && [pausePopover isShown]) {
         [pausePopover close];
-        statusBarDebugEventGo(PauseStatusBarDebugEventPopoverClosed);
     }
     PauseRemovePopoverAutoClose();
     PauseUpdateStatusItemTooltipVisibility();
@@ -375,10 +362,6 @@ static void PauseInstallPopoverAutoClose(void) {
 
 static void PauseUpdateStatusItemTooltipVisibility(void) {
     if (pauseStatusItem == nil || pauseStatusItem.button == nil) {
-        return;
-    }
-    if (pausePopover != nil && [pausePopover isShown]) {
-        [pauseStatusItem.button setToolTip:nil];
         return;
     }
     if (pauseStatusTooltipText != nil) {
@@ -540,7 +523,6 @@ void PauseStatusBarInit(void) {
         [pauseStatusItem.button setTarget:pauseStatusHandler];
         [pauseStatusItem.button setAction:@selector(onStatusItemClick:)];
         [pauseStatusItem.button sendActionOn:(NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp)];
-        [[NSNotificationCenter defaultCenter] addObserver:pauseStatusHandler selector:@selector(onAppDidBecomeActive:) name:NSApplicationDidBecomeActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:pauseStatusHandler selector:@selector(onAppDidResignActive:) name:NSApplicationDidResignActiveNotification object:nil];
 
         BuildPopoverContent();

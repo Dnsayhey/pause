@@ -18,8 +18,8 @@ func TestStoreCreatesDefaults(t *testing.T) {
 	if got.Eye.IntervalSec != want.Eye.IntervalSec {
 		t.Fatalf("expected default eye interval %d, got %d", want.Eye.IntervalSec, got.Eye.IntervalSec)
 	}
-	if !got.Enforcement.OverlayEnabled {
-		t.Fatalf("expected overlay enabled by default")
+	if !got.Enforcement.OverlaySkipAllowed {
+		t.Fatalf("expected overlay skip allowed by default")
 	}
 	if got.UI.Theme != UIThemeAuto {
 		t.Fatalf("expected default theme %q, got %q", UIThemeAuto, got.UI.Theme)
@@ -125,25 +125,6 @@ func TestApplyPatchNormalizesValues(t *testing.T) {
 	}
 	if got.UI.Theme != base.UI.Theme {
 		t.Fatalf("expected theme fallback to %q, got %q", base.UI.Theme, got.UI.Theme)
-	}
-}
-
-func TestOverlayEnforcementAlwaysEnabled(t *testing.T) {
-	base := DefaultSettings()
-	base.Enforcement.OverlayEnabled = false
-	normalized := base.Normalize()
-	if !normalized.Enforcement.OverlayEnabled {
-		t.Fatalf("expected Normalize() to force overlay enabled")
-	}
-
-	overlayOff := false
-	patched := normalized.ApplyPatch(SettingsPatch{
-		Enforcement: &EnforcementSettingsPatch{
-			OverlayEnabled: &overlayOff,
-		},
-	})
-	if !patched.Enforcement.OverlayEnabled {
-		t.Fatalf("expected ApplyPatch() to keep overlay enabled")
 	}
 }
 

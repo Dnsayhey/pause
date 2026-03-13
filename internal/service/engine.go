@@ -20,6 +20,13 @@ const (
 	PauseModeIndefinite = "indefinite"
 )
 
+type SkipMode string
+
+const (
+	SkipModeNormal    SkipMode = "normal"
+	SkipModeEmergency SkipMode = "emergency"
+)
+
 type Engine struct {
 	mu        sync.Mutex
 	startOnce sync.Once
@@ -270,14 +277,23 @@ func (e *Engine) Resume(now time.Time) config.RuntimeState {
 	return e.runtimeStateLocked(now, settings)
 }
 
-func (e *Engine) SkipCurrentBreak(now time.Time) (config.RuntimeState, error) {
+func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (config.RuntimeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	settings := e.store.Get()
-	if !settings.Enforcement.OverlaySkipAllowed {
-		return config.RuntimeState{}, errors.New("skip is disabled by settings")
+	switch mode {
+	case "", SkipModeNormal:
+		if !settings.Enforcement.OverlaySkipAllowed {
+			return config.RuntimeState{}, errors.New("skip is disabled by settings")
+		}
+	case SkipModeEmergency:
+		// Emergency path: allow explicit user escape from enforced overlay.
+		e.session.SetCanSkip(true)
+	default:
+		return config.RuntimeState{}, errors.New("invalid skip mode")
 	}
+
 	if err := e.session.Skip(); err != nil {
 		return config.RuntimeState{}, err
 	}
@@ -339,7 +355,6 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings config.Settings) con
 		LastTickActive:     e.lastTickActive,
 		CurrentIdleSec:     e.currentIdleSec,
 		ShowTrayCountdown:  settings.UI.ShowTrayCountdown,
-		OverlayEnabled:     settings.Enforcement.OverlayEnabled,
 		OverlaySkipAllowed: settings.Enforcement.OverlaySkipAllowed,
 	}
 }

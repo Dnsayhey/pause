@@ -49,13 +49,12 @@ func newDesktopController() desktopController {
 
 func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 	c.startOnce.Do(func() {
-		diag.Logf("desktop.start")
 		configureDesktopWindowBehavior()
 		c.statusBar.Init(func(actionID int) {
 			c.handleStatusBarAction(ctx, app, actionID)
 		})
 		c.overlay.Init(func() {
-			_, err := app.SkipCurrentBreak()
+			_, err := app.skipCurrentBreakEmergency()
 			c.logErr(ctx, err)
 		})
 		settings := app.engine.GetSettings()
@@ -111,62 +110,33 @@ func (c *wailsDesktopController) syncStatusBar(state config.RuntimeState, settin
 	countdown := buildCountdownLabel(displayState, settings, language)
 	title := buildStatusBarTitle(displayState, settings, language)
 	progress := buildStatusBarProgress(displayState, settings)
-	started := time.Now()
 	c.statusBar.Update(status, countdown, title, state.Paused, progress)
-	updateMs := time.Since(started).Milliseconds()
-
-	sessionStatus := "none"
-	if state.CurrentSession != nil {
-		sessionStatus = state.CurrentSession.Status
-	}
-	diag.Logf(
-		"desktop.tick gap_ms=%d update_ms=%d next_eye_raw=%d next_stand_raw=%d next_eye_display=%d next_stand_display=%d paused=%t session=%s title=%q countdown=%q progress=%.3f",
-		loopGapMs,
-		updateMs,
-		state.NextEyeInSec,
-		state.NextStandInSec,
-		displayNextEye,
-		displayNextStand,
-		state.Paused,
-		sessionStatus,
-		title,
-		countdown,
-		progress,
-	)
 }
 
 func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app *App, actionID int) {
-	diag.Logf("desktop.action id=%d", actionID)
 	switch actionID {
 	case statusBarActionBreakNow:
-		diag.Logf("desktop.action break_now_select_auto")
 		state := app.engine.GetRuntimeState(time.Now())
 		choice := selectAutoReminderChoice(state, app.engine.GetSettings())
-		diag.Logf("desktop.action break_now reason=%s remaining=%d", choice.reason, choice.remaining)
 		_, err := app.StartBreakNowForReason(choice.reason)
 		c.logErr(ctx, err)
 	case statusBarActionPause:
-		diag.Logf("desktop.action pause_indefinite")
 		_, err := app.Pause(service.PauseModeIndefinite, 0)
 		c.logErr(ctx, err)
 	case statusBarActionPause30:
-		diag.Logf("desktop.action pause_30m")
 		_, err := app.Pause(service.PauseModeTemporary, 30*60)
 		c.logErr(ctx, err)
 	case statusBarActionResume:
-		diag.Logf("desktop.action resume")
 		_ = app.Resume()
 	case statusBarActionOpenWindow:
-		diag.Logf("desktop.action open_window dispatch_show_main")
 		showMainWindowFromStatusBar(ctx)
 	case statusBarActionQuit:
-		diag.Logf("desktop.action quit")
 		app.Quit()
 	}
 }
 
 func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, state config.RuntimeState, settings config.Settings) {
-	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting" && state.OverlayEnabled
+	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting"
 	overlaySkipAllowed := overlayActive && state.OverlaySkipAllowed && state.CurrentSession != nil && state.CurrentSession.CanSkip
 	language := c.lastLanguage
 	theme := resolveEffectiveTheme(settings.UI.Theme)
@@ -185,13 +155,11 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, stat
 	if c.overlay.IsNative() {
 		needsUpdate := overlayActive != c.lastOverlayActive || overlaySkipAllowed != c.lastOverlaySkip || language != c.lastOverlayLang || overlayText != c.lastOverlayText || theme != c.lastOverlayTheme
 		if needsUpdate {
-			diag.Logf("desktop.overlay native active=%t allow_skip=%t text=%q theme=%s", overlayActive, overlaySkipAllowed, overlayText, theme)
 			if overlayActive {
 				// Keep native break overlay isolated from the main window.
 				hideMainWindowForOverlay(ctx)
 				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, theme) {
 					if !c.overlayFallbackNotified && app != nil {
-						diag.Logf("desktop.overlay native_show_failed fallback_notify=true")
 						app.SendBreakFallbackNotification(state)
 						c.overlayFallbackNotified = true
 					}
@@ -209,7 +177,6 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, stat
 	}
 
 	if overlayActive != c.lastOverlayActive {
-		diag.Logf("desktop.overlay fallback active=%t", overlayActive)
 		if overlayActive {
 			showMainWindowForOverlay(ctx)
 			runtime.WindowSetAlwaysOnTop(ctx, true)

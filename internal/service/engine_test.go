@@ -215,8 +215,73 @@ func TestUpdateSettingsAffectsSkipImmediately(t *testing.T) {
 		t.Fatalf("UpdateSettings() error = %v", err)
 	}
 
-	if _, err := engine.SkipCurrentBreak(base.Add(1 * time.Second)); err == nil {
+	if _, err := engine.SkipCurrentBreak(base.Add(1*time.Second), SkipModeNormal); err == nil {
 		t.Fatalf("expected skip to fail after setting changed")
+	}
+}
+
+func TestSkipCurrentBreakEmergencyBypassesSkipSetting(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	engine := newTestEngine(t, idle, &fakeStartupManager{})
+
+	eyeInterval := 1
+	standEnabled := false
+	_, err := engine.UpdateSettings(config.SettingsPatch{
+		Eye:   &config.ReminderRulePatch{IntervalSec: &eyeInterval},
+		Stand: &config.ReminderRulePatch{Enabled: &standEnabled},
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	base := time.Unix(1_700_000_000, 0)
+	engine.Tick(base)
+	engine.Tick(base.Add(1 * time.Second))
+	if state := engine.GetRuntimeState(base.Add(1 * time.Second)); state.CurrentSession == nil {
+		t.Fatalf("expected active session")
+	}
+
+	skipAllowed := false
+	_, err = engine.UpdateSettings(config.SettingsPatch{
+		Enforcement: &config.EnforcementSettingsPatch{OverlaySkipAllowed: &skipAllowed},
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	if _, err := engine.SkipCurrentBreak(base.Add(1*time.Second), SkipModeNormal); err == nil {
+		t.Fatalf("expected normal skip to fail after setting changed")
+	}
+
+	state, err := engine.SkipCurrentBreak(base.Add(2*time.Second), SkipModeEmergency)
+	if err != nil {
+		t.Fatalf("SkipCurrentBreak(emergency) error = %v", err)
+	}
+	if state.CurrentSession != nil {
+		t.Fatalf("expected session cleared after emergency skip")
+	}
+}
+
+func TestSkipCurrentBreakRejectsInvalidMode(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	engine := newTestEngine(t, idle, &fakeStartupManager{})
+
+	eyeInterval := 1
+	standEnabled := false
+	_, err := engine.UpdateSettings(config.SettingsPatch{
+		Eye:   &config.ReminderRulePatch{IntervalSec: &eyeInterval},
+		Stand: &config.ReminderRulePatch{Enabled: &standEnabled},
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings() error = %v", err)
+	}
+
+	base := time.Unix(1_700_000_000, 0)
+	engine.Tick(base)
+	engine.Tick(base.Add(1 * time.Second))
+
+	if _, err := engine.SkipCurrentBreak(base.Add(2*time.Second), SkipMode("bad")); err == nil {
+		t.Fatalf("expected invalid skip mode to fail")
 	}
 }
 

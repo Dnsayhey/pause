@@ -96,8 +96,7 @@ export function App() {
   const overlayActive = Boolean(
     !runtime.overlayNative &&
       runtime.currentSession &&
-      runtime.currentSession.status === 'resting' &&
-      runtime.overlayEnabled
+      runtime.currentSession.status === 'resting'
   );
 
   return (
