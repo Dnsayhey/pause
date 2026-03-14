@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	"pause/internal/core/config"
 	"pause/internal/core/scheduler"
 	"pause/internal/core/session"
-	"pause/internal/diag"
+	"pause/internal/logx"
 	"pause/internal/platform"
 )
 
@@ -82,16 +83,19 @@ func (e *Engine) SyncPlatformSettings() error {
 
 	// First app run after config creation: attempt to enable launch-at-login once.
 	if e.store.WasCreated() {
+		logx.Infof("startup.auto_launch_at_login attempt=true")
 		if err := e.startupManager.SetLaunchAtLogin(true); err != nil {
+			logx.Warnf("startup.auto_launch_at_login_err err=%v", err)
 			return err
 		}
+		logx.Infof("startup.auto_launch_at_login enabled=true")
 	}
 	return nil
 }
 
 func (e *Engine) Start(ctx context.Context) {
 	e.startOnce.Do(func() {
-		diag.Logf("engine.start")
+		logx.Infof("engine.start")
 		ticker := time.NewTicker(time.Second)
 		go func() {
 			defer ticker.Stop()
@@ -130,7 +134,14 @@ func (e *Engine) Tick(now time.Time) {
 
 	e.session.Tick(now)
 	if view := e.session.CurrentView(now); view != nil && view.Status == string(session.StatusCompleted) {
-		_ = e.soundPlayer.PlayBreakEnd(settings.Sound)
+		logx.Infof(
+			"break.completed reasons=%s duration_sec=%d",
+			joinReasons(view.Reasons),
+			int(view.EndsAt.Sub(view.StartedAt).Seconds()),
+		)
+		if err := e.soundPlayer.PlayBreakEnd(settings.Sound); err != nil {
+			logx.Warnf("break.end_sound_err err=%v", err)
+		}
 	}
 	e.session.ClearIfDone()
 
@@ -189,6 +200,12 @@ func (e *Engine) Tick(now time.Time) {
 	}
 
 	e.session.StartBreak(now, evt, settings.Enforcement.OverlaySkipAllowed)
+	logx.Infof(
+		"break.started source=scheduled reasons=%s break_sec=%d skip_allowed=%t",
+		joinReminderTypes(evt.Reasons),
+		evt.BreakSec,
+		settings.Enforcement.OverlaySkipAllowed,
+	)
 	e.logTickLocked(now, settings, "event", rawDeltaSec, appliedDeltaSec, evt)
 }
 
@@ -200,9 +217,11 @@ func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, er
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	patchJSON := marshalPatchForLog(patch)
 	prev := e.store.Get()
 	next, err := e.store.Update(patch)
 	if err != nil {
+		logx.Warnf("settings.update_err patch=%s err=%v", patchJSON, err)
 		return config.Settings{}, err
 	}
 
@@ -211,6 +230,7 @@ func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, er
 	}
 
 	e.applySchedulePatchLocked(prev, next)
+	logx.Infof("settings.updated patch=%s", patchJSON)
 
 	return next, nil
 }
@@ -218,16 +238,29 @@ func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, er
 func (e *Engine) GetLaunchAtLogin() (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.startupManager.GetLaunchAtLogin()
+	enabled, err := e.startupManager.GetLaunchAtLogin()
+	if err != nil {
+		logx.Warnf("launch_at_login.get_err err=%v", err)
+		return false, err
+	}
+	logx.Debugf("launch_at_login.get enabled=%t", enabled)
+	return enabled, nil
 }
 
 func (e *Engine) SetLaunchAtLogin(enabled bool) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := e.startupManager.SetLaunchAtLogin(enabled); err != nil {
+		logx.Warnf("launch_at_login.set_err requested=%t err=%v", enabled, err)
 		return false, err
 	}
-	return e.startupManager.GetLaunchAtLogin()
+	actual, err := e.startupManager.GetLaunchAtLogin()
+	if err != nil {
+		logx.Warnf("launch_at_login.verify_err requested=%t err=%v", enabled, err)
+		return false, err
+	}
+	logx.Infof("launch_at_login.set requested=%t actual=%t", enabled, actual)
+	return actual, nil
 }
 
 func (e *Engine) GetRuntimeState(now time.Time) config.RuntimeState {
@@ -251,10 +284,12 @@ func (e *Engine) Pause(mode string, durationSec int, now time.Time) (config.Runt
 		e.paused = true
 		e.pauseMode = mode
 		e.pausedUntil = &until
+		logx.Infof("pause.enabled mode=%s duration_sec=%d until_unix=%d", mode, durationSec, until.Unix())
 	case PauseModeIndefinite:
 		e.paused = true
 		e.pauseMode = mode
 		e.pausedUntil = nil
+		logx.Infof("pause.enabled mode=%s", mode)
 	default:
 		return config.RuntimeState{}, errors.New("invalid pause mode")
 	}
@@ -267,11 +302,15 @@ func (e *Engine) Resume(now time.Time) config.RuntimeState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	wasPaused := e.paused
 	e.paused = false
 	e.pauseMode = ""
 	e.pausedUntil = nil
 	e.lastTick = now
 	e.tickRemainder = 0
+	if wasPaused {
+		logx.Infof("pause.resumed source=manual")
+	}
 
 	settings := e.store.Get()
 	return e.runtimeStateLocked(now, settings)
@@ -282,6 +321,7 @@ func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (config.RuntimeS
 	defer e.mu.Unlock()
 
 	settings := e.store.Get()
+	view := e.session.CurrentView(now)
 	switch mode {
 	case "", SkipModeNormal:
 		if !settings.Enforcement.OverlaySkipAllowed {
@@ -295,7 +335,16 @@ func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (config.RuntimeS
 	}
 
 	if err := e.session.Skip(); err != nil {
+		logx.Warnf("break.skip_err mode=%s err=%v", mode, err)
 		return config.RuntimeState{}, err
+	}
+	if view != nil {
+		logx.Infof(
+			"break.skipped mode=%s reasons=%s remaining_sec=%d",
+			mode,
+			joinReasons(view.Reasons),
+			view.RemainingSec,
+		)
 	}
 	e.session.ClearIfDone()
 	return e.runtimeStateLocked(now, settings), nil
@@ -319,6 +368,7 @@ func (e *Engine) StartBreakNowForReason(reason string, now time.Time) (config.Ru
 		e.paused = false
 		e.pauseMode = ""
 		e.pausedUntil = nil
+		logx.Infof("pause.resumed source=manual_break_now")
 	}
 	if e.session.IsActive() {
 		return config.RuntimeState{}, errors.New("break already active")
@@ -335,6 +385,13 @@ func (e *Engine) StartBreakNowForReason(reason string, now time.Time) (config.Ru
 	e.tickRemainder = 0
 
 	e.session.StartBreak(now, evt, settings.Enforcement.OverlaySkipAllowed)
+	logx.Infof(
+		"break.started source=manual reasons=%s break_sec=%d skip_allowed=%t forced_reason=%s",
+		joinReminderTypes(evt.Reasons),
+		evt.BreakSec,
+		settings.Enforcement.OverlaySkipAllowed,
+		normalizeImmediateReason(reason),
+	)
 	return e.runtimeStateLocked(now, settings), nil
 }
 
@@ -379,6 +436,7 @@ func (e *Engine) syncPause(now time.Time) bool {
 	e.paused = false
 	e.pauseMode = ""
 	e.pausedUntil = nil
+	logx.Infof("pause.resumed source=auto_expire")
 	return false
 }
 
@@ -399,7 +457,7 @@ func (e *Engine) logTickLocked(now time.Time, settings config.Settings, reason s
 		evtReasons = strings.Join(reasons, "+")
 	}
 
-	diag.Logf(
+	logx.Debugf(
 		"engine.tick reason=%s now_unix=%d raw_delta=%d applied_delta=%d idle_sec=%d tick_active=%t paused=%t session=%s next_eye=%d next_stand=%d evt_reasons=%s evt_break=%d",
 		reason,
 		now.Unix(),
@@ -489,6 +547,33 @@ func selectImmediateReason(nextEye, nextStand int) string {
 	default:
 		return string(scheduler.ReminderStand)
 	}
+}
+
+func joinReminderTypes(reasons []scheduler.ReminderType) string {
+	if len(reasons) == 0 {
+		return "none"
+	}
+
+	labels := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		labels = append(labels, string(reason))
+	}
+	return strings.Join(labels, "+")
+}
+
+func joinReasons(reasons []string) string {
+	if len(reasons) == 0 {
+		return "none"
+	}
+	return strings.Join(reasons, "+")
+}
+
+func marshalPatchForLog(patch config.SettingsPatch) string {
+	raw, err := json.Marshal(patch)
+	if err != nil {
+		return "{}"
+	}
+	return string(raw)
 }
 
 func nextReasons(nextEye, nextStand int) []string {

@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"pause/internal/desktop"
+	"pause/internal/logx"
 )
 
 // BeforeClose intercepts window close requests.
@@ -17,6 +18,7 @@ func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 	}
 
 	if a.quitRequested.Swap(false) {
+		logx.Infof("window.before_close allow=true reason=quit_requested")
 		return false
 	}
 
@@ -24,11 +26,13 @@ func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 	if ctx != nil {
 		select {
 		case <-ctx.Done():
+			logx.Infof("window.before_close allow=true reason=context_done")
 			return false
 		default:
 		}
 	}
 
 	desktop.HideMainWindowForClose(ctx)
+	logx.Infof("window.before_close prevent=true action=hide_main_window")
 	return true
 }

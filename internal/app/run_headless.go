@@ -4,6 +4,8 @@ import (
 	"context"
 	"os/signal"
 	"syscall"
+
+	"pause/internal/logx"
 )
 
 func RunHeadless(configPath string) error {
@@ -16,6 +18,8 @@ func RunHeadless(configPath string) error {
 	defer stop()
 
 	desktopApp.Startup(ctx)
+	logx.Infof("app.headless_running")
 	<-ctx.Done()
+	logx.Infof("app.headless_stopped")
 	return nil
 }

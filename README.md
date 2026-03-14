@@ -32,8 +32,17 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 ### 持久化与启动项
 
 - 配置文件默认路径：
-  - macOS / Linux：`~/.pause/settings.json`
-  - Windows：`%APPDATA%/Pause/settings.json`（不可用时回退到 `~/.pause/settings.json`）
+  - macOS：`~/Library/Application Support/Pause/settings.json`
+  - Linux：`$XDG_CONFIG_HOME/Pause/settings.json`（通常为 `~/.config/Pause/settings.json`）
+  - Windows：`%AppData%/Pause/settings.json`
+  - 当系统目录不可用时，回退到 `~/.pause/settings.json`
+- 日志文件默认路径（统一日志）：
+  - macOS：`~/Library/Logs/Pause/app.log`
+  - Linux：`$XDG_CACHE_HOME/Pause/logs/app.log`（通常为 `~/.cache/Pause/logs/app.log`）
+  - Windows：`%LocalAppData%/Pause/logs/app.log`
+  - 当系统目录不可用时，回退到 `~/.pause/logs/app.log`
+- 日志级别默认 `info`，可通过 `PAUSE_LOG_LEVEL=debug|info|warn|error` 调整。
+- 日志文件超过 `2MB` 会自动轮转为 `app.log.1`（仅保留 1 份备份）。
 - 配置文件损坏时自动回退默认值，并备份为 `settings.json.corrupt.<timestamp>.bak`。
 - 支持开机启动：
   - macOS 13+：`SMAppService`

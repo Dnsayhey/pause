@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"pause/internal/logx"
 	"pause/internal/meta"
 
 	"github.com/wailsapp/wails/v2"
@@ -25,6 +26,7 @@ func InstallProcessSignalQuit(desktopApp *App) {
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-ch
+		logx.Warnf("app.signal_quit signal=interrupt_or_sigterm")
 		desktopApp.Quit()
 		signal.Stop(ch)
 		close(ch)
@@ -54,6 +56,13 @@ func RunWails(configPath string, assets fs.FS) error {
 		},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: meta.SingleInstanceID(),
+			OnSecondInstanceLaunch: func(secondInstanceData options.SecondInstanceData) {
+				logx.Infof(
+					"app.second_instance_detected args=%d workdir=%s",
+					len(secondInstanceData.Args),
+					secondInstanceData.WorkingDirectory,
+				)
+			},
 		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,

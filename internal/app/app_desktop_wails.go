@@ -13,7 +13,7 @@ import (
 	"pause/internal/core/config"
 	"pause/internal/core/service"
 	"pause/internal/desktop"
-	"pause/internal/diag"
+	"pause/internal/logx"
 )
 
 type wailsDesktopController struct {
@@ -50,6 +50,23 @@ func newDesktopController() desktopController {
 
 func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 	c.startOnce.Do(func() {
+		logx.SetSink(func(level logx.Level, message string) {
+			switch level {
+			case logx.LevelError:
+				runtime.LogError(ctx, message)
+			case logx.LevelWarn:
+				runtime.LogWarning(ctx, message)
+			case logx.LevelInfo:
+				runtime.LogInfo(ctx, message)
+			default:
+				runtime.LogDebug(ctx, message)
+			}
+		})
+		go func() {
+			<-ctx.Done()
+			logx.ClearSink()
+		}()
+
 		desktop.ConfigureDesktopWindowBehavior()
 		c.statusBar.Init(func(actionID int) {
 			c.handleStatusBarAction(ctx, app, actionID)
@@ -194,12 +211,11 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, stat
 	c.lastOverlayTheme = theme
 }
 
-func (c *wailsDesktopController) logErr(ctx context.Context, err error) {
-	if err == nil || ctx == nil {
+func (c *wailsDesktopController) logErr(_ context.Context, err error) {
+	if err == nil {
 		return
 	}
-	diag.Logf("desktop.error err=%v", err)
-	runtime.LogErrorf(ctx, "menu action failed: %v", err)
+	logx.Errorf("desktop.error err=%v", err)
 }
 
 func buildPauseLabel(state config.RuntimeState, language string) string {

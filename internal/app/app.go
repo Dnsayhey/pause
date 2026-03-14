@@ -2,19 +2,16 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"pause/internal/core/config"
 	"pause/internal/core/service"
-	"pause/internal/diag"
+	"pause/internal/logx"
 	"pause/internal/meta"
+	"pause/internal/paths"
 	"pause/internal/platform"
 )
 
@@ -52,6 +49,13 @@ func NewApp(configPath string) (*App, error) {
 		adapters.StartupManager,
 	)
 
+	logx.Infof(
+		"app.init bundle_id=%s config_path=%s config_created=%t",
+		meta.EffectiveAppBundleID(),
+		configPath,
+		store.WasCreated(),
+	)
+
 	return &App{
 		engine:   engine,
 		notifier: adapters.Notifier,
@@ -62,12 +66,13 @@ func NewApp(configPath string) (*App, error) {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	if err := a.engine.SyncPlatformSettings(); err != nil {
-		diag.Logf("app.startup sync_platform_settings_err=%v", err)
+		logx.Warnf("app.startup sync_platform_settings_err=%v", err)
 	}
 	a.engine.Start(ctx)
 	if a.desktop != nil {
 		a.desktop.OnStartup(ctx, a)
 	}
+	logx.Infof("app.startup completed")
 }
 
 func (a *App) GetSettings() config.Settings {
@@ -75,7 +80,12 @@ func (a *App) GetSettings() config.Settings {
 }
 
 func (a *App) UpdateSettings(patch config.SettingsPatch) (config.Settings, error) {
-	return a.engine.UpdateSettings(patch)
+	settings, err := a.engine.UpdateSettings(patch)
+	if err != nil {
+		logx.Warnf("app.update_settings_err err=%v", err)
+		return config.Settings{}, err
+	}
+	return settings, nil
 }
 
 func (a *App) GetRuntimeState() config.RuntimeState {
@@ -124,9 +134,18 @@ func (a *App) SetLaunchAtLogin(enabled bool) (bool, error) {
 
 func (a *App) SendBreakFallbackNotification(state config.RuntimeState) {
 	if a.notifier == nil {
+		logx.Warnf("overlay.fallback_notification_skipped reason=no_notifier")
 		return
 	}
-	_ = a.notifier.ShowReminder("Time to rest", buildBreakNotificationBody(state))
+	if err := a.notifier.ShowReminder("Time to rest", buildBreakNotificationBody(state)); err != nil {
+		logx.Warnf("overlay.fallback_notification_err err=%v", err)
+		return
+	}
+	reasons := "none"
+	if state.CurrentSession != nil {
+		reasons = joinReasons(state.CurrentSession.Reasons)
+	}
+	logx.Warnf("overlay.fallback_notification_sent reasons=%s", reasons)
 }
 
 func buildBreakNotificationBody(state config.RuntimeState) string {
@@ -155,21 +174,13 @@ func buildBreakNotificationBody(state config.RuntimeState) string {
 	return label + " break started"
 }
 
+func joinReasons(reasons []string) string {
+	if len(reasons) == 0 {
+		return "none"
+	}
+	return strings.Join(reasons, "+")
+}
+
 func defaultConfigPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	if home == "" {
-		return "", errors.New("unable to resolve home directory")
-	}
-
-	if runtime.GOOS == "windows" {
-		appData := os.Getenv("APPDATA")
-		if appData != "" {
-			return filepath.Join(appData, "Pause", "settings.json"), nil
-		}
-	}
-
-	return filepath.Join(home, ".pause", "settings.json"), nil
+	return paths.ConfigFile("settings.json")
 }
