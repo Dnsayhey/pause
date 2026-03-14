@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="${APP_NAME:-Pause}"
 source "${ROOT_DIR}/scripts/app_identity.sh"
+APP_ICON_SOURCE="${APP_ICON_SOURCE:-${ROOT_DIR}/assets/branding/app-icon-1024.png}"
+APP_ICON_TARGET="${ROOT_DIR}/build/appicon.png"
 HELPER_NAME="${HELPER_NAME:-PauseLoginHelper}"
 CODE_SIGN_IDENTITY="${PAUSE_CODESIGN_IDENTITY:--}"
 APP_BUNDLE="${ROOT_DIR}/build/bin/${APP_NAME}.app"
@@ -14,6 +16,13 @@ APP_INFO_PLIST="${APP_BUNDLE}/Contents/Info.plist"
 APP_VERSION="1.0.0"
 
 cd "${ROOT_DIR}"
+
+if [[ ! -f "${APP_ICON_SOURCE}" ]]; then
+  echo "ERROR: app icon source not found: ${APP_ICON_SOURCE}" >&2
+  exit 1
+fi
+mkdir -p "$(dirname "${APP_ICON_TARGET}")"
+cp "${APP_ICON_SOURCE}" "${APP_ICON_TARGET}"
 
 echo "[1/4] Building ${APP_NAME}.app"
 if command -v wails >/dev/null 2>&1; then

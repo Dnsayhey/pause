@@ -75,6 +75,7 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 - `internal/platform/`：平台 facade 与接口定义。
 - `internal/platform/darwin|windows|linux/`：平台能力实现（空闲检测、通知、开机启动、声音）。
 - `internal/meta/bundle_id.txt`：应用 Bundle ID 单一来源（脚本与运行时均从这里派生，支持构建时覆盖）。
+- `assets/branding/app-icon-1024.png`：应用图标源文件（打包时同步到 `build/appicon.png`）。
 - `frontend/`：React 前端界面。
 
 ## 本地开发
@@ -118,6 +119,7 @@ go test -tags wails ./...
 
 - 产物：`build/bin/Pause.dmg`
 - Bundle ID 默认来源：`internal/meta/bundle_id.txt`（可通过环境变量 `APP_BUNDLE_ID` 临时覆盖）
+- 图标默认来源：`assets/branding/app-icon-1024.png`（可通过环境变量 `APP_ICON_SOURCE` 临时覆盖）
 - 脚本会优先使用本机 `wails` 命令；如果未安装，会自动回退到：
   - `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`
 
