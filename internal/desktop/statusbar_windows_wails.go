@@ -4,6 +4,8 @@ package desktop
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -44,6 +46,9 @@ const (
 	tpmBottomAlign = 0x0020
 	tpmRightButton = 0x0002
 	tpmReturnCmd   = 0x0100
+
+	imageIcon      = 1
+	lrLoadFromFile = 0x0010
 )
 
 const (
@@ -52,7 +57,6 @@ const (
 	menuPause30  = 1003
 	menuResume   = 1004
 	menuOpen     = 1005
-	menuAbout    = 1006
 	menuQuit     = 1007
 )
 
@@ -76,6 +80,7 @@ var (
 	procDestroyMenu      = user32DLL.NewProc("DestroyMenu")
 	procGetCursorPos     = user32DLL.NewProc("GetCursorPos")
 	procSetForegroundWnd = user32DLL.NewProc("SetForegroundWindow")
+	procLoadImageW = user32DLL.NewProc("LoadImageW")
 
 	procShellNotifyIconW = shell32.NewProc("Shell_NotifyIconW")
 )
@@ -180,7 +185,11 @@ func (c *windowsStatusBarController) Update(status, countdown, title string, pau
 func (c *windowsStatusBarController) SetLocale(strings StatusBarLocaleStrings) {
 	c.mu.Lock()
 	c.locale = strings
+	hwnd := c.hwnd
 	c.mu.Unlock()
+	if hwnd != 0 {
+		postMessage(hwnd, msgTrayUpdate, 0, 0)
+	}
 }
 
 func (c *windowsStatusBarController) Destroy() {
@@ -259,7 +268,10 @@ func (c *windowsStatusBarController) loop() {
 }
 
 func (c *windowsStatusBarController) addTrayIcon(hwnd uintptr) bool {
-	icon, _, _ := procLoadIconW.Call(0, uintptr(idiApplication))
+	icon := loadTrayIcon()
+	if icon == 0 {
+		icon, _, _ = procLoadIconW.Call(0, uintptr(idiApplication))
+	}
 	nid := notifyIconData{
 		cbSize:           uint32(unsafe.Sizeof(notifyIconData{})),
 		hWnd:             hwnd,
@@ -272,9 +284,38 @@ func (c *windowsStatusBarController) addTrayIcon(hwnd uintptr) bool {
 	return shellNotifyIcon(nimAdd, &nid)
 }
 
+func loadTrayIcon() uintptr {
+	// Only accept icon.ico next to the executable.
+	exePath, err := os.Executable()
+	if err != nil || strings.TrimSpace(exePath) == "" {
+		return 0
+	}
+	iconPath := filepath.Join(filepath.Dir(exePath), "icon.ico")
+	if _, err := os.Stat(iconPath); err != nil {
+		return 0
+	}
+	ptr, err := syscall.UTF16PtrFromString(iconPath)
+	if err != nil {
+		return 0
+	}
+	icon, _, _ := procLoadImageW.Call(
+		0,
+		uintptr(unsafe.Pointer(ptr)),
+		imageIcon,
+		0,
+		0,
+		lrLoadFromFile,
+	)
+	if icon == 0 {
+		return 0
+	}
+	return icon
+}
+
+
 func (c *windowsStatusBarController) updateTooltip(hwnd uintptr) {
 	c.mu.RLock()
-	tip := composeTrayTip(c.status, c.countdown, c.title)
+	tip := composeTrayTip(c.status, c.countdown, c.title, c.locale.Tooltip)
 	c.mu.RUnlock()
 
 	nid := notifyIconData{
@@ -287,7 +328,7 @@ func (c *windowsStatusBarController) updateTooltip(hwnd uintptr) {
 	_ = shellNotifyIcon(nimModify, &nid)
 }
 
-func composeTrayTip(status, countdown, title string) string {
+func composeTrayTip(status, countdown, title, fallbackTip string) string {
 	parts := make([]string, 0, 3)
 	if status != "" {
 		parts = append(parts, status)
@@ -299,7 +340,7 @@ func composeTrayTip(status, countdown, title string) string {
 		parts = append(parts, title)
 	}
 	if len(parts) == 0 {
-		return "Pause"
+		return fallback(fallbackTip, "Pause")
 	}
 	return strings.Join(parts, " | ")
 }
@@ -315,24 +356,39 @@ func (c *windowsStatusBarController) showContextMenu(hwnd uintptr) {
 
 	c.mu.RLock()
 	paused := c.paused
+	status := c.status
+	countdown := c.countdown
 	locale := c.locale
 	c.mu.RUnlock()
 
+	statusLine := strings.TrimSpace(status)
+	if statusLine == "" {
+		statusLine = fallback(locale.StatusLineFallback, "Status: --")
+	}
+	countdownLine := strings.TrimSpace(countdown)
+	if countdownLine == "" {
+		countdownLine = fallback(locale.NextBreakLineFallback, "Next break: --:--")
+	}
+
 	labelBreakNow := fallback(locale.BreakNowButton, "Break now")
-	labelPause := fallback(locale.PauseButton, "Pause")
-	labelPause30 := fallback(locale.Pause30Button, "Pause 30m")
-	labelResume := fallback(locale.ResumeButton, "Resume")
+	labelToggle := fallback(locale.PauseButton, "Pause")
+	if paused {
+		labelToggle = fallback(locale.ResumeButton, "Resume")
+	}
 	labelOpen := fallback(locale.OpenAppButton, "Open")
-	labelAbout := fallback(locale.AboutMenuItem, "About")
 	labelQuit := fallback(locale.QuitMenuItem, "Quit")
 
+	addMenuText(menu, 0, statusLine, true)
+	addMenuText(menu, 0, countdownLine, true)
+	addMenuSeparator(menu)
 	addMenuText(menu, menuBreakNow, labelBreakNow, false)
-	addMenuText(menu, menuPause, labelPause, paused)
-	addMenuText(menu, menuPause30, labelPause30, paused)
-	addMenuText(menu, menuResume, labelResume, !paused)
+	if paused {
+		addMenuText(menu, menuResume, labelToggle, false)
+	} else {
+		addMenuText(menu, menuPause, labelToggle, false)
+	}
 	addMenuSeparator(menu)
 	addMenuText(menu, menuOpen, labelOpen, false)
-	addMenuText(menu, menuAbout, labelAbout, false)
 	addMenuSeparator(menu)
 	addMenuText(menu, menuQuit, labelQuit, false)
 
@@ -354,6 +410,7 @@ func (c *windowsStatusBarController) showContextMenu(hwnd uintptr) {
 	// Required by Windows so the menu closes consistently when clicking elsewhere.
 	postMessage(hwnd, wmUser, 0, 0)
 }
+
 
 func addMenuText(menu uintptr, id int, label string, disabled bool) {
 	flags := uintptr(mfString)
@@ -395,7 +452,7 @@ func (c *windowsStatusBarController) dispatchMenuCommand(id int) {
 		action = StatusBarActionPause30
 	case menuResume:
 		action = StatusBarActionResume
-	case menuOpen, menuAbout:
+	case menuOpen:
 		action = StatusBarActionOpenWindow
 	case menuQuit:
 		action = StatusBarActionQuit
@@ -444,10 +501,10 @@ func windowsStatusbarWndProc(hwnd uintptr, msg uint32, wParam uintptr, lParam ui
 		return 0
 	case msgTrayCallback:
 		switch uint32(lParam) {
-		case wmLButtonUp, wmLButtonDbl:
-			ctrl.dispatchMenuCommand(menuOpen)
-		case wmRButtonUp, wmContext:
+		case wmLButtonUp, wmRButtonUp, wmContext:
 			ctrl.showContextMenu(hwnd)
+		case wmLButtonDbl:
+			ctrl.dispatchMenuCommand(menuOpen)
 		}
 		return 0
 	case wmClose:
@@ -461,6 +518,7 @@ func windowsStatusbarWndProc(hwnd uintptr, msg uint32, wParam uintptr, lParam ui
 		return ret
 	}
 }
+
 
 func shellNotifyIcon(message uint32, data *notifyIconData) bool {
 	ret, _, _ := procShellNotifyIconW.Call(

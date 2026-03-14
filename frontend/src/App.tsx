@@ -86,11 +86,13 @@ export function App() {
 
   if (!settings || !runtime) {
     return (
-      <div className="min-h-screen select-none">
-        <div className="h-7 select-none [--wails-draggable:drag]" />
-        <div className="mx-auto max-w-[840px] p-[14px] sm:px-5 sm:pt-[10px] sm:pb-6">
+      <div className="h-full select-none overflow-hidden">
+      <div className="h-7 select-none [--wails-draggable:drag]" />
+      <div className="h-[calc(100%-1.75rem)] overflow-hidden">
+          <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
           {t(resolveLocale('auto'), 'loading')}
           {error && <InlineError message={error} />}
+          </div>
         </div>
       </div>
     );
@@ -104,9 +106,10 @@ export function App() {
   );
 
   return (
-    <div className="min-h-screen select-none">
+    <div className="h-full select-none overflow-hidden">
       <div className="h-7 select-none [--wails-draggable:drag]" />
-      <div className="mx-auto max-w-[840px] p-[14px] sm:px-5 sm:pt-[10px] sm:pb-6">
+      <div className="h-[calc(100%-1.75rem)] overflow-hidden">
+        <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
         <HeroHeader
           locale={locale}
           language={settings.ui.language}
@@ -118,7 +121,7 @@ export function App() {
 
         {error && <InlineError message={error} />}
 
-        <section className="mt-4 grid grid-cols-1 gap-4 min-[721px]:grid-cols-2">
+        <section className="mt-3 grid grid-cols-1 gap-3 min-[721px]:grid-cols-2">
           <ReminderCard
             title={t(locale, 'eyeReminder')}
             enabledLabel={t(locale, 'enabled')}
@@ -182,6 +185,7 @@ export function App() {
             }}
           />
         )}
+        </div>
       </div>
     </div>
   );

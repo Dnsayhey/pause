@@ -11,6 +11,8 @@ type StatusBarLocaleStrings struct {
 	QuitMenuItem   string
 	MoreButtonTip  string
 	Tooltip        string
+	StatusLineFallback    string
+	NextBreakLineFallback string
 }
 
 const (

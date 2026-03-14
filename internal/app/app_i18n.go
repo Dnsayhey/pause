@@ -1,4 +1,4 @@
-package app
+﻿package app
 
 import (
 	"fmt"
@@ -45,29 +45,33 @@ func languageFromLocaleValue(value string) string {
 func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings {
 	if language == config.UILanguageZhCN {
 		return desktop.StatusBarLocaleStrings{
-			PopoverTitle:   "Pause",
-			BreakNowButton: "zzZ",
-			PauseButton:    "暂停",
-			Pause30Button:  "暂停 30 分钟",
-			ResumeButton:   "恢复",
-			OpenAppButton:  "打开主界面",
-			AboutMenuItem:  "关于",
-			QuitMenuItem:   "退出",
-			MoreButtonTip:  "更多",
-			Tooltip:        "Pause 休息提醒",
+			PopoverTitle:          "Pause",
+			BreakNowButton:        "立即休息",
+			PauseButton:           "暂停计时",
+			Pause30Button:         "暂停 30 分钟",
+			ResumeButton:          "恢复计时",
+			OpenAppButton:         "打开主界面",
+			AboutMenuItem:         "关于",
+			QuitMenuItem:          "退出",
+			MoreButtonTip:         "更多",
+			Tooltip:               "Pause 休息提醒",
+			StatusLineFallback:    "运行状态：--",
+			NextBreakLineFallback: "下一次休息：--:--",
 		}
 	}
 	return desktop.StatusBarLocaleStrings{
-		PopoverTitle:   "Pause",
-		BreakNowButton: "zzZ",
-		PauseButton:    "Pause",
-		Pause30Button:  "Pause 30m",
-		ResumeButton:   "Resume",
-		OpenAppButton:  "Open Pause",
-		AboutMenuItem:  "About",
-		QuitMenuItem:   "Quit",
-		MoreButtonTip:  "More",
-		Tooltip:        "Pause break reminder",
+		PopoverTitle:          "Pause",
+		BreakNowButton:        "Break now",
+		PauseButton:           "Pause Timer",
+		Pause30Button:         "Pause 30m",
+		ResumeButton:          "Resume Timer",
+		OpenAppButton:         "Open Main Window",
+		AboutMenuItem:         "About",
+		QuitMenuItem:          "Quit",
+		MoreButtonTip:         "More",
+		Tooltip:               "Pause break reminder",
+		StatusLineFallback:    "Status: --",
+		NextBreakLineFallback: "Next break: --:--",
 	}
 }
 
@@ -110,3 +114,4 @@ func formatOverlayCountdown(sec int) string {
 	s := sec % 60
 	return fmt.Sprintf("%02d:%02d", m, s)
 }
+
