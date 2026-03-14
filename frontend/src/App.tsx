@@ -87,7 +87,10 @@ export function App() {
     return (
       <div className="app-root">
         <div className="window-drag-strip" />
-        <div className="shell">{t(resolveLocale('auto'), 'loading')}</div>
+        <div className="shell">
+          {t(resolveLocale('auto'), 'loading')}
+          {error && <div className="error">{error}</div>}
+        </div>
       </div>
     );
   }

@@ -49,10 +49,19 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
 
     const loadSettings = async () => {
       try {
-        const [next, startupState] = await Promise.all([getSettings(), getLaunchAtLogin()]);
-        if (mounted) {
-          setSettings(next);
-          setLaunchAtLoginState(startupState);
+        const next = await getSettings();
+        if (!mounted) return;
+        setSettings(next);
+
+        try {
+          const startupState = await getLaunchAtLogin();
+          if (mounted) {
+            setLaunchAtLoginState(startupState);
+          }
+        } catch (err) {
+          if (mounted) {
+            setError(String(err));
+          }
         }
       } catch (err) {
         if (mounted) {

@@ -4,9 +4,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="${APP_NAME:-Pause}"
-APP_BUNDLE_ID="${APP_BUNDLE_ID:-com.pause.app}"
+source "${ROOT_DIR}/scripts/app_identity.sh"
 HELPER_NAME="${HELPER_NAME:-PauseLoginHelper}"
-HELPER_BUNDLE_ID="${HELPER_BUNDLE_ID:-${APP_BUNDLE_ID}.loginhelper}"
 CODE_SIGN_IDENTITY="${PAUSE_CODESIGN_IDENTITY:--}"
 APP_BUNDLE="${ROOT_DIR}/build/bin/${APP_NAME}.app"
 DMG_OUTPUT="${ROOT_DIR}/build/bin/${APP_NAME}.dmg"
@@ -23,11 +22,18 @@ else
   echo "wails not found in PATH, using 'go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2'"
   WAILS_CMD=(go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2)
 fi
-"${WAILS_CMD[@]}" build -platform darwin/universal -clean -skipbindings -tags wails
+WAILS_LDFLAGS="-X pause/internal/meta.AppBundleID=${APP_BUNDLE_ID}"
+"${WAILS_CMD[@]}" build -platform darwin/universal -clean -skipbindings -tags wails -ldflags "${WAILS_LDFLAGS}"
 
 if [[ ! -d "${APP_BUNDLE}" ]]; then
   echo "ERROR: app bundle not found: ${APP_BUNDLE}" >&2
   exit 1
+fi
+
+# Keep app/helper bundle identifiers aligned with runtime startup-manager logic.
+if [[ -f "${APP_INFO_PLIST}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${APP_BUNDLE_ID}" "${APP_INFO_PLIST}" >/dev/null 2>&1 \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string ${APP_BUNDLE_ID}" "${APP_INFO_PLIST}" >/dev/null
 fi
 if [[ -f "${APP_INFO_PLIST}" ]]; then
   APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP_INFO_PLIST}" 2>/dev/null || echo '1.0.0')"

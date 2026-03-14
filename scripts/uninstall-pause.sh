@@ -2,16 +2,17 @@
 
 set -euo pipefail
 
-APP_BUNDLE_ID="com.pause.app"
-HELPER_BUNDLE_ID="${APP_BUNDLE_ID}.loginhelper"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${ROOT_DIR}/scripts/app_identity.sh"
+LEGACY_APP_BUNDLE_ID="com.wails.Pause"
 APP_PATH="/Applications/Pause.app"
 DATA_DIR="${HOME}/.pause"
-LEGACY_LAUNCH_AGENT_PLIST="${HOME}/Library/LaunchAgents/com.pause.app.plist"
-PREFERENCES_PLIST_NEW="${HOME}/Library/Preferences/com.pause.app.plist"
+LEGACY_LAUNCH_AGENT_PLIST="${HOME}/Library/LaunchAgents/${APP_BUNDLE_ID}.plist"
+PREFERENCES_PLIST_NEW="${HOME}/Library/Preferences/${APP_BUNDLE_ID}.plist"
 PREFERENCES_PLIST_OLD="${HOME}/Library/Preferences/com.wails.Pause.plist"
-SAVED_STATE_NEW="${HOME}/Library/Saved Application State/com.pause.app.savedState"
+SAVED_STATE_NEW="${HOME}/Library/Saved Application State/${APP_BUNDLE_ID}.savedState"
 SAVED_STATE_OLD="${HOME}/Library/Saved Application State/com.wails.Pause.savedState"
-CACHE_NEW="${HOME}/Library/Caches/com.pause.app"
+CACHE_NEW="${HOME}/Library/Caches/${APP_BUNDLE_ID}"
 CACHE_OLD="${HOME}/Library/Caches/com.wails.Pause"
 
 echo "Stopping Pause..."
@@ -25,6 +26,8 @@ launchctl bootout "gui/${USER_ID}/${APP_BUNDLE_ID}" 2>/dev/null || true
 launchctl disable "gui/${USER_ID}/${APP_BUNDLE_ID}" 2>/dev/null || true
 launchctl bootout "gui/${USER_ID}/${HELPER_BUNDLE_ID}" 2>/dev/null || true
 launchctl disable "gui/${USER_ID}/${HELPER_BUNDLE_ID}" 2>/dev/null || true
+launchctl bootout "gui/${USER_ID}/${LEGACY_APP_BUNDLE_ID}" 2>/dev/null || true
+launchctl disable "gui/${USER_ID}/${LEGACY_APP_BUNDLE_ID}" 2>/dev/null || true
 # Legacy launch agent cleanup (older Pause builds)
 launchctl bootout "gui/${USER_ID}" "${LEGACY_LAUNCH_AGENT_PLIST}" 2>/dev/null || true
 launchctl disable "gui/${USER_ID}/${APP_BUNDLE_ID}" 2>/dev/null || true

@@ -1,46 +1,21 @@
 package platform
 
-import "pause/internal/config"
+import "pause/internal/platform/api"
 
-type Adapters struct {
-	IdleProvider   IdleProvider
-	Notifier       Notifier
-	SoundPlayer    SoundPlayer
-	StartupManager StartupManager
-}
+type Adapters = api.Adapters
 
-type IdleProvider interface {
-	CurrentIdleSeconds() int
-}
+type IdleProvider = api.IdleProvider
 
-type Notifier interface {
-	ShowReminder(title, body string) error
-}
+type Notifier = api.Notifier
 
-type SoundPlayer interface {
-	PlayBreakEnd(sound config.SoundSettings) error
-}
+type SoundPlayer = api.SoundPlayer
 
-type StartupManager interface {
-	SetLaunchAtLogin(enabled bool) error
-	GetLaunchAtLogin() (bool, error)
-}
+type StartupManager = api.StartupManager
 
-type NoopIdleProvider struct{}
+type NoopIdleProvider = api.NoopIdleProvider
 
-func (NoopIdleProvider) CurrentIdleSeconds() int { return 0 }
+type NoopNotifier = api.NoopNotifier
 
-type NoopNotifier struct{}
+type NoopSoundPlayer = api.NoopSoundPlayer
 
-func (NoopNotifier) ShowReminder(_, _ string) error { return nil }
-
-type NoopSoundPlayer struct{}
-
-func (NoopSoundPlayer) PlayBreakEnd(_ config.SoundSettings) error { return nil }
-
-type NoopStartupManager struct{}
-
-func (NoopStartupManager) SetLaunchAtLogin(_ bool) error { return nil }
-func (NoopStartupManager) GetLaunchAtLogin() (bool, error) {
-	return false, nil
-}
+type NoopStartupManager = api.NoopStartupManager

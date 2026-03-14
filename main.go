@@ -3,21 +3,13 @@
 package main
 
 import (
-	"context"
 	"log"
-	"os/signal"
-	"syscall"
+
+	entry "pause/internal/entry/desktop"
 )
 
 func main() {
-	app, err := NewApp("")
-	if err != nil {
+	if err := entry.RunHeadless(""); err != nil {
 		log.Fatalf("failed to init app: %v", err)
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	app.Startup(ctx)
-	<-ctx.Done()
 }

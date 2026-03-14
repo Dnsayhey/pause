@@ -50,11 +50,18 @@ export function useRuntimePolling({ setError }: UseRuntimePollingOptions) {
       }
     };
 
-    const offOverlayEvent = onOverlayEvent((active) => {
-      if (!mountedRef.current) return;
-      if (!active) return;
-      document.body.requestFullscreen?.().catch(() => undefined);
-    });
+    let offOverlayEvent: () => void = () => undefined;
+    try {
+      offOverlayEvent = onOverlayEvent((active) => {
+        if (!mountedRef.current) return;
+        if (!active) return;
+        document.body.requestFullscreen?.().catch(() => undefined);
+      });
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(String(err));
+      }
+    }
 
     void refreshRuntime();
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -62,7 +69,7 @@ export function useRuntimePolling({ setError }: UseRuntimePollingOptions) {
 
     return () => {
       mountedRef.current = false;
-      offOverlayEvent?.();
+      offOverlayEvent();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopPolling();
     };

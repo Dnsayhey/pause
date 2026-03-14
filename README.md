@@ -65,6 +65,18 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 - `SkipCurrentBreak() -> RuntimeState`
 - `StartBreakNow() -> RuntimeState`
 
+## 代码结构（当前）
+
+- `main.go` / `main_wails.go`：根入口（Wails 构建根入口，含嵌入式前端资源）。
+- `internal/app/`：应用编排层（App 生命周期、Wails 绑定、桌面交互逻辑）。
+- `internal/core/`：纯业务核心（`config / scheduler / session / service`）。
+- `internal/desktop/`：桌面能力抽象（状态栏、全屏遮罩、窗口行为）。
+- `internal/desktop/macbridge/`：macOS 原生桥接实现（状态栏、全屏遮罩、窗口行为的 Objective-C 桥接）。
+- `internal/platform/`：平台 facade 与接口定义。
+- `internal/platform/darwin|windows|linux/`：平台能力实现（空闲检测、通知、开机启动、声音）。
+- `internal/meta/bundle_id.txt`：应用 Bundle ID 单一来源（脚本与运行时均从这里派生，支持构建时覆盖）。
+- `frontend/`：React 前端界面。
+
 ## 本地开发
 
 ### 1) 安装前端依赖
@@ -105,6 +117,7 @@ go test -tags wails ./...
 ```
 
 - 产物：`build/bin/Pause.dmg`
+- Bundle ID 默认来源：`internal/meta/bundle_id.txt`（可通过环境变量 `APP_BUNDLE_ID` 临时覆盖）
 - 脚本会优先使用本机 `wails` 命令；如果未安装，会自动回退到：
   - `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`
 
