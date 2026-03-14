@@ -7,6 +7,7 @@ APP_NAME="${APP_NAME:-Pause}"
 WINDOWS_PLATFORM="${WINDOWS_PLATFORM:-windows/amd64}"
 WINDOWS_ARCH_LABEL="${WINDOWS_ARCH_LABEL:-windows-x64}"
 WINDOWS_OUTPUT_DIR="${WINDOWS_OUTPUT_DIR:-${ROOT_DIR}/build/bin/${WINDOWS_ARCH_LABEL}}"
+WINDOWS_NSIS_TEMPLATE="${WINDOWS_NSIS_TEMPLATE:-${ROOT_DIR}/scripts/windows-installer/project.nsi}"
 WINDOWS_WEBVIEW2="${WINDOWS_WEBVIEW2:-download}"
 WAILS_TAGS="${WAILS_TAGS:-wails}"
 USE_CLEAN="${USE_CLEAN:-0}"
@@ -20,6 +21,12 @@ fi
 
 mkdir -p "${ROOT_DIR}/build/bin"
 mkdir -p "${WINDOWS_OUTPUT_DIR}"
+
+if [[ -f "${WINDOWS_NSIS_TEMPLATE}" ]]; then
+  mkdir -p "${ROOT_DIR}/build/windows/installer"
+  cp "${WINDOWS_NSIS_TEMPLATE}" "${ROOT_DIR}/build/windows/installer/project.nsi"
+  echo "using NSIS template: ${WINDOWS_NSIS_TEMPLATE}"
+fi
 
 STAMP_FILE="$(mktemp /tmp/pause-win-build-stamp-XXXXXX)"
 cleanup_stamp() {
@@ -51,7 +58,10 @@ echo "[1/2] Building ${APP_NAME} Windows installer (${WINDOWS_PLATFORM})"
 
 echo "[2/2] Collecting Windows artifacts into ${WINDOWS_OUTPUT_DIR}"
 
-mapfile -d '' GENERATED_FILES < <(
+GENERATED_FILES=()
+while IFS= read -r -d '' file; do
+  GENERATED_FILES+=("${file}")
+done < <(
   find "${ROOT_DIR}/build/bin" \
     -maxdepth 1 \
     -type f \

@@ -150,6 +150,7 @@ go test -tags wails ./...
 - 可选参数示例：
   - `WINDOWS_WEBVIEW2=browser ./scripts/build-windows-installer.sh`
   - `WINDOWS_OUTPUT_DIR=build/bin/win-release ./scripts/build-windows-installer.sh`
+- NSIS 模板默认来自 `scripts/windows-installer/project.nsi`（脚本会在构建前同步到 `build/windows/installer/project.nsi`）；该模板已包含把 `assets/branding/icon.ico` 安装到应用目录。
 
 ## 卸载（macOS）
 
