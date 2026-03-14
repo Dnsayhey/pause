@@ -1,4 +1,5 @@
 import { ToggleSwitchRow } from './ToggleSwitch';
+import { GlassCard, PillSelect } from './ui';
 import { t, type Locale } from '../i18n';
 import type { Settings, SettingsPatch } from '../types';
 
@@ -22,9 +23,9 @@ export function SystemSettingsCard({
   onPatch
 }: SystemSettingsCardProps) {
   return (
-    <section className="card system-card">
-      <h3>{t(locale, 'sectionSettings')}</h3>
-      <div className="form-grid system-grid">
+    <GlassCard>
+      <h3 className="mb-3 mt-0 text-[18px]">{t(locale, 'sectionSettings')}</h3>
+      <div className="grid gap-2.5">
         <ToggleSwitchRow
           label={t(locale, 'launchAtLogin')}
           checked={launchAtLogin}
@@ -39,10 +40,9 @@ export function SystemSettingsCard({
             void onPatch({ enforcement: { overlaySkipAllowed: checked } });
           }}
         />
-        <div className="switch-row setting-row">
-          <span>{t(locale, 'stopOnIdleEnabled')}</span>
-          <select
-            className="setting-select"
+        <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
+          <span className="text-[#122236]">{t(locale, 'stopOnIdleEnabled')}</span>
+          <PillSelect
             value={idleModeSelectValue}
             onChange={(e) => {
               const next = e.target.value;
@@ -57,20 +57,20 @@ export function SystemSettingsCard({
                 }
               });
             }}
-          >
-            <option value="off">{t(locale, 'off')}</option>
-            <option value="60">{t(locale, 'idleOption1Minute')}</option>
-            <option value="300">{t(locale, 'idleOption5Minutes')}</option>
-            <option value="600">{t(locale, 'idleOption10Minutes')}</option>
-            <option value="1800">{t(locale, 'idleOption30Minutes')}</option>
-            <option value="3600">{t(locale, 'idleOption1Hour')}</option>
-            <option value="7200">{t(locale, 'idleOption2Hours')}</option>
-          </select>
+            options={[
+              { value: 'off', label: t(locale, 'off') },
+              { value: '60', label: t(locale, 'idleOption1Minute') },
+              { value: '300', label: t(locale, 'idleOption5Minutes') },
+              { value: '600', label: t(locale, 'idleOption10Minutes') },
+              { value: '1800', label: t(locale, 'idleOption30Minutes') },
+              { value: '3600', label: t(locale, 'idleOption1Hour') },
+              { value: '7200', label: t(locale, 'idleOption2Hours') }
+            ]}
+          />
         </div>
-        <div className="switch-row setting-row">
-          <span>{t(locale, 'endSoundEnabled')}</span>
-          <select
-            className="setting-select"
+        <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
+          <span className="text-[#122236]">{t(locale, 'endSoundEnabled')}</span>
+          <PillSelect
             value={soundModeSelectValue}
             onChange={(e) => {
               const next = e.target.value;
@@ -85,14 +85,15 @@ export function SystemSettingsCard({
                 }
               });
             }}
-          >
-            <option value="off">{t(locale, 'off')}</option>
-            <option value="20">20%</option>
-            <option value="40">40%</option>
-            <option value="60">60%</option>
-            <option value="80">80%</option>
-            <option value="100">100%</option>
-          </select>
+            options={[
+              { value: 'off', label: t(locale, 'off') },
+              { value: '20', label: '20%' },
+              { value: '40', label: '40%' },
+              { value: '60', label: '60%' },
+              { value: '80', label: '80%' },
+              { value: '100', label: '100%' }
+            ]}
+          />
         </div>
         <ToggleSwitchRow
           label={t(locale, 'showTrayCountdown')}
@@ -102,6 +103,6 @@ export function SystemSettingsCard({
           }}
         />
       </div>
-    </section>
+    </GlassCard>
   );
 }

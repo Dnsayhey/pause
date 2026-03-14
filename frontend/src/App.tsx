@@ -5,6 +5,7 @@ import { HeroHeader } from './components/HeroHeader';
 import { ReminderCard } from './components/ReminderCard';
 import { SystemSettingsCard } from './components/SystemSettingsCard';
 import { BreakOverlay } from './components/BreakOverlay';
+import { InlineError } from './components/ui';
 import { useRuntimePolling } from './hooks/useRuntimePolling';
 import { useSettings } from './hooks/useSettings';
 
@@ -85,11 +86,11 @@ export function App() {
 
   if (!settings || !runtime) {
     return (
-      <div className="app-root">
-        <div className="window-drag-strip" />
-        <div className="shell">
+      <div className="min-h-screen select-none">
+        <div className="h-7 select-none [--wails-draggable:drag]" />
+        <div className="mx-auto max-w-[840px] p-[14px] sm:px-5 sm:pt-[10px] sm:pb-6">
           {t(resolveLocale('auto'), 'loading')}
-          {error && <div className="error">{error}</div>}
+          {error && <InlineError message={error} />}
         </div>
       </div>
     );
@@ -103,9 +104,9 @@ export function App() {
   );
 
   return (
-    <div className="app-root">
-      <div className="window-drag-strip" />
-      <div className="shell">
+    <div className="min-h-screen select-none">
+      <div className="h-7 select-none [--wails-draggable:drag]" />
+      <div className="mx-auto max-w-[840px] p-[14px] sm:px-5 sm:pt-[10px] sm:pb-6">
         <HeroHeader
           locale={locale}
           language={settings.ui.language}
@@ -115,9 +116,9 @@ export function App() {
           }}
         />
 
-        {error && <div className="error">{error}</div>}
+        {error && <InlineError message={error} />}
 
-        <section className="rules-grid">
+        <section className="mt-4 grid grid-cols-1 gap-4 min-[721px]:grid-cols-2">
           <ReminderCard
             title={t(locale, 'eyeReminder')}
             enabledLabel={t(locale, 'enabled')}

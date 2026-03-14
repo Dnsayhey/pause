@@ -14,22 +14,34 @@ export type ToggleSwitchRowProps = {
 
 export function ToggleSwitch({ ariaLabel, checked, disabled = false, onChange }: ToggleSwitchProps) {
   return (
-    <label className={`pill-switch ${checked ? 'is-on' : ''} ${disabled ? 'is-disabled' : ''}`}>
+    <label
+      className={[
+        'relative inline-block h-5 w-[34px] rounded-full p-[2px] transition-colors duration-200',
+        checked ? 'bg-[linear-gradient(130deg,#0f826b,#0f9a8a)]' : 'bg-[rgba(18,34,54,0.24)]',
+        disabled ? 'opacity-60' : ''
+      ].join(' ')}
+    >
       <input
         type="checkbox"
         aria-label={ariaLabel}
+        className="absolute inset-0 z-[1] m-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="pill-thumb" />
+      <span
+        className={[
+          'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-[0_1px_3px_rgba(18,34,54,0.2)] transition-transform duration-200',
+          checked ? 'translate-x-[14px]' : 'translate-x-0'
+        ].join(' ')}
+      />
     </label>
   );
 }
 
 export function ToggleSwitchRow({ label, checked, disabled = false, onChange }: ToggleSwitchRowProps) {
   return (
-    <div className="switch-row">
+    <div className="flex items-center justify-between gap-3 text-sm font-normal leading-[1.35]">
       <span>{label}</span>
       <ToggleSwitch ariaLabel={label} checked={checked} disabled={disabled} onChange={onChange} />
     </div>

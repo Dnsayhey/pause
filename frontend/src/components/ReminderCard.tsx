@@ -1,5 +1,6 @@
 import { type KeyboardEvent } from 'react';
 import { ToggleSwitch } from './ToggleSwitch';
+import { GlassCard } from './ui';
 
 function blurOnEnter(event: KeyboardEvent<HTMLInputElement>) {
   if (event.key !== 'Enter') return;
@@ -26,6 +27,11 @@ type ReminderCardProps = {
   onBreakCommit: (value: string) => Promise<void>;
 };
 
+const rowLabelClassName =
+  'flex flex-col items-start justify-between gap-3 text-sm leading-[1.35] sm:flex-row sm:items-center';
+const numberInputClassName =
+  'number-input w-[3.6ch] min-w-[3.6ch] cursor-text appearance-none border-0 border-b border-b-transparent bg-transparent px-0 py-[2px] text-right text-sm leading-[1.2] font-normal text-[#122236] caret-[rgba(15,130,107,0.9)] shadow-none outline-none transition-colors duration-150 hover:border-b-[rgba(18,34,54,0.28)] focus:border-b-[rgba(15,130,107,0.88)]';
+
 export function ReminderCard({
   title,
   enabledLabel,
@@ -45,16 +51,16 @@ export function ReminderCard({
   onBreakCommit
 }: ReminderCardProps) {
   return (
-    <article className="card">
-      <div className="card-title-row">
-        <h3>{title}</h3>
+    <GlassCard as="article">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="m-0 text-[18px]">{title}</h3>
         <ToggleSwitch ariaLabel={enabledLabel} checked={enabled} onChange={onEnabledChange} />
       </div>
-      <div className="form-grid">
-        <label>
+      <div className="grid gap-2.5">
+        <label className={rowLabelClassName}>
           {intervalLabel}
           <input
-            className="rule-number-input"
+            className={numberInputClassName}
             type="number"
             min={intervalMin}
             max={intervalMax}
@@ -67,10 +73,10 @@ export function ReminderCard({
             }}
           />
         </label>
-        <label>
+        <label className={rowLabelClassName}>
           {breakLabel}
           <input
-            className="rule-number-input"
+            className={numberInputClassName}
             type="number"
             min={breakMin}
             max={breakMax}
@@ -84,6 +90,6 @@ export function ReminderCard({
           />
         </label>
       </div>
-    </article>
+    </GlassCard>
   );
 }
