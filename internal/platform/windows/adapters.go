@@ -2,13 +2,362 @@
 
 package windows
 
-import "pause/internal/platform/api"
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+	"unsafe"
 
-func NewAdapters(_ string) api.Adapters {
-	return api.Adapters{
-		IdleProvider:   api.NoopIdleProvider{},
-		Notifier:       api.NoopNotifier{},
-		SoundPlayer:    api.NoopSoundPlayer{},
-		StartupManager: api.NoopStartupManager{},
+	xwindows "golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
+
+	"pause/internal/core/config"
+	"pause/internal/meta"
+	"pause/internal/platform/api"
+)
+
+const runKeyPath = `Software\Microsoft\Windows\CurrentVersion\Run`
+
+var (
+	user32DLL            = syscall.NewLazyDLL("user32.dll")
+	kernel32DLL          = syscall.NewLazyDLL("kernel32.dll")
+	shell32DLL           = syscall.NewLazyDLL("shell32.dll")
+	procGetLastInputInfo = user32DLL.NewProc("GetLastInputInfo")
+	procGetTickCount64   = kernel32DLL.NewProc("GetTickCount64")
+	procMessageBeep      = user32DLL.NewProc("MessageBeep")
+	procCreateWindowExW  = user32DLL.NewProc("CreateWindowExW")
+	procDestroyWindow    = user32DLL.NewProc("DestroyWindow")
+	procShellNotifyIconW = shell32DLL.NewProc("Shell_NotifyIconW")
+	execCommand          = exec.Command
+)
+
+var pauseNotifyGUID = xwindows.GUID{
+	Data1: 0x23a58e31,
+	Data2: 0x8d36,
+	Data3: 0x43f2,
+	Data4: [8]byte{0x9c, 0x11, 0x4c, 0x6b, 0xfe, 0xc7, 0x09, 0xb4},
+}
+
+const (
+	nimAdd    = 0x00000000
+	nimModify = 0x00000001
+	nimDelete = 0x00000002
+
+	nifTip  = 0x00000004
+	nifInfo = 0x00000010
+	nifGUID = 0x00000020
+
+	niifInfo = 0x00000001
+
+	mbIconAsterisk = 0x00000040
+
+	hwndMessage = ^uintptr(2) // (HWND)-3
+)
+
+type windowsIdleProvider struct{}
+
+type windowsNotifier struct{}
+
+type windowsSoundPlayer struct{}
+
+type windowsStartupManager struct {
+	valueName string
+}
+
+type lastInputInfo struct {
+	cbSize uint32
+	dwTime uint32
+}
+
+type notifyIconData struct {
+	cbSize            uint32
+	hWnd              uintptr
+	uID               uint32
+	uFlags            uint32
+	uCallbackMessage  uint32
+	hIcon             uintptr
+	szTip             [128]uint16
+	dwState           uint32
+	dwStateMask       uint32
+	szInfo            [256]uint16
+	uTimeoutOrVersion uint32
+	szInfoTitle       [64]uint16
+	dwInfoFlags       uint32
+	guidItem          xwindows.GUID
+	hBalloonIcon      uintptr
+}
+
+func NewAdapters(appID string) api.Adapters {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		appID = meta.EffectiveAppBundleID()
 	}
+	return api.Adapters{
+		IdleProvider:   windowsIdleProvider{},
+		Notifier:       windowsNotifier{},
+		SoundPlayer:    windowsSoundPlayer{},
+		StartupManager: windowsStartupManager{valueName: startupValueName(appID)},
+	}
+}
+
+func (windowsIdleProvider) CurrentIdleSeconds() int {
+	info := lastInputInfo{cbSize: uint32(unsafe.Sizeof(lastInputInfo{}))}
+	ret, _, _ := procGetLastInputInfo.Call(uintptr(unsafe.Pointer(&info)))
+	if ret == 0 {
+		return 0
+	}
+
+	tick64, _, _ := procGetTickCount64.Call()
+	if tick64 == 0 {
+		return 0
+	}
+
+	now := uint64(tick64)
+	last := uint64(info.dwTime)
+	const wrap32 = uint64(^uint32(0)) + 1
+	if now < last {
+		now += wrap32
+	}
+	return int((now - last) / 1000)
+}
+
+func (windowsNotifier) ShowReminder(title, body string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "Pause"
+	}
+	body = strings.TrimSpace(body)
+	if body == "" {
+		body = "Break started"
+	}
+
+	if err := showBalloonReminder(title, body); err == nil {
+		return nil
+	}
+
+	// Fallback for environments where native shell notifications are unavailable.
+	script := fmt.Sprintf(`
+Add-Type -AssemblyName System.Windows.Forms;
+Add-Type -AssemblyName System.Drawing;
+$n = New-Object System.Windows.Forms.NotifyIcon;
+$n.Icon = [System.Drawing.SystemIcons]::Information;
+$n.BalloonTipTitle = '%s';
+$n.BalloonTipText = '%s';
+$n.Visible = $true;
+$n.ShowBalloonTip(5000);
+Start-Sleep -Milliseconds 5500;
+$n.Dispose();
+`, escapePowerShellSingleQuoted(title), escapePowerShellSingleQuoted(body))
+
+	return runPowerShellAsync(script)
+}
+
+func (windowsSoundPlayer) PlayBreakEnd(sound config.SoundSettings) error {
+	if !sound.Enabled {
+		return nil
+	}
+	ret, _, callErr := procMessageBeep.Call(uintptr(mbIconAsterisk))
+	if ret != 0 {
+		return nil
+	}
+	if callErr != syscall.Errno(0) {
+		return callErr
+	}
+	return errors.New("MessageBeep returned 0")
+}
+
+func (s windowsStartupManager) SetLaunchAtLogin(enabled bool) error {
+	key, err := registry.OpenKey(registry.CURRENT_USER, runKeyPath, registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer key.Close()
+
+	if !enabled {
+		err = key.DeleteValue(s.valueName)
+		if errors.Is(err, registry.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(execPath) == "" {
+		return errors.New("empty executable path")
+	}
+	if !filepath.IsAbs(execPath) {
+		execPath, err = filepath.Abs(execPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return key.SetStringValue(s.valueName, quoteCommandPath(execPath))
+}
+
+func (s windowsStartupManager) GetLaunchAtLogin() (bool, error) {
+	key, err := registry.OpenKey(registry.CURRENT_USER, runKeyPath, registry.QUERY_VALUE)
+	if err != nil {
+		return false, err
+	}
+	defer key.Close()
+
+	raw, _, err := key.GetStringValue(s.valueName)
+	if errors.Is(err, registry.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(raw) != "", nil
+}
+
+func startupValueName(appID string) string {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return "Pause"
+	}
+	appID = strings.ReplaceAll(appID, "/", ".")
+	return appID
+}
+
+func quoteCommandPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return path
+	}
+	if strings.HasPrefix(path, "\"") && strings.HasSuffix(path, "\"") {
+		return path
+	}
+	return `"` + path + `"`
+}
+
+func escapePowerShellSingleQuoted(value string) string {
+	return strings.ReplaceAll(value, `'`, `''`)
+}
+
+func runPowerShellAsync(script string) error {
+	cmd := execCommand("powershell.exe",
+		"-NoProfile",
+		"-NonInteractive",
+		"-WindowStyle",
+		"Hidden",
+		"-Command",
+		script,
+	)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() {
+		_ = cmd.Wait()
+	}()
+	return nil
+}
+
+func showBalloonReminder(title, body string) error {
+	className, err := syscall.UTF16PtrFromString("STATIC")
+	if err != nil {
+		return err
+	}
+	windowTitle, err := syscall.UTF16PtrFromString("pause-notify")
+	if err != nil {
+		return err
+	}
+	hwnd, _, createErr := procCreateWindowExW.Call(
+		0,
+		uintptr(unsafe.Pointer(className)),
+		uintptr(unsafe.Pointer(windowTitle)),
+		0,
+		0, 0, 0, 0,
+		hwndMessage,
+		0,
+		0,
+		0,
+	)
+	if hwnd == 0 {
+		if createErr != syscall.Errno(0) {
+			return createErr
+		}
+		return errors.New("CreateWindowExW returned null HWND")
+	}
+
+	add := notifyIconData{
+		cbSize:   uint32(unsafe.Sizeof(notifyIconData{})),
+		hWnd:     hwnd,
+		uID:      1,
+		uFlags:   nifTip | nifGUID,
+		guidItem: pauseNotifyGUID,
+	}
+	copyUTF16(add.szTip[:], "Pause")
+
+	if !shellNotifyIcon(nimAdd, &add) {
+		_, _, _ = procDestroyWindow.Call(hwnd)
+		return errors.New("Shell_NotifyIconW(NIM_ADD) failed")
+	}
+
+	mod := notifyIconData{
+		cbSize:      uint32(unsafe.Sizeof(notifyIconData{})),
+		hWnd:        hwnd,
+		uID:         1,
+		uFlags:      nifInfo | nifGUID,
+		dwInfoFlags: niifInfo,
+		guidItem:    pauseNotifyGUID,
+	}
+	copyUTF16(mod.szInfoTitle[:], title)
+	copyUTF16(mod.szInfo[:], body)
+
+	if !shellNotifyIcon(nimModify, &mod) {
+		del := notifyIconData{
+			cbSize:   uint32(unsafe.Sizeof(notifyIconData{})),
+			hWnd:     hwnd,
+			uID:      1,
+			uFlags:   nifGUID,
+			guidItem: pauseNotifyGUID,
+		}
+		shellNotifyIcon(nimDelete, &del)
+		_, _, _ = procDestroyWindow.Call(hwnd)
+		return errors.New("Shell_NotifyIconW(NIM_MODIFY) failed")
+	}
+
+	go func(targetHWND uintptr) {
+		time.Sleep(7 * time.Second)
+		del := notifyIconData{
+			cbSize:   uint32(unsafe.Sizeof(notifyIconData{})),
+			hWnd:     targetHWND,
+			uID:      1,
+			uFlags:   nifGUID,
+			guidItem: pauseNotifyGUID,
+		}
+		shellNotifyIcon(nimDelete, &del)
+		_, _, _ = procDestroyWindow.Call(targetHWND)
+	}(hwnd)
+	return nil
+}
+
+func shellNotifyIcon(message uint32, data *notifyIconData) bool {
+	ret, _, _ := procShellNotifyIconW.Call(
+		uintptr(message),
+		uintptr(unsafe.Pointer(data)),
+	)
+	return ret != 0
+}
+
+func copyUTF16(dst []uint16, value string) {
+	if len(dst) == 0 {
+		return
+	}
+	encoded := syscall.StringToUTF16(value)
+	if len(encoded) > len(dst) {
+		encoded = encoded[:len(dst)]
+		encoded[len(dst)-1] = 0
+	}
+	copy(dst, encoded)
 }
