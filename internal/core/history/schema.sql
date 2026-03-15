@@ -8,11 +8,13 @@ CREATE TABLE IF NOT EXISTS reminders (
   break_sec      INTEGER NOT NULL CHECK (break_sec > 0),
   delivery_type  TEXT NOT NULL DEFAULT 'overlay'
                  CHECK (delivery_type IN ('overlay', 'notification')),
+  deleted_at     INTEGER,
   created_at     INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at     INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE INDEX IF NOT EXISTS idx_reminders_enabled ON reminders(enabled);
+CREATE INDEX IF NOT EXISTS idx_reminders_deleted_at ON reminders(deleted_at);
 
 CREATE TABLE IF NOT EXISTS break_sessions (
   id                TEXT PRIMARY KEY,
@@ -38,6 +40,9 @@ CREATE INDEX IF NOT EXISTS idx_break_sessions_started_at
 
 CREATE INDEX IF NOT EXISTS idx_break_sessions_status_started_at
   ON break_sessions(status, started_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_break_sessions_single_running
+  ON break_sessions(status)
+  WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS break_session_reminders (
   session_id              TEXT NOT NULL,

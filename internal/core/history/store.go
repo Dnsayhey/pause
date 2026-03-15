@@ -120,7 +120,25 @@ func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
 		return fmt.Errorf("history migrate failed: %w", err)
 	}
+	if err := s.cleanupDanglingRunningSessions(ctx); err != nil {
+		return fmt.Errorf("history migrate cleanup running sessions failed: %w", err)
+	}
 	return nil
+}
+
+func (s *Store) cleanupDanglingRunningSessions(ctx context.Context) error {
+	_, err := s.db.ExecContext(
+		ctx,
+		`UPDATE break_sessions
+		 SET status = ?,
+		     ended_at = COALESCE(ended_at, unixepoch()),
+		     actual_break_sec = CASE WHEN actual_break_sec < 0 THEN 0 ELSE actual_break_sec END,
+		     updated_at = unixepoch()
+		 WHERE status = ?`,
+		statusCanceled,
+		statusRunning,
+	)
+	return err
 }
 
 func normalizeReminderID(id string) string {
@@ -198,6 +216,7 @@ func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
 			   interval_sec=excluded.interval_sec,
 			   break_sec=excluded.break_sec,
 			   delivery_type=excluded.delivery_type,
+			   deleted_at=NULL,
 			   updated_at=unixepoch()`,
 			id,
 			name,
@@ -223,6 +242,7 @@ func (s *Store) ListReminders() ([]ReminderDefinition, error) {
 		context.Background(),
 		`SELECT id, name, enabled, interval_sec, break_sec, delivery_type
 		 FROM reminders
+		 WHERE deleted_at IS NULL
 		 ORDER BY id ASC`,
 	)
 	if err != nil {
@@ -319,6 +339,7 @@ func (s *Store) UpdateReminders(mutations []ReminderMutation) error {
 			   interval_sec=excluded.interval_sec,
 			   break_sec=excluded.break_sec,
 			   delivery_type=excluded.delivery_type,
+			   deleted_at=NULL,
 			   updated_at=unixepoch()`,
 			current.ID,
 			current.Name,
@@ -396,8 +417,9 @@ func (s *Store) StartBreak(sessionID string, startedAt time.Time, source string,
 		row := tx.QueryRowContext(
 			context.Background(),
 			`SELECT name, interval_sec, break_sec, delivery_type
-			 FROM reminders
-			 WHERE id = ?`,
+				 FROM reminders
+				 WHERE id = ?
+				   AND deleted_at IS NULL`,
 			reminderID,
 		)
 		switch err := row.Scan(&name, &intervalSec, &breakSec, &deliveryType); {
@@ -534,6 +556,7 @@ func (s *Store) QueryWeeklyStats(weekStart time.Time, weekEnd time.Time) (Weekly
 		 FROM reminders r
 		 LEFT JOIN break_session_reminders bsr ON bsr.reminder_id = r.id
 		 LEFT JOIN sessions_in_week s ON s.id = bsr.session_id
+		 WHERE r.deleted_at IS NULL
 		 GROUP BY r.id, r.name, r.enabled, r.delivery_type
 		 ORDER BY triggered_count DESC, r.name COLLATE NOCASE ASC`,
 		startUnix,

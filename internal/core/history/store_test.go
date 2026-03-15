@@ -1,6 +1,8 @@
 package history
 
 import (
+	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -69,5 +71,89 @@ func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 	}
 	if stats.Summary.TotalActualBreakSec != 20 {
 		t.Fatalf("expected total completed actual sec 20, got %d", stats.Summary.TotalActualBreakSec)
+	}
+}
+
+func TestListRemindersSkipsSoftDeletedRows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer store.Close()
+
+	if _, err := store.db.ExecContext(context.Background(), `UPDATE reminders SET deleted_at = unixepoch() WHERE id = 'eye'`); err != nil {
+		t.Fatalf("soft delete reminder error = %v", err)
+	}
+
+	reminders, err := store.ListReminders()
+	if err != nil {
+		t.Fatalf("ListReminders() error = %v", err)
+	}
+	for _, r := range reminders {
+		if r.ID == "eye" {
+			t.Fatalf("expected soft-deleted reminder to be excluded from list")
+		}
+	}
+}
+
+func TestStartBreakEnforcesSingleRunningSession(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer store.Close()
+
+	base := time.Unix(1_700_000_000, 0).UTC()
+	if err := store.StartBreak("run-1", base, "scheduled", 20, nil); err != nil {
+		t.Fatalf("StartBreak(run-1) error = %v", err)
+	}
+	if err := store.StartBreak("run-2", base.Add(10*time.Second), "scheduled", 20, nil); err == nil {
+		t.Fatalf("expected second running session insert to fail")
+	}
+}
+
+func TestOpenStoreCancelsDanglingRunningSessions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+
+	base := time.Unix(1_700_000_000, 0).UTC()
+	if err := store.StartBreak("dangling", base, "manual", 20, nil); err != nil {
+		t.Fatalf("StartBreak(dangling) error = %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore(reopen) error = %v", err)
+	}
+	defer reopened.Close()
+
+	var status string
+	var endedAt sql.NullInt64
+	row := reopened.db.QueryRowContext(context.Background(), `SELECT status, ended_at FROM break_sessions WHERE id = ?`, "dangling")
+	if err := row.Scan(&status, &endedAt); err != nil {
+		t.Fatalf("scan dangling session error = %v", err)
+	}
+	if status != "canceled" {
+		t.Fatalf("expected dangling running session to be canceled, got %q", status)
+	}
+	if !endedAt.Valid {
+		t.Fatalf("expected dangling running session to have ended_at after cleanup")
+	}
+
+	// After cleanup there should be no running rows left.
+	var runningCount int
+	if err := reopened.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM break_sessions WHERE status = 'running'`).Scan(&runningCount); err != nil {
+		t.Fatalf("count running sessions error = %v", err)
+	}
+	if runningCount != 0 {
+		t.Fatalf("expected zero running sessions after reopen cleanup, got %d", runningCount)
 	}
 }
