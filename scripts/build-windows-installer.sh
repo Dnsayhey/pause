@@ -164,6 +164,8 @@ echo "[1/2] Building ${APP_NAME} Windows installer (${WINDOWS_PLATFORM})"
 "${WAILS_CMD[@]}" "${WAILS_ARGS[@]}"
 
 echo "[2/2] Collecting Windows artifacts into ${WINDOWS_OUTPUT_DIR}"
+# Wails -clean can remove build/bin (including the custom output dir), so ensure it exists again.
+mkdir -p "${WINDOWS_OUTPUT_DIR}"
 
 GENERATED_FILES=()
 while IFS= read -r -d '' file; do
