@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import type { Ref } from 'react';
 import type { Settings } from '../types';
 import type { Locale } from '../i18n';
 import { t } from '../i18n';
@@ -6,7 +6,7 @@ import { t } from '../i18n';
 type HeroHeaderProps = {
   locale: Locale;
   language: Settings['ui']['language'];
-  titleRef?: RefObject<HTMLHeadingElement | null>;
+  titleRef?: Ref<HTMLHeadingElement>;
   onLanguageChange: (language: Settings['ui']['language']) => void;
 };
 

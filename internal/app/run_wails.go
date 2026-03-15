@@ -68,6 +68,7 @@ func RunWails(configPath string, assets fs.FS) error {
 			Assets: assets,
 		},
 		OnStartup:     desktopApp.Startup,
+		OnShutdown:    desktopApp.Shutdown,
 		OnBeforeClose: desktopApp.BeforeClose,
 		Bind: []interface{}{
 			desktopApp,

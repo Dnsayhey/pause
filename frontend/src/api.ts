@@ -1,12 +1,14 @@
-import type { RuntimeState, Settings, SettingsPatch } from './types';
+import type { ReminderConfig, ReminderPatch, RuntimeState, Settings, SettingsPatch } from './types';
 
 type Backend = {
   GetSettings: () => Promise<Settings>;
   UpdateSettings: (patch: SettingsPatch) => Promise<Settings>;
+  GetReminders: () => Promise<ReminderConfig[]>;
+  UpdateReminders: (patches: ReminderPatch[]) => Promise<ReminderConfig[]>;
   GetLaunchAtLogin: () => Promise<boolean>;
   SetLaunchAtLogin: (enabled: boolean) => Promise<boolean>;
   GetRuntimeState: () => Promise<RuntimeState>;
-  Pause: (mode: string, durationSec: number) => Promise<RuntimeState>;
+  Pause: () => Promise<RuntimeState>;
   Resume: () => Promise<RuntimeState>;
   SkipCurrentBreak: () => Promise<RuntimeState>;
   Quit?: () => Promise<void> | void;
@@ -37,6 +39,14 @@ export async function updateSettings(patch: SettingsPatch): Promise<Settings> {
   return requireBackend().UpdateSettings(patch);
 }
 
+export async function getReminders(): Promise<ReminderConfig[]> {
+  return requireBackend().GetReminders();
+}
+
+export async function updateReminders(patches: ReminderPatch[]): Promise<ReminderConfig[]> {
+  return requireBackend().UpdateReminders(patches);
+}
+
 export async function getLaunchAtLogin(): Promise<boolean> {
   return requireBackend().GetLaunchAtLogin();
 }
@@ -47,14 +57,6 @@ export async function setLaunchAtLogin(enabled: boolean): Promise<boolean> {
 
 export async function getRuntimeState(): Promise<RuntimeState> {
   return requireBackend().GetRuntimeState();
-}
-
-export async function pause(mode: string, durationSec = 0): Promise<RuntimeState> {
-  return requireBackend().Pause(mode, durationSec);
-}
-
-export async function resume(): Promise<RuntimeState> {
-  return requireBackend().Resume();
 }
 
 export async function skipCurrentBreak(): Promise<RuntimeState> {

@@ -10,12 +10,11 @@ export type Locale = keyof typeof dictionaries;
 export type LanguageSetting = 'auto' | Locale;
 export type TranslationKey = keyof typeof enUS;
 
-export function resolveLocale(setting: LanguageSetting): Locale {
-  if (setting === 'zh-CN' || setting === 'en-US') {
-    return setting;
+export function resolveLocale(effectiveLanguage?: string): Locale {
+  if (effectiveLanguage === 'zh-CN' || effectiveLanguage === 'en-US') {
+    return effectiveLanguage;
   }
-  const browserLang = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : '';
-  return browserLang.startsWith('zh') ? 'zh-CN' : 'en-US';
+  return 'en-US';
 }
 
 export function t(locale: Locale, key: TranslationKey): string {
@@ -31,4 +30,3 @@ export function localizeReason(reason: string, locale: Locale): string {
   }
   return reason;
 }
-

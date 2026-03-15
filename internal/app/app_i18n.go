@@ -45,29 +45,31 @@ func languageFromLocaleValue(value string) string {
 func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings {
 	if language == config.UILanguageZhCN {
 		return desktop.StatusBarLocaleStrings{
-			PopoverTitle:   "Pause",
-			BreakNowButton: "zzZ",
-			PauseButton:    "暂停",
-			Pause30Button:  "暂停 30 分钟",
-			ResumeButton:   "恢复",
-			OpenAppButton:  "打开主界面",
-			AboutMenuItem:  "关于",
-			QuitMenuItem:   "退出",
-			MoreButtonTip:  "更多",
-			Tooltip:        "Pause 休息提醒",
+			PopoverTitle:          "Pause",
+			BreakNowButton:        "立即休息",
+			PauseButton:           "关闭提醒",
+			ResumeButton:          "开启提醒",
+			OpenAppButton:         "打开主界面",
+			AboutMenuItem:         "关于",
+			QuitMenuItem:          "退出",
+			MoreButtonTip:         "更多",
+			Tooltip:               "Pause 休息提醒",
+			StatusLineFallback:    "运行状态：--",
+			NextBreakLineFallback: "下一次休息：--:--",
 		}
 	}
 	return desktop.StatusBarLocaleStrings{
-		PopoverTitle:   "Pause",
-		BreakNowButton: "zzZ",
-		PauseButton:    "Pause",
-		Pause30Button:  "Pause 30m",
-		ResumeButton:   "Resume",
-		OpenAppButton:  "Open Pause",
-		AboutMenuItem:  "About",
-		QuitMenuItem:   "Quit",
-		MoreButtonTip:  "More",
-		Tooltip:        "Pause break reminder",
+		PopoverTitle:          "Pause",
+		BreakNowButton:        "Break now",
+		PauseButton:           "Disable reminders",
+		ResumeButton:          "Enable reminders",
+		OpenAppButton:         "Open Main Window",
+		AboutMenuItem:         "About",
+		QuitMenuItem:          "Quit",
+		MoreButtonTip:         "More",
+		Tooltip:               "Pause break reminder",
+		StatusLineFallback:    "Status: --",
+		NextBreakLineFallback: "Next break: --:--",
 	}
 }
 

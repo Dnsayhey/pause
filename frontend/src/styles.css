@@ -62,8 +62,18 @@ body[data-platform='linux'] {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
+  position: fixed;
+  inset: 0;
   background: var(--app-bg);
   color: var(--text-primary);
 }

@@ -9,12 +9,11 @@ package desktop
 #include <stdlib.h>
 
 void PauseStatusBarInit(void);
-void PauseStatusBarUpdate(const char *status, const char *countdown, const char *title, int paused, double progress);
+void PauseStatusBarUpdate(const char *status, const char *countdown, const char *title, int paused, double progress, const char *remindersPayload);
 void PauseStatusBarSetLocaleStrings(
 	const char *popoverTitle,
 	const char *breakNowButton,
 	const char *pauseButton,
-	const char *pause30Button,
 	const char *resumeButton,
 	const char *openButton,
 	const char *aboutMenuItem,
@@ -51,10 +50,11 @@ func (darwinStatusBarController) Init(onAction func(actionID int)) {
 	C.PauseStatusBarInit()
 }
 
-func (darwinStatusBarController) Update(status, countdown, title string, paused bool, progress float64) {
+func (darwinStatusBarController) Update(status, countdown, title string, paused bool, progress float64, remindersPayload string) {
 	cStatus := C.CString(status)
 	cCountdown := C.CString(countdown)
 	cTitle := C.CString(title)
+	cReminders := C.CString(remindersPayload)
 	cPaused := C.int(0)
 	if paused {
 		cPaused = 1
@@ -62,14 +62,14 @@ func (darwinStatusBarController) Update(status, countdown, title string, paused 
 	defer C.free(unsafe.Pointer(cStatus))
 	defer C.free(unsafe.Pointer(cCountdown))
 	defer C.free(unsafe.Pointer(cTitle))
-	C.PauseStatusBarUpdate(cStatus, cCountdown, cTitle, cPaused, C.double(progress))
+	defer C.free(unsafe.Pointer(cReminders))
+	C.PauseStatusBarUpdate(cStatus, cCountdown, cTitle, cPaused, C.double(progress), cReminders)
 }
 
 func (darwinStatusBarController) SetLocale(strings StatusBarLocaleStrings) {
 	cPopoverTitle := C.CString(strings.PopoverTitle)
 	cBreakNowButton := C.CString(strings.BreakNowButton)
 	cPauseButton := C.CString(strings.PauseButton)
-	cPause30Button := C.CString(strings.Pause30Button)
 	cResumeButton := C.CString(strings.ResumeButton)
 	cOpenButton := C.CString(strings.OpenAppButton)
 	cAboutMenuItem := C.CString(strings.AboutMenuItem)
@@ -79,7 +79,6 @@ func (darwinStatusBarController) SetLocale(strings StatusBarLocaleStrings) {
 	defer C.free(unsafe.Pointer(cPopoverTitle))
 	defer C.free(unsafe.Pointer(cBreakNowButton))
 	defer C.free(unsafe.Pointer(cPauseButton))
-	defer C.free(unsafe.Pointer(cPause30Button))
 	defer C.free(unsafe.Pointer(cResumeButton))
 	defer C.free(unsafe.Pointer(cOpenButton))
 	defer C.free(unsafe.Pointer(cAboutMenuItem))
@@ -91,7 +90,6 @@ func (darwinStatusBarController) SetLocale(strings StatusBarLocaleStrings) {
 		cPopoverTitle,
 		cBreakNowButton,
 		cPauseButton,
-		cPause30Button,
 		cResumeButton,
 		cOpenButton,
 		cAboutMenuItem,

@@ -1,4 +1,4 @@
-//go:build wails && !darwin
+//go:build wails && !darwin && !windows
 
 package desktop
 
@@ -8,7 +8,8 @@ func NewStatusBarController() StatusBarController {
 	return noopStatusBarController{}
 }
 
-func (noopStatusBarController) Init(func(int))                               {}
-func (noopStatusBarController) Update(string, string, string, bool, float64) {}
-func (noopStatusBarController) SetLocale(StatusBarLocaleStrings)             {}
-func (noopStatusBarController) Destroy()                                     {}
+func (noopStatusBarController) Init(func(int)) {}
+func (noopStatusBarController) Update(string, string, string, bool, float64, string) {
+}
+func (noopStatusBarController) SetLocale(StatusBarLocaleStrings) {}
+func (noopStatusBarController) Destroy()                         {}

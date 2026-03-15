@@ -1,17 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getLaunchAtLogin, setLaunchAtLogin, getSettings, updateSettings } from '../api';
-import type { Settings, SettingsPatch } from '../types';
+import { getLaunchAtLogin, getReminders, getSettings, setLaunchAtLogin, updateReminders, updateSettings } from '../api';
+import {
+  isReminderValueValid,
+  reminderFieldSpecByID,
+  toDraftBreakValue,
+  toDraftIntervalValue,
+  toStoredBreakSec,
+  toStoredIntervalSec
+} from '../reminderFields';
+import type { ReminderConfig, ReminderPatch, Settings, SettingsPatch } from '../types';
 
-const EYE_DEFAULT_INTERVAL_MIN = 20;
-const EYE_DEFAULT_BREAK_SEC = 20;
-const STAND_DEFAULT_INTERVAL_HOUR = 1;
-const STAND_DEFAULT_BREAK_MIN = 5;
 const IDLE_THRESHOLD_OPTIONS = [60, 300, 600, 1800, 3600, 7200] as const;
 const SOUND_VOLUME_OPTIONS = [20, 40, 60, 80, 100] as const;
 
 type UseSettingsOptions = {
   setError: (message: string) => void;
   refreshRuntime: () => Promise<unknown>;
+};
+
+type ReminderDraft = {
+  interval: string;
+  break: string;
 };
 
 function parseInteger(text: string): number | null {
@@ -36,22 +45,25 @@ function nearestOptionValue(value: number, options: readonly number[]): number {
   return nearest;
 }
 
+function reminderByID(reminders: ReminderConfig[], id: string) {
+  return reminders.find((reminder) => reminder.id === id);
+}
+
 export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [reminders, setReminders] = useState<ReminderConfig[]>([]);
+  const [reminderDrafts, setReminderDrafts] = useState<Record<string, ReminderDraft>>({});
   const [launchAtLogin, setLaunchAtLoginState] = useState(false);
-  const [eyeIntervalMinDraft, setEyeIntervalMinDraft] = useState(String(EYE_DEFAULT_INTERVAL_MIN));
-  const [eyeBreakSecDraft, setEyeBreakSecDraft] = useState(String(EYE_DEFAULT_BREAK_SEC));
-  const [standIntervalHourDraft, setStandIntervalHourDraft] = useState(String(STAND_DEFAULT_INTERVAL_HOUR));
-  const [standBreakMinDraft, setStandBreakMinDraft] = useState(String(STAND_DEFAULT_BREAK_MIN));
 
   useEffect(() => {
     let mounted = true;
 
     const loadSettings = async () => {
       try {
-        const next = await getSettings();
+        const [next, reminderRows] = await Promise.all([getSettings(), getReminders()]);
         if (!mounted) return;
         setSettings(next);
+        setReminders(reminderRows);
 
         try {
           const startupState = await getLaunchAtLogin();
@@ -106,12 +118,16 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   }, [refreshLaunchAtLoginState]);
 
   useEffect(() => {
-    if (!settings) return;
-    setEyeIntervalMinDraft(String(Math.max(1, Math.round(settings.eye.intervalSec / 60))));
-    setEyeBreakSecDraft(String(settings.eye.breakSec));
-    setStandIntervalHourDraft(String(Math.max(1, Math.round(settings.stand.intervalSec / 3600))));
-    setStandBreakMinDraft(String(Math.max(1, Math.round(settings.stand.breakSec / 60))));
-  }, [settings]);
+    const nextDrafts: Record<string, ReminderDraft> = {};
+    for (const reminder of reminders) {
+      const spec = reminderFieldSpecByID(reminder.id);
+      nextDrafts[reminder.id] = {
+        interval: String(toDraftIntervalValue(reminder.intervalSec, spec)),
+        break: String(toDraftBreakValue(reminder.breakSec, spec))
+      };
+    }
+    setReminderDrafts(nextDrafts);
+  }, [reminders]);
 
   const applyPatch = useCallback(
     async (patch: SettingsPatch) => {
@@ -143,96 +159,71 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     [refreshLaunchAtLoginState, setError]
   );
 
-  const commitEyeIntervalDraft = useCallback(
-    async (raw: string) => {
-      const intervalMin = parseInteger(raw);
-      const valid = intervalMin !== null && intervalMin >= 1;
-      if (!valid) {
-        setEyeIntervalMinDraft(String(EYE_DEFAULT_INTERVAL_MIN));
-        await applyPatch({
-          eye: {
-            intervalSec: EYE_DEFAULT_INTERVAL_MIN * 60
+  const applyReminderPatch = useCallback(
+    async (id: string, patch: Omit<ReminderPatch, 'id'>) => {
+      setError('');
+      try {
+        const next = await updateReminders([
+          {
+            id,
+            ...patch
           }
-        });
-        return;
+        ]);
+        setReminders(next);
+        await refreshRuntime();
+      } catch (err) {
+        setError(String(err));
       }
-      setEyeIntervalMinDraft(String(intervalMin));
-      await applyPatch({
-        eye: {
-          intervalSec: intervalMin * 60
-        }
-      });
     },
-    [applyPatch]
+    [refreshRuntime, setError]
   );
 
-  const commitEyeBreakDraft = useCallback(
-    async (raw: string) => {
-      const breakSec = parseInteger(raw);
-      const valid = breakSec !== null && breakSec >= 10 && breakSec <= 60;
-      if (!valid) {
-        setEyeBreakSecDraft(String(EYE_DEFAULT_BREAK_SEC));
-        await applyPatch({
-          eye: {
-            breakSec: EYE_DEFAULT_BREAK_SEC
-          }
-        });
-        return;
+  const setReminderIntervalDraft = useCallback((id: string, value: string) => {
+    setReminderDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        interval: value,
+        break: prev[id]?.break ?? ''
       }
-      setEyeBreakSecDraft(String(breakSec));
-      await applyPatch({
-        eye: {
-          breakSec
-        }
-      });
+    }));
+  }, []);
+
+  const setReminderBreakDraft = useCallback((id: string, value: string) => {
+    setReminderDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        interval: prev[id]?.interval ?? '',
+        break: value
+      }
+    }));
+  }, []);
+
+  const commitReminderIntervalDraft = useCallback(
+    async (id: string, raw: string) => {
+      const spec = reminderFieldSpecByID(id);
+      const parsed = parseInteger(raw);
+      const current = reminderByID(reminders, id);
+      const fallback = toDraftIntervalValue(current?.intervalSec ?? spec.intervalMin * spec.intervalUnitSec, spec);
+      const nextValue = isReminderValueValid(parsed, spec.intervalMin, spec.intervalMax) ? parsed : fallback;
+
+      setReminderIntervalDraft(id, String(nextValue));
+      await applyReminderPatch(id, { intervalSec: toStoredIntervalSec(nextValue, spec) });
     },
-    [applyPatch]
+    [applyReminderPatch, reminders, setReminderIntervalDraft]
   );
 
-  const commitStandIntervalDraft = useCallback(
-    async (raw: string) => {
-      const intervalHour = parseInteger(raw);
-      const valid = intervalHour !== null && intervalHour >= 1;
-      if (!valid) {
-        setStandIntervalHourDraft(String(STAND_DEFAULT_INTERVAL_HOUR));
-        await applyPatch({
-          stand: {
-            intervalSec: STAND_DEFAULT_INTERVAL_HOUR * 3600
-          }
-        });
-        return;
-      }
-      setStandIntervalHourDraft(String(intervalHour));
-      await applyPatch({
-        stand: {
-          intervalSec: intervalHour * 3600
-        }
-      });
-    },
-    [applyPatch]
-  );
+  const commitReminderBreakDraft = useCallback(
+    async (id: string, raw: string) => {
+      const spec = reminderFieldSpecByID(id);
+      const parsed = parseInteger(raw);
+      const current = reminderByID(reminders, id);
+      const fallback = toDraftBreakValue(current?.breakSec ?? spec.breakMin * spec.breakUnitSec, spec);
+      const nextValue = isReminderValueValid(parsed, spec.breakMin, spec.breakMax) ? parsed : fallback;
 
-  const commitStandBreakDraft = useCallback(
-    async (raw: string) => {
-      const breakMin = parseInteger(raw);
-      const valid = breakMin !== null && breakMin >= 1 && breakMin <= 10;
-      if (!valid) {
-        setStandBreakMinDraft(String(STAND_DEFAULT_BREAK_MIN));
-        await applyPatch({
-          stand: {
-            breakSec: STAND_DEFAULT_BREAK_MIN * 60
-          }
-        });
-        return;
-      }
-      setStandBreakMinDraft(String(breakMin));
-      await applyPatch({
-        stand: {
-          breakSec: breakMin * 60
-        }
-      });
+      setReminderBreakDraft(id, String(nextValue));
+      await applyReminderPatch(id, { breakSec: toStoredBreakSec(nextValue, spec) });
     },
-    [applyPatch]
+    [applyReminderPatch, reminders, setReminderBreakDraft]
   );
 
   const idleModeSelectValue = useMemo(() => {
@@ -248,21 +239,16 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
 
   return {
     settings,
+    reminders,
+    reminderDrafts,
     launchAtLogin,
     applyLaunchAtLogin,
     applyPatch,
-    eyeIntervalMinDraft,
-    setEyeIntervalMinDraft,
-    eyeBreakSecDraft,
-    setEyeBreakSecDraft,
-    standIntervalHourDraft,
-    setStandIntervalHourDraft,
-    standBreakMinDraft,
-    setStandBreakMinDraft,
-    commitEyeIntervalDraft,
-    commitEyeBreakDraft,
-    commitStandIntervalDraft,
-    commitStandBreakDraft,
+    applyReminderPatch,
+    setReminderIntervalDraft,
+    setReminderBreakDraft,
+    commitReminderIntervalDraft,
+    commitReminderBreakDraft,
     idleModeSelectValue,
     soundModeSelectValue
   };

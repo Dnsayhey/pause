@@ -14,10 +14,11 @@ extern void statusBarMenuCallbackGo(int callbackID);
 enum {
     PauseStatusBarActionBreakNow = 1,
     PauseStatusBarActionPause = 2,
-    PauseStatusBarActionPause30 = 3,
     PauseStatusBarActionResume = 4,
     PauseStatusBarActionOpenWindow = 5,
-    PauseStatusBarActionQuit = 6
+    PauseStatusBarActionQuit = 6,
+    PauseStatusBarActionPauseReminderBase = 1000,
+    PauseStatusBarActionResumeReminderBase = 2000
 };
 
 static void PauseClosePopover(void);
@@ -30,6 +31,11 @@ static NSImage *PauseStatusBarBuildIconByName(NSString *symbolName, CGFloat poin
 static void PauseStatusBarSetTitleText(NSString *text);
 static void PauseStatusBarAdjustLengthForTitle(NSString *text);
 static void PauseUpdateStatusItemTooltipVisibility(void);
+static void PauseClearReminderRows(void);
+static void PauseRebuildReminderRows(NSString *remindersPayload);
+static NSString *PauseNoRemindersText(void);
+static void PauseAppendNoReminderRow(NSString *titleText);
+static void PauseUpdatePopoverSize(void);
 
 static const CGFloat pauseStatusItemWidthWithTime = 68.0;
 static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
@@ -149,13 +155,14 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
 NSStatusItem *pauseStatusItem;
 NSPopover *pausePopover;
 NSViewController *pausePopoverController;
+NSView *pausePopoverContentView;
 NSTextField *pausePopoverTitleLabel;
 NSTextField *pauseStatusLabel;
-NSTextField *pauseCountdownLabel;
-NSProgressIndicator *pauseCountdownProgress;
-NSButton *pausePauseButton;
-NSButton *pausePause30Button;
-NSButton *pauseResumeButton;
+NSStackView *pauseRemindersStack;
+NSMutableArray *pauseReminderPauseButtons;
+NSMutableArray *pauseReminderResumeButtons;
+NSMutableArray *pauseReminderProgressBars;
+NSButton *pauseGlobalToggleButton;
 NSButton *pauseBreakNowButton;
 NSButton *pauseOpenButton;
 NSButton *pauseMoreButton;
@@ -163,6 +170,10 @@ NSString *pauseAboutMenuTitle;
 NSString *pauseQuitMenuTitle;
 NSString *pauseMoreButtonTip;
 NSString *pauseStatusTooltipText;
+NSString *pausePauseButtonTooltip;
+NSString *pauseResumeButtonTooltip;
+NSString *pauseGlobalPauseButtonTitle;
+NSString *pauseGlobalResumeButtonTitle;
 id pauseLocalMonitor;
 id pauseGlobalMonitor;
 PauseStatusBarHandler *pauseStatusHandler;
@@ -297,17 +308,21 @@ static void PauseStatusBarSetPausedBlinking(BOOL paused) {
 }
 
 static void PauseSetActionButtonsPausedState(BOOL paused) {
+    if (pauseGlobalToggleButton != nil) {
+        NSString *pauseTitle = pauseGlobalPauseButtonTitle ? pauseGlobalPauseButtonTitle : @"Pause";
+        NSString *resumeTitle = pauseGlobalResumeButtonTitle ? pauseGlobalResumeButtonTitle : @"Resume";
+        if (paused) {
+            [pauseGlobalToggleButton setTitle:resumeTitle];
+            [pauseGlobalToggleButton setTag:PauseStatusBarActionResume];
+            [pauseGlobalToggleButton setToolTip:resumeTitle];
+        } else {
+            [pauseGlobalToggleButton setTitle:pauseTitle];
+            [pauseGlobalToggleButton setTag:PauseStatusBarActionPause];
+            [pauseGlobalToggleButton setToolTip:pauseTitle];
+        }
+    }
     if (pauseBreakNowButton != nil) {
         [pauseBreakNowButton setHidden:NO];
-    }
-    if (pausePauseButton != nil) {
-        [pausePauseButton setHidden:paused];
-    }
-    if (pausePause30Button != nil) {
-        [pausePause30Button setHidden:paused];
-    }
-    if (pauseResumeButton != nil) {
-        [pauseResumeButton setHidden:!paused];
     }
 }
 
@@ -369,8 +384,213 @@ static void PauseUpdateStatusItemTooltipVisibility(void) {
     }
 }
 
+static NSString *PauseNoRemindersText(void) {
+    return @"暂无提醒";
+}
+
+static void PauseUpdatePopoverSize(void) {
+    if (pausePopover == nil || pausePopoverContentView == nil) {
+        return;
+    }
+    [pausePopoverContentView layoutSubtreeIfNeeded];
+    NSSize fitting = [pausePopoverContentView fittingSize];
+    CGFloat height = fitting.height;
+    if (height < 190.0) {
+        height = 190.0;
+    }
+    if (height > 380.0) {
+        height = 380.0;
+    }
+    [pausePopover setContentSize:NSMakeSize(300.0, height)];
+}
+
+static void PauseClearReminderRows(void) {
+    if (pauseRemindersStack != nil) {
+        NSArray *existingRows = [[pauseRemindersStack arrangedSubviews] copy];
+        for (NSView *row in existingRows) {
+            [pauseRemindersStack removeArrangedSubview:row];
+            [row removeFromSuperview];
+        }
+        [existingRows release];
+    }
+    [pauseReminderPauseButtons removeAllObjects];
+    [pauseReminderResumeButtons removeAllObjects];
+    [pauseReminderProgressBars removeAllObjects];
+}
+
+static int PauseActionForReminder(NSInteger rowIndex, BOOL paused) {
+    if (rowIndex < 0) {
+        return (paused ? PauseStatusBarActionResume : PauseStatusBarActionPause);
+    }
+    if (paused) {
+        return (int)(PauseStatusBarActionResumeReminderBase + rowIndex);
+    }
+    return (int)(PauseStatusBarActionPauseReminderBase + rowIndex);
+}
+
+static void PauseAppendReminderRow(NSInteger rowIndex, BOOL paused, NSString *titleText, double progress) {
+    if (pauseRemindersStack == nil) {
+        return;
+    }
+
+    NSString *safeTitle = titleText ? titleText : @"";
+    NSStackView *reminderStack = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    [reminderStack setOrientation:NSUserInterfaceLayoutOrientationVertical];
+    [reminderStack setAlignment:NSLayoutAttributeCenterX];
+    [reminderStack setSpacing:6.0];
+    [reminderStack setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+    NSTextField *titleLabel = MakeLabel(safeTitle, [NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightMedium], [NSColor labelColor]);
+    [titleLabel setAlignment:NSTextAlignmentCenter];
+    [titleLabel setLineBreakMode:NSLineBreakByTruncatingTail];
+
+    NSStackView *rowControls = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    [rowControls setOrientation:NSUserInterfaceLayoutOrientationHorizontal];
+    [rowControls setDistribution:NSStackViewDistributionFill];
+    [rowControls setAlignment:NSLayoutAttributeCenterY];
+    [rowControls setSpacing:8.0];
+    [rowControls setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+    NSString *pauseTip = pausePauseButtonTooltip ? pausePauseButtonTooltip : @"Pause";
+    NSString *resumeTip = pauseResumeButtonTooltip ? pauseResumeButtonTooltip : @"Resume";
+    int pauseActionID = PauseActionForReminder(rowIndex, NO);
+    int resumeActionID = PauseActionForReminder(rowIndex, YES);
+    NSButton *pauseButton = MakeIconActionButton(@"pause.fill", pauseTip, pauseActionID);
+    NSButton *resumeButton = MakeIconActionButton(@"play.fill", resumeTip, resumeActionID);
+    NSProgressIndicator *progressView = [[NSProgressIndicator alloc] initWithFrame:NSZeroRect];
+    [progressView setIndeterminate:NO];
+    [progressView setMinValue:0];
+    [progressView setMaxValue:100];
+    [progressView setControlSize:NSControlSizeSmall];
+    [progressView setStyle:NSProgressIndicatorStyleBar];
+    [progressView setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+    double clamped = progress;
+    if (clamped < 0) {
+        clamped = 0;
+    }
+    if (clamped > 1) {
+        clamped = 1;
+    }
+    [progressView setDoubleValue:(clamped * 100.0)];
+
+    [rowControls addArrangedSubview:pauseButton];
+    [rowControls addArrangedSubview:resumeButton];
+    [rowControls addArrangedSubview:progressView];
+
+    [reminderStack addArrangedSubview:titleLabel];
+    [reminderStack addArrangedSubview:rowControls];
+    [pauseRemindersStack addArrangedSubview:reminderStack];
+
+    [pauseReminderPauseButtons addObject:pauseButton];
+    [pauseReminderResumeButtons addObject:resumeButton];
+    [pauseReminderProgressBars addObject:progressView];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [reminderStack.leadingAnchor constraintEqualToAnchor:pauseRemindersStack.leadingAnchor],
+        [reminderStack.trailingAnchor constraintEqualToAnchor:pauseRemindersStack.trailingAnchor],
+        [titleLabel.leadingAnchor constraintEqualToAnchor:reminderStack.leadingAnchor],
+        [titleLabel.trailingAnchor constraintEqualToAnchor:reminderStack.trailingAnchor],
+        [rowControls.leadingAnchor constraintEqualToAnchor:reminderStack.leadingAnchor],
+        [rowControls.trailingAnchor constraintEqualToAnchor:reminderStack.trailingAnchor],
+        [pauseButton.widthAnchor constraintEqualToConstant:32],
+        [resumeButton.widthAnchor constraintEqualToConstant:32],
+        [progressView.heightAnchor constraintEqualToConstant:8],
+        [rowControls.heightAnchor constraintEqualToConstant:28],
+    ]];
+
+    [pauseButton setHidden:paused];
+    [resumeButton setHidden:!paused];
+
+    [progressView release];
+    [rowControls release];
+    [reminderStack release];
+}
+
+static void PauseAppendNoReminderRow(NSString *titleText) {
+    if (pauseRemindersStack == nil) {
+        return;
+    }
+
+    NSString *safeTitle = titleText ? titleText : @"";
+    NSStackView *reminderStack = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    [reminderStack setOrientation:NSUserInterfaceLayoutOrientationVertical];
+    [reminderStack setAlignment:NSLayoutAttributeCenterX];
+    [reminderStack setSpacing:0.0];
+    [reminderStack setTranslatesAutoresizingMaskIntoConstraints:NO];
+
+    NSTextField *titleLabel = MakeLabel(safeTitle, [NSFont systemFontOfSize:13 weight:NSFontWeightRegular], [NSColor secondaryLabelColor]);
+    [titleLabel setAlignment:NSTextAlignmentCenter];
+    [titleLabel setLineBreakMode:NSLineBreakByTruncatingTail];
+
+    [reminderStack addArrangedSubview:titleLabel];
+    [pauseRemindersStack addArrangedSubview:reminderStack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [reminderStack.leadingAnchor constraintEqualToAnchor:pauseRemindersStack.leadingAnchor],
+        [reminderStack.trailingAnchor constraintEqualToAnchor:pauseRemindersStack.trailingAnchor],
+        [titleLabel.leadingAnchor constraintEqualToAnchor:reminderStack.leadingAnchor],
+        [titleLabel.trailingAnchor constraintEqualToAnchor:reminderStack.trailingAnchor],
+    ]];
+
+    [reminderStack release];
+}
+
+static void PauseRebuildReminderRows(NSString *remindersPayload) {
+    PauseClearReminderRows();
+
+    NSData *payloadData = nil;
+    if (remindersPayload != nil && [remindersPayload length] > 0) {
+        payloadData = [remindersPayload dataUsingEncoding:NSUTF8StringEncoding];
+    }
+    NSArray *items = nil;
+    if (payloadData != nil) {
+        NSError *error = nil;
+        id parsed = [NSJSONSerialization JSONObjectWithData:payloadData options:0 error:&error];
+        if (error == nil && [parsed isKindOfClass:[NSArray class]]) {
+            items = (NSArray *)parsed;
+        }
+    }
+
+    if (items == nil || [items count] == 0) {
+        PauseAppendNoReminderRow(PauseNoRemindersText());
+        PauseUpdatePopoverSize();
+        return;
+    }
+
+    NSInteger appended = 0;
+    for (id item in items) {
+        if (![item isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        NSDictionary *entry = (NSDictionary *)item;
+        NSString *title = @"";
+        id titleValue = [entry objectForKey:@"title"];
+        if ([titleValue isKindOfClass:[NSString class]]) {
+            title = (NSString *)titleValue;
+        }
+
+        double progress = 0;
+        id progressValue = [entry objectForKey:@"progress"];
+        if ([progressValue respondsToSelector:@selector(doubleValue)]) {
+            progress = [progressValue doubleValue];
+        }
+        BOOL paused = NO;
+        id pausedValue = [entry objectForKey:@"paused"];
+        if ([pausedValue respondsToSelector:@selector(boolValue)]) {
+            paused = [pausedValue boolValue];
+        }
+        PauseAppendReminderRow(appended, paused, title, progress);
+        appended += 1;
+    }
+    if (appended == 0) {
+        PauseAppendNoReminderRow(PauseNoRemindersText());
+    }
+    PauseUpdatePopoverSize();
+}
+
 static void BuildPopoverContent(void) {
-    NSView *contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 210)];
+    NSView *contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 250)];
     [contentView setTranslatesAutoresizingMaskIntoConstraints:NO];
 
     NSStackView *stack = [[NSStackView alloc] initWithFrame:NSZeroRect];
@@ -402,38 +622,37 @@ static void BuildPopoverContent(void) {
         [pausePopoverTitleLabel.trailingAnchor constraintLessThanOrEqualToAnchor:pauseMoreButton.leadingAnchor constant:-8],
     ]];
     pauseStatusLabel = MakeLabel(@"Status: running", [NSFont systemFontOfSize:12 weight:NSFontWeightRegular], [NSColor secondaryLabelColor]);
-    pauseCountdownLabel = MakeLabel(@"Next break: --:--", [NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightMedium], [NSColor labelColor]);
-    [pauseCountdownLabel setAlignment:NSTextAlignmentCenter];
-    pauseCountdownProgress = [[NSProgressIndicator alloc] initWithFrame:NSZeroRect];
-    [pauseCountdownProgress setIndeterminate:NO];
-    [pauseCountdownProgress setMinValue:0];
-    [pauseCountdownProgress setMaxValue:100];
-    [pauseCountdownProgress setDoubleValue:0];
-    [pauseCountdownProgress setControlSize:NSControlSizeSmall];
-    [pauseCountdownProgress setStyle:NSProgressIndicatorStyleBar];
-    [pauseCountdownProgress setTranslatesAutoresizingMaskIntoConstraints:NO];
+    pauseRemindersStack = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    [pauseRemindersStack setOrientation:NSUserInterfaceLayoutOrientationVertical];
+    [pauseRemindersStack setAlignment:NSLayoutAttributeLeading];
+    [pauseRemindersStack setSpacing:10.0];
+    [pauseRemindersStack setTranslatesAutoresizingMaskIntoConstraints:NO];
+    pauseReminderPauseButtons = [[NSMutableArray alloc] init];
+    pauseReminderResumeButtons = [[NSMutableArray alloc] init];
+    pauseReminderProgressBars = [[NSMutableArray alloc] init];
+    PauseRebuildReminderRows(@"");
 
-    NSStackView *rowControls = [[NSStackView alloc] initWithFrame:NSZeroRect];
-    [rowControls setOrientation:NSUserInterfaceLayoutOrientationHorizontal];
-    [rowControls setDistribution:NSStackViewDistributionFill];
-    [rowControls setAlignment:NSLayoutAttributeCenterY];
-    [rowControls setSpacing:8.0];
-    pausePauseButton = MakeIconActionButton(@"pause.fill", @"Pause", PauseStatusBarActionPause);
-    pauseResumeButton = MakeIconActionButton(@"play.fill", @"Resume", PauseStatusBarActionResume);
-    [rowControls addArrangedSubview:pausePauseButton];
-    [rowControls addArrangedSubview:pauseResumeButton];
-    [rowControls addArrangedSubview:pauseCountdownProgress];
-
+    pauseGlobalToggleButton = MakeActionButton(@"Pause", PauseStatusBarActionPause);
     pauseBreakNowButton = MakeActionButton(@"zzZ", PauseStatusBarActionBreakNow);
+    NSStackView *breakNowButtonsRow = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    [breakNowButtonsRow setOrientation:NSUserInterfaceLayoutOrientationHorizontal];
+    [breakNowButtonsRow setAlignment:NSLayoutAttributeCenterY];
+    [breakNowButtonsRow setSpacing:8.0];
+    [breakNowButtonsRow setTranslatesAutoresizingMaskIntoConstraints:NO];
+    [breakNowButtonsRow addArrangedSubview:pauseGlobalToggleButton];
+    [breakNowButtonsRow addArrangedSubview:pauseBreakNowButton];
+
     NSView *breakNowContainer = [[NSView alloc] initWithFrame:NSZeroRect];
     [breakNowContainer setTranslatesAutoresizingMaskIntoConstraints:NO];
-    [breakNowContainer addSubview:pauseBreakNowButton];
+    [breakNowContainer addSubview:breakNowButtonsRow];
     [NSLayoutConstraint activateConstraints:@[
-        [pauseBreakNowButton.centerXAnchor constraintEqualToAnchor:breakNowContainer.centerXAnchor],
-        [pauseBreakNowButton.topAnchor constraintEqualToAnchor:breakNowContainer.topAnchor],
-        [pauseBreakNowButton.bottomAnchor constraintEqualToAnchor:breakNowContainer.bottomAnchor],
+        [breakNowButtonsRow.centerXAnchor constraintEqualToAnchor:breakNowContainer.centerXAnchor],
+        [breakNowButtonsRow.topAnchor constraintEqualToAnchor:breakNowContainer.topAnchor],
+        [breakNowButtonsRow.bottomAnchor constraintEqualToAnchor:breakNowContainer.bottomAnchor],
+        [breakNowButtonsRow.leadingAnchor constraintGreaterThanOrEqualToAnchor:breakNowContainer.leadingAnchor],
+        [breakNowButtonsRow.trailingAnchor constraintLessThanOrEqualToAnchor:breakNowContainer.trailingAnchor],
+        [pauseGlobalToggleButton.heightAnchor constraintEqualToConstant:28],
         [pauseBreakNowButton.heightAnchor constraintEqualToConstant:28],
-        [pauseBreakNowButton.widthAnchor constraintEqualToConstant:72],
     ]];
 
     pauseOpenButton = MakeActionButton(@"Open Pause", PauseStatusBarActionOpenWindow);
@@ -454,8 +673,7 @@ static void BuildPopoverContent(void) {
 
     [stack addArrangedSubview:headerView];
     [stack addArrangedSubview:pauseStatusLabel];
-    [stack addArrangedSubview:pauseCountdownLabel];
-    [stack addArrangedSubview:rowControls];
+    [stack addArrangedSubview:pauseRemindersStack];
     [stack addArrangedSubview:breakNowContainer];
     [stack addArrangedSubview:separator];
     [stack addArrangedSubview:openButtonContainer];
@@ -469,12 +687,8 @@ static void BuildPopoverContent(void) {
         [stack.bottomAnchor constraintEqualToAnchor:contentView.bottomAnchor constant:-12],
         [headerView.widthAnchor constraintEqualToAnchor:stack.widthAnchor],
         [headerView.heightAnchor constraintEqualToConstant:24],
-        [pauseCountdownLabel.leadingAnchor constraintEqualToAnchor:stack.leadingAnchor],
-        [pauseCountdownLabel.trailingAnchor constraintEqualToAnchor:stack.trailingAnchor],
-        [pausePauseButton.widthAnchor constraintEqualToConstant:32],
-        [pauseResumeButton.widthAnchor constraintEqualToConstant:32],
-        [pauseCountdownProgress.heightAnchor constraintEqualToConstant:8],
-        [rowControls.heightAnchor constraintEqualToConstant:28],
+        [pauseRemindersStack.leadingAnchor constraintEqualToAnchor:stack.leadingAnchor],
+        [pauseRemindersStack.trailingAnchor constraintEqualToAnchor:stack.trailingAnchor],
         [breakNowContainer.heightAnchor constraintEqualToConstant:28],
         [openButtonContainer.widthAnchor constraintEqualToAnchor:stack.widthAnchor],
         [openButtonContainer.heightAnchor constraintEqualToConstant:28],
@@ -482,19 +696,20 @@ static void BuildPopoverContent(void) {
 
     pausePopoverController = [[NSViewController alloc] init];
     [pausePopoverController setView:contentView];
+    pausePopoverContentView = [contentView retain];
     [contentView release];
 
     pausePopover = [[NSPopover alloc] init];
     [pausePopover setBehavior:NSPopoverBehaviorTransient];
-    [pausePopover setContentSize:NSMakeSize(300, 220)];
+    [pausePopover setContentSize:NSMakeSize(300, 250)];
     [pausePopover setContentViewController:pausePopoverController];
     PauseSetActionButtonsPausedState(NO);
+    PauseUpdatePopoverSize();
 
+    [breakNowButtonsRow release];
     [openButtonContainer release];
     [breakNowContainer release];
     [headerView release];
-    [pauseCountdownProgress release];
-    [rowControls release];
     [separator release];
     [stack release];
 }
@@ -529,10 +744,11 @@ void PauseStatusBarInit(void) {
     });
 }
 
-void PauseStatusBarUpdate(const char *status, const char *countdown, const char *title, int paused, double progress) {
+void PauseStatusBarUpdate(const char *status, const char *countdown, const char *title, int paused, double progress, const char *remindersPayload) {
     NSString *statusText = status ? [NSString stringWithUTF8String:status] : @"Status: running";
     NSString *countdownText = countdown ? [NSString stringWithUTF8String:countdown] : @"Next break: --:--";
     NSString *titleText = title ? [NSString stringWithUTF8String:title] : @"";
+    NSString *remindersText = remindersPayload ? [NSString stringWithUTF8String:remindersPayload] : @"";
 
     PauseRunOnMain(^{
         if (pauseStatusItem == nil) {
@@ -543,19 +759,9 @@ void PauseStatusBarUpdate(const char *status, const char *countdown, const char 
         if (pauseStatusLabel != nil) {
             [pauseStatusLabel setStringValue:statusText];
         }
-        if (pauseCountdownLabel != nil) {
-            [pauseCountdownLabel setStringValue:countdownText];
-        }
-        if (pauseCountdownProgress != nil) {
-            double clamped = progress;
-            if (clamped < 0) {
-                clamped = 0;
-            }
-            if (clamped > 1) {
-                clamped = 1;
-            }
-            [pauseCountdownProgress setDoubleValue:(clamped * 100.0)];
-        }
+        (void)countdownText;
+        (void)progress;
+        PauseRebuildReminderRows(remindersText);
         PauseSetActionButtonsPausedState(paused != 0);
     });
 }
@@ -564,7 +770,6 @@ void PauseStatusBarSetLocaleStrings(
     const char *popoverTitle,
     const char *breakNowButton,
     const char *pauseButton,
-    const char *pause30Button,
     const char *resumeButton,
     const char *openButton,
     const char *aboutMenuItem,
@@ -575,7 +780,6 @@ void PauseStatusBarSetLocaleStrings(
     NSString *popoverTitleText = popoverTitle ? [NSString stringWithUTF8String:popoverTitle] : @"Pause";
     NSString *breakNowButtonText = breakNowButton ? [NSString stringWithUTF8String:breakNowButton] : @"zzZ";
     NSString *pauseButtonText = pauseButton ? [NSString stringWithUTF8String:pauseButton] : @"Pause";
-    NSString *pause30ButtonText = pause30Button ? [NSString stringWithUTF8String:pause30Button] : @"Pause 30m";
     NSString *resumeButtonText = resumeButton ? [NSString stringWithUTF8String:resumeButton] : @"Resume";
     NSString *openButtonText = openButton ? [NSString stringWithUTF8String:openButton] : @"Open Pause";
     NSString *aboutMenuText = aboutMenuItem ? [NSString stringWithUTF8String:aboutMenuItem] : @"About";
@@ -596,19 +800,37 @@ void PauseStatusBarSetLocaleStrings(
         if (pausePopoverTitleLabel != nil) {
             [pausePopoverTitleLabel setStringValue:popoverTitleText];
         }
-        if (pausePauseButton != nil) {
-            [pausePauseButton setTitle:@""];
-            [pausePauseButton setToolTip:pauseButtonText];
-        }
         if (pauseBreakNowButton != nil) {
             [pauseBreakNowButton setTitle:breakNowButtonText];
         }
-        if (pausePause30Button != nil) {
-            [pausePause30Button setTitle:pause30ButtonText];
+        if (pauseGlobalPauseButtonTitle != nil) {
+            [pauseGlobalPauseButtonTitle release];
+            pauseGlobalPauseButtonTitle = nil;
         }
-        if (pauseResumeButton != nil) {
-            [pauseResumeButton setTitle:@""];
-            [pauseResumeButton setToolTip:resumeButtonText];
+        pauseGlobalPauseButtonTitle = [pauseButtonText copy];
+        if (pauseGlobalResumeButtonTitle != nil) {
+            [pauseGlobalResumeButtonTitle release];
+            pauseGlobalResumeButtonTitle = nil;
+        }
+        pauseGlobalResumeButtonTitle = [resumeButtonText copy];
+        PauseSetActionButtonsPausedState(pauseStatusPaused);
+        if (pausePauseButtonTooltip != nil) {
+            [pausePauseButtonTooltip release];
+            pausePauseButtonTooltip = nil;
+        }
+        pausePauseButtonTooltip = [pauseButtonText copy];
+        if (pauseResumeButtonTooltip != nil) {
+            [pauseResumeButtonTooltip release];
+            pauseResumeButtonTooltip = nil;
+        }
+        pauseResumeButtonTooltip = [resumeButtonText copy];
+        for (NSButton *pauseButton in pauseReminderPauseButtons) {
+            [pauseButton setTitle:@""];
+            [pauseButton setToolTip:pauseButtonText];
+        }
+        for (NSButton *resumeButton in pauseReminderResumeButtons) {
+            [resumeButton setTitle:@""];
+            [resumeButton setToolTip:resumeButtonText];
         }
         if (pauseOpenButton != nil) {
             [pauseOpenButton setTitle:openButtonText];
@@ -648,6 +870,9 @@ void PauseStatusBarDestroy(void) {
         if (pausePopoverController != nil) {
             [pausePopoverController release];
         }
+        if (pausePopoverContentView != nil) {
+            [pausePopoverContentView release];
+        }
         if (pauseStatusHandler != nil) {
             [[NSNotificationCenter defaultCenter] removeObserver:pauseStatusHandler];
             [pauseStatusHandler release];
@@ -670,17 +895,42 @@ void PauseStatusBarDestroy(void) {
         if (pauseStatusTooltipText != nil) {
             [pauseStatusTooltipText release];
         }
+        if (pausePauseButtonTooltip != nil) {
+            [pausePauseButtonTooltip release];
+        }
+        if (pauseResumeButtonTooltip != nil) {
+            [pauseResumeButtonTooltip release];
+        }
+        if (pauseGlobalPauseButtonTitle != nil) {
+            [pauseGlobalPauseButtonTitle release];
+        }
+        if (pauseGlobalResumeButtonTitle != nil) {
+            [pauseGlobalResumeButtonTitle release];
+        }
+        if (pauseReminderPauseButtons != nil) {
+            [pauseReminderPauseButtons release];
+        }
+        if (pauseReminderResumeButtons != nil) {
+            [pauseReminderResumeButtons release];
+        }
+        if (pauseReminderProgressBars != nil) {
+            [pauseReminderProgressBars release];
+        }
+        if (pauseRemindersStack != nil) {
+            [pauseRemindersStack release];
+        }
 
         pauseStatusItem = nil;
         pausePopover = nil;
         pausePopoverController = nil;
+        pausePopoverContentView = nil;
         pausePopoverTitleLabel = nil;
         pauseStatusLabel = nil;
-        pauseCountdownLabel = nil;
-        pauseCountdownProgress = nil;
-        pausePauseButton = nil;
-        pausePause30Button = nil;
-        pauseResumeButton = nil;
+        pauseRemindersStack = nil;
+        pauseReminderPauseButtons = nil;
+        pauseReminderResumeButtons = nil;
+        pauseReminderProgressBars = nil;
+        pauseGlobalToggleButton = nil;
         pauseBreakNowButton = nil;
         pauseOpenButton = nil;
         pauseMoreButton = nil;
@@ -688,6 +938,10 @@ void PauseStatusBarDestroy(void) {
         pauseQuitMenuTitle = nil;
         pauseMoreButtonTip = nil;
         pauseStatusTooltipText = nil;
+        pausePauseButtonTooltip = nil;
+        pauseResumeButtonTooltip = nil;
+        pauseGlobalPauseButtonTitle = nil;
+        pauseGlobalResumeButtonTitle = nil;
         pauseLocalMonitor = nil;
         pauseGlobalMonitor = nil;
         pauseStatusHandler = nil;

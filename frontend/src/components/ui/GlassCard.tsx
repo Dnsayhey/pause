@@ -7,7 +7,7 @@ type GlassCardProps = {
 };
 
 const baseClassName =
-  'mt-4 rounded-[18px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-[18px] shadow-[var(--surface-shadow),var(--surface-inner-highlight)] [backdrop-filter:blur(var(--surface-blur))_saturate(var(--surface-sat))]';
+  'mt-3 rounded-[18px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-[18px] shadow-[var(--surface-shadow),var(--surface-inner-highlight)] [backdrop-filter:blur(var(--surface-blur))_saturate(var(--surface-sat))]';
 
 export function GlassCard({ as: Component = 'section', className = '', children }: GlassCardProps) {
   const mergedClassName = `${baseClassName} ${className}`.trim();

@@ -1,4 +1,4 @@
-//go:build wails && !darwin
+//go:build wails && !darwin && !windows
 
 package desktop
 
