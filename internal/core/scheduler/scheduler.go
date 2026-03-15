@@ -40,12 +40,12 @@ func (s *Scheduler) ResetByID(id string) {
 	delete(s.elapsedSec, norm)
 }
 
-func (s *Scheduler) OnActiveSeconds(activeSec int, settings config.Settings) *Event {
+func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []config.ReminderConfig) *Event {
 	if activeSec <= 0 {
 		return nil
 	}
 
-	enabled := enabledReminders(settings)
+	enabled := enabledReminders(reminders)
 	if len(enabled) == 0 {
 		return nil
 	}
@@ -95,8 +95,8 @@ func (s *Scheduler) OnActiveSeconds(activeSec int, settings config.Settings) *Ev
 	return &Event{Reasons: reasons, BreakSec: breakSec}
 }
 
-func (s *Scheduler) NextInSec(settings config.Settings, reminderID string) int {
-	reminder, ok := settings.ReminderByID(reminderID)
+func (s *Scheduler) NextInSec(reminders []config.ReminderConfig, reminderID string) int {
+	reminder, ok := config.ReminderByID(reminders, reminderID)
 	if !ok || !reminder.Enabled {
 		return -1
 	}
@@ -107,17 +107,17 @@ func (s *Scheduler) NextInSec(settings config.Settings, reminderID string) int {
 	return remaining
 }
 
-func (s *Scheduler) NextByID(settings config.Settings) map[string]int {
+func (s *Scheduler) NextByID(reminders []config.ReminderConfig) map[string]int {
 	next := map[string]int{}
-	for _, reminder := range settings.Reminders {
-		next[reminder.ID] = s.NextInSec(settings, reminder.ID)
+	for _, reminder := range reminders {
+		next[reminder.ID] = s.NextInSec(reminders, reminder.ID)
 	}
 	return next
 }
 
-func enabledReminders(settings config.Settings) []config.ReminderConfig {
-	result := make([]config.ReminderConfig, 0, len(settings.Reminders))
-	for _, reminder := range settings.Reminders {
+func enabledReminders(reminders []config.ReminderConfig) []config.ReminderConfig {
+	result := make([]config.ReminderConfig, 0, len(reminders))
+	for _, reminder := range reminders {
 		if !reminder.Enabled {
 			continue
 		}

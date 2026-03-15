@@ -15,15 +15,6 @@ func TestStoreCreatesDefaults(t *testing.T) {
 	}
 
 	got := store.Get()
-	want := DefaultSettings()
-	gotEye, ok := got.ReminderByID(ReminderIDEye)
-	if !ok {
-		t.Fatalf("expected default eye reminder")
-	}
-	wantEye, _ := want.ReminderByID(ReminderIDEye)
-	if gotEye.IntervalSec != wantEye.IntervalSec {
-		t.Fatalf("expected default eye interval %d, got %d", wantEye.IntervalSec, gotEye.IntervalSec)
-	}
 	if !got.Enforcement.OverlaySkipAllowed {
 		t.Fatalf("expected overlay skip allowed by default")
 	}
@@ -35,7 +26,7 @@ func TestStoreCreatesDefaults(t *testing.T) {
 	}
 }
 
-func TestStoreUpdatePersistsNonReminderSettingsOnly(t *testing.T) {
+func TestStoreUpdatePersistsSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	store, err := NewStore(path)
 	if err != nil {
@@ -43,15 +34,8 @@ func TestStoreUpdatePersistsNonReminderSettingsOnly(t *testing.T) {
 	}
 
 	off := false
-	interval := 1500
 	_, err = store.Update(SettingsPatch{
 		GlobalEnabled: &off,
-		Reminders: []ReminderPatch{
-			{
-				ID:          ReminderIDEye,
-				IntervalSec: &interval,
-			},
-		},
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -68,21 +52,13 @@ func TestStoreUpdatePersistsNonReminderSettingsOnly(t *testing.T) {
 	if got.GlobalEnabled {
 		t.Fatalf("expected GlobalEnabled=false after reload")
 	}
-	gotEye, ok := got.ReminderByID(ReminderIDEye)
-	if !ok {
-		t.Fatalf("expected eye reminder after reload")
-	}
-	wantDefaultEye, _ := DefaultSettings().ReminderByID(ReminderIDEye)
-	if gotEye.IntervalSec != wantDefaultEye.IntervalSec {
-		t.Fatalf("expected Eye.IntervalSec fallback to default %d after reload, got %d", wantDefaultEye.IntervalSec, gotEye.IntervalSec)
-	}
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
-	if strings.Contains(string(raw), "\"reminders\"") {
-		t.Fatalf("expected settings file to not persist reminders, got %s", string(raw))
+	if !strings.Contains(string(raw), "\"globalEnabled\": false") {
+		t.Fatalf("expected settings file to persist updated value, got %s", string(raw))
 	}
 }
 

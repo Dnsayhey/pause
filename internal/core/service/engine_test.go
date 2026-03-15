@@ -96,6 +96,13 @@ func reminderPatch(id string, enabled *bool, intervalSec *int, breakSec *int) co
 	}
 }
 
+func setReminderPatches(t *testing.T, engine *Engine, patches ...config.ReminderPatch) {
+	t.Helper()
+	if _, err := engine.UpdateReminderConfigs(patches); err != nil {
+		t.Fatalf("UpdateReminderConfigs() error = %v", err)
+	}
+}
+
 func requireReminderRuntime(t *testing.T, state config.RuntimeState, id string) config.ReminderRuntime {
 	t.Helper()
 	for _, reminder := range state.Reminders {
@@ -114,15 +121,10 @@ func TestIdlePauseModeBoundary(t *testing.T) {
 	standEnabled := false
 	eyeInterval := 10
 	eyeBreak := 20
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -158,14 +160,14 @@ func TestRealTimeModeIgnoresIdle(t *testing.T) {
 	standEnabled := false
 	_, err := engine.UpdateSettings(config.SettingsPatch{
 		Timer: &config.TimerSettingsPatch{Mode: &mode},
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-		},
 	})
 	if err != nil {
 		t.Fatalf("UpdateSettings() error = %v", err)
 	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -185,15 +187,10 @@ func TestPauseAndResumeToggleGlobalEnabled(t *testing.T) {
 
 	eyeInterval := 5
 	standEnabled := false
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -229,15 +226,10 @@ func TestStandSettingChangeDoesNotResetEyeCountdown(t *testing.T) {
 
 	eyeInterval := 120
 	standInterval := 3600
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
-			reminderPatch(config.ReminderIDStand, nil, &standInterval, nil),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
+		reminderPatch(config.ReminderIDStand, nil, &standInterval, nil),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -252,14 +244,7 @@ func TestStandSettingChangeDoesNotResetEyeCountdown(t *testing.T) {
 	}
 
 	standEnabled := false
-	_, err = engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine, reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil))
 
 	after := engine.GetRuntimeState(base.Add(30 * time.Second))
 	afterEye := requireReminderRuntime(t, after, config.ReminderIDEye)
@@ -278,15 +263,10 @@ func TestUpdateSettingsAffectsSkipImmediately(t *testing.T) {
 
 	eyeInterval := 1
 	standEnabled := false
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -296,7 +276,7 @@ func TestUpdateSettingsAffectsSkipImmediately(t *testing.T) {
 	}
 
 	skipAllowed := false
-	_, err = engine.UpdateSettings(config.SettingsPatch{
+	_, err := engine.UpdateSettings(config.SettingsPatch{
 		Enforcement: &config.EnforcementSettingsPatch{OverlaySkipAllowed: &skipAllowed},
 	})
 	if err != nil {
@@ -314,15 +294,10 @@ func TestSkipCurrentBreakEmergencyBypassesSkipSetting(t *testing.T) {
 
 	eyeInterval := 1
 	standEnabled := false
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -332,7 +307,7 @@ func TestSkipCurrentBreakEmergencyBypassesSkipSetting(t *testing.T) {
 	}
 
 	skipAllowed := false
-	_, err = engine.UpdateSettings(config.SettingsPatch{
+	_, err := engine.UpdateSettings(config.SettingsPatch{
 		Enforcement: &config.EnforcementSettingsPatch{OverlaySkipAllowed: &skipAllowed},
 	})
 	if err != nil {
@@ -358,15 +333,10 @@ func TestSkipCurrentBreakRejectsInvalidMode(t *testing.T) {
 
 	eyeInterval := 1
 	standEnabled := false
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, nil),
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -384,15 +354,10 @@ func TestStartBreakNow(t *testing.T) {
 	standEnabled := false
 	eyeInterval := 1200
 	eyeBreak := 25
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -420,15 +385,10 @@ func TestStartBreakNowWhileGlobalDisabled(t *testing.T) {
 	standEnabled := false
 	eyeInterval := 1200
 	eyeBreak := 25
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -450,15 +410,10 @@ func TestStartBreakNowForReason_ResetsOnlySelectedReminder(t *testing.T) {
 	standInterval := 3600
 	standBreak := 300
 	enabled := true
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDEye, &enabled, &eyeInterval, &eyeBreak),
-			reminderPatch(config.ReminderIDStand, &enabled, &standInterval, &standBreak),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, &enabled, &eyeInterval, &eyeBreak),
+		reminderPatch(config.ReminderIDStand, &enabled, &standInterval, &standBreak),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -532,15 +487,10 @@ func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 	standEnabled := false
 	eyeInterval := 1200
 	eyeBreak := 5
-	_, err = engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
@@ -584,15 +534,10 @@ func TestHistoryRecorder_SkipBreak(t *testing.T) {
 	standEnabled := false
 	eyeInterval := 1200
 	eyeBreak := 60
-	_, err = engine.UpdateSettings(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
-			reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
-		},
-	})
-	if err != nil {
-		t.Fatalf("UpdateSettings() error = %v", err)
-	}
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)

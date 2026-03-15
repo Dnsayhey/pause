@@ -8,15 +8,15 @@ import (
 
 func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 	s := New()
-	cfg := config.DefaultSettings()
-	eye, _ := cfg.ReminderByID(config.ReminderIDEye)
+	reminders := config.DefaultReminderConfigs()
+	eye, _ := config.ReminderByID(reminders, config.ReminderIDEye)
 
-	evt := s.OnActiveSeconds(eye.IntervalSec-1, cfg)
+	evt := s.OnActiveSeconds(eye.IntervalSec-1, reminders)
 	if evt != nil {
 		t.Fatalf("unexpected event before interval")
 	}
 
-	evt = s.OnActiveSeconds(1, cfg)
+	evt = s.OnActiveSeconds(1, reminders)
 	if evt == nil {
 		t.Fatalf("expected eye reminder event")
 	}
@@ -30,16 +30,13 @@ func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 
 func TestMergeConflictWithinWindow(t *testing.T) {
 	s := New()
-	cfg := config.DefaultSettings()
-	cfg = cfg.ApplyPatch(config.SettingsPatch{
-		Reminders: []config.ReminderPatch{
-			{ID: config.ReminderIDEye, IntervalSec: intPtr(1200)},
-			{ID: config.ReminderIDStand, IntervalSec: intPtr(1230)},
-		},
-	})
-	stand, _ := cfg.ReminderByID(config.ReminderIDStand)
+	reminders := []config.ReminderConfig{
+		{ID: config.ReminderIDEye, Enabled: true, IntervalSec: 1200, BreakSec: 20},
+		{ID: config.ReminderIDStand, Enabled: true, IntervalSec: 1230, BreakSec: 300},
+	}
+	stand, _ := config.ReminderByID(reminders, config.ReminderIDStand)
 
-	evt := s.OnActiveSeconds(1200, cfg)
+	evt := s.OnActiveSeconds(1200, reminders)
 	if evt == nil {
 		t.Fatalf("expected merged event")
 	}
@@ -53,17 +50,15 @@ func TestMergeConflictWithinWindow(t *testing.T) {
 
 func TestNextCountdown(t *testing.T) {
 	s := New()
-	cfg := config.DefaultSettings()
-	eye, _ := cfg.ReminderByID(config.ReminderIDEye)
-	stand, _ := cfg.ReminderByID(config.ReminderIDStand)
+	reminders := config.DefaultReminderConfigs()
+	eye, _ := config.ReminderByID(reminders, config.ReminderIDEye)
+	stand, _ := config.ReminderByID(reminders, config.ReminderIDStand)
 
-	s.OnActiveSeconds(100, cfg)
-	if got := s.NextInSec(cfg, config.ReminderIDEye); got != eye.IntervalSec-100 {
+	s.OnActiveSeconds(100, reminders)
+	if got := s.NextInSec(reminders, config.ReminderIDEye); got != eye.IntervalSec-100 {
 		t.Fatalf("unexpected next eye in sec: %d", got)
 	}
-	if got := s.NextInSec(cfg, config.ReminderIDStand); got != stand.IntervalSec-100 {
+	if got := s.NextInSec(reminders, config.ReminderIDStand); got != stand.IntervalSec-100 {
 		t.Fatalf("unexpected next stand in sec: %d", got)
 	}
 }
-
-func intPtr(v int) *int { return &v }

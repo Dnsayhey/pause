@@ -145,16 +145,22 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 		if actionID >= desktop.StatusBarActionPauseReminderBase && actionID < desktop.StatusBarActionResumeReminderBase {
 			row := actionID - desktop.StatusBarActionPauseReminderBase
 			if reason, ok := c.reminderReasonByRow(row); ok {
+				logx.Infof("desktop.statusbar_action action=pause_reminder row=%d reason=%s", row, reason)
 				_, err := app.PauseReminder(reason)
 				c.logErr(ctx, err)
+			} else {
+				logx.Warnf("desktop.statusbar_action action=pause_reminder row=%d reason=unknown", row)
 			}
 			return
 		}
 		if actionID >= desktop.StatusBarActionResumeReminderBase {
 			row := actionID - desktop.StatusBarActionResumeReminderBase
 			if reason, ok := c.reminderReasonByRow(row); ok {
+				logx.Infof("desktop.statusbar_action action=resume_reminder row=%d reason=%s", row, reason)
 				_, err := app.ResumeReminder(reason)
 				c.logErr(ctx, err)
+			} else {
+				logx.Warnf("desktop.statusbar_action action=resume_reminder row=%d reason=unknown", row)
 			}
 			return
 		}
