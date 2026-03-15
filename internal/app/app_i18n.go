@@ -1,4 +1,4 @@
-﻿package app
+package app
 
 import (
 	"fmt"
@@ -47,9 +47,8 @@ func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings
 		return desktop.StatusBarLocaleStrings{
 			PopoverTitle:          "Pause",
 			BreakNowButton:        "立即休息",
-			PauseButton:           "暂停计时",
-			Pause30Button:         "暂停 30 分钟",
-			ResumeButton:          "恢复计时",
+			PauseButton:           "关闭提醒",
+			ResumeButton:          "开启提醒",
 			OpenAppButton:         "打开主界面",
 			AboutMenuItem:         "关于",
 			QuitMenuItem:          "退出",
@@ -62,9 +61,8 @@ func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings
 	return desktop.StatusBarLocaleStrings{
 		PopoverTitle:          "Pause",
 		BreakNowButton:        "Break now",
-		PauseButton:           "Pause Timer",
-		Pause30Button:         "Pause 30m",
-		ResumeButton:          "Resume Timer",
+		PauseButton:           "Disable reminders",
+		ResumeButton:          "Enable reminders",
 		OpenAppButton:         "Open Main Window",
 		AboutMenuItem:         "About",
 		QuitMenuItem:          "Quit",
@@ -114,4 +112,3 @@ func formatOverlayCountdown(sec int) string {
 	s := sec % 60
 	return fmt.Sprintf("%02d:%02d", m, s)
 }
-

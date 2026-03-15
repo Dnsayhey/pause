@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,12 +53,11 @@ const (
 )
 
 const (
-	menuBreakNow = 1001
-	menuPause    = 1002
-	menuPause30  = 1003
-	menuResume   = 1004
-	menuOpen     = 1005
-	menuQuit     = 1007
+	menuBreakNow = 101
+	menuPause    = 102
+	menuResume   = 104
+	menuOpen     = 105
+	menuQuit     = 107
 )
 
 var (
@@ -80,7 +80,7 @@ var (
 	procDestroyMenu      = user32DLL.NewProc("DestroyMenu")
 	procGetCursorPos     = user32DLL.NewProc("GetCursorPos")
 	procSetForegroundWnd = user32DLL.NewProc("SetForegroundWindow")
-	procLoadImageW = user32DLL.NewProc("LoadImageW")
+	procLoadImageW       = user32DLL.NewProc("LoadImageW")
 
 	procShellNotifyIconW = shell32.NewProc("Shell_NotifyIconW")
 )
@@ -95,10 +95,18 @@ type windowsStatusBarController struct {
 	countdown string
 	title     string
 	paused    bool
+	canBreak  bool
+	reminders []windowsReminderStatusView
 
 	hwnd      uintptr
 	startOnce sync.Once
 	done      chan struct{}
+}
+
+type windowsReminderStatusView struct {
+	Reason string `json:"reason"`
+	Paused bool   `json:"paused"`
+	Title  string `json:"title"`
 }
 
 type wndClassEx struct {
@@ -168,18 +176,106 @@ func (c *windowsStatusBarController) Init(onAction func(actionID int)) {
 	})
 }
 
-func (c *windowsStatusBarController) Update(status, countdown, title string, paused bool, _ float64) {
+func (c *windowsStatusBarController) Update(status, countdown, title string, paused bool, _ float64, remindersPayload string) {
+	items, parsed := parseReminderItems(remindersPayload)
+	hasPayload := strings.TrimSpace(remindersPayload) != ""
+
 	c.mu.Lock()
 	c.status = strings.TrimSpace(status)
-	c.countdown = strings.TrimSpace(countdown)
+	c.countdown = flattenMenuText(countdown)
 	c.title = strings.TrimSpace(title)
 	c.paused = paused
+	c.reminders = append([]windowsReminderStatusView(nil), items...)
+	c.canBreak = canTriggerBreakNow(paused, hasPayload, parsed, items)
 	hwnd := c.hwnd
 	c.mu.Unlock()
 
 	if hwnd != 0 {
 		postMessage(hwnd, msgTrayUpdate, 0, 0)
 	}
+}
+
+func flattenMenuText(text string) string {
+	parts := strings.FieldsFunc(text, func(r rune) bool {
+		return r == '\r' || r == '\n'
+	})
+	if len(parts) == 0 {
+		return ""
+	}
+	cleaned := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		cleaned = append(cleaned, part)
+	}
+	return strings.Join(cleaned, " | ")
+}
+
+func parseReminderItems(remindersPayload string) ([]windowsReminderStatusView, bool) {
+	trimmed := strings.TrimSpace(remindersPayload)
+	if trimmed == "" {
+		return nil, true
+	}
+
+	var items []windowsReminderStatusView
+	if err := json.Unmarshal([]byte(trimmed), &items); err != nil {
+		return nil, false
+	}
+	return items, true
+}
+
+func canTriggerBreakNow(paused bool, hasPayload bool, parsed bool, items []windowsReminderStatusView) bool {
+	if paused {
+		return false
+	}
+	if !parsed {
+		// Keep break-now available if payload format changes but is non-empty.
+		return hasPayload
+	}
+	for _, item := range items {
+		if !item.Paused {
+			return true
+		}
+	}
+	return false
+}
+
+func isLikelyChinese(locale StatusBarLocaleStrings) bool {
+	sample := locale.PauseButton + locale.ResumeButton + locale.BreakNowButton
+	for _, r := range sample {
+		if r > 127 {
+			return true
+		}
+	}
+	return false
+}
+
+func reminderStateLabel(locale StatusBarLocaleStrings, paused bool) string {
+	if isLikelyChinese(locale) {
+		if paused {
+			return "暂停中"
+		}
+		return "运行中"
+	}
+	if paused {
+		return "Paused"
+	}
+	return "Running"
+}
+
+func reminderActionLabel(locale StatusBarLocaleStrings, paused bool) string {
+	if isLikelyChinese(locale) {
+		if paused {
+			return "恢复"
+		}
+		return "暂停"
+	}
+	if paused {
+		return "Resume"
+	}
+	return "Pause"
 }
 
 func (c *windowsStatusBarController) SetLocale(strings StatusBarLocaleStrings) {
@@ -312,7 +408,6 @@ func loadTrayIcon() uintptr {
 	return icon
 }
 
-
 func (c *windowsStatusBarController) updateTooltip(hwnd uintptr) {
 	c.mu.RLock()
 	tip := composeTrayTip(c.status, c.countdown, c.title, c.locale.Tooltip)
@@ -356,15 +451,11 @@ func (c *windowsStatusBarController) showContextMenu(hwnd uintptr) {
 
 	c.mu.RLock()
 	paused := c.paused
-	status := c.status
+	canBreak := c.canBreak
 	countdown := c.countdown
+	reminders := append([]windowsReminderStatusView(nil), c.reminders...)
 	locale := c.locale
 	c.mu.RUnlock()
-
-	statusLine := strings.TrimSpace(status)
-	if statusLine == "" {
-		statusLine = fallback(locale.StatusLineFallback, "Status: --")
-	}
 	countdownLine := strings.TrimSpace(countdown)
 	if countdownLine == "" {
 		countdownLine = fallback(locale.NextBreakLineFallback, "Next break: --:--")
@@ -378,15 +469,33 @@ func (c *windowsStatusBarController) showContextMenu(hwnd uintptr) {
 	labelOpen := fallback(locale.OpenAppButton, "Open")
 	labelQuit := fallback(locale.QuitMenuItem, "Quit")
 
-	addMenuText(menu, 0, statusLine, true)
-	addMenuText(menu, 0, countdownLine, true)
+	if len(reminders) == 0 {
+		addMenuText(menu, 0, countdownLine, true)
+	} else {
+		for idx, reminder := range reminders {
+			title := strings.TrimSpace(reminder.Title)
+			if title == "" {
+				title = fallback(reminder.Reason, "Reminder")
+			}
+			headline := fmt.Sprintf("%s - %s", reminderStateLabel(locale, reminder.Paused), title)
+			addMenuText(menu, 0, headline, true)
+
+			actionLabel := "  " + reminderActionLabel(locale, reminder.Paused)
+			actionID := StatusBarActionPauseReminderBase + idx
+			if reminder.Paused {
+				actionID = StatusBarActionResumeReminderBase + idx
+			}
+			addMenuText(menu, actionID, actionLabel, false)
+		}
+	}
+
 	addMenuSeparator(menu)
-	addMenuText(menu, menuBreakNow, labelBreakNow, false)
 	if paused {
 		addMenuText(menu, menuResume, labelToggle, false)
 	} else {
 		addMenuText(menu, menuPause, labelToggle, false)
 	}
+	addMenuText(menu, menuBreakNow, labelBreakNow, !canBreak)
 	addMenuSeparator(menu)
 	addMenuText(menu, menuOpen, labelOpen, false)
 	addMenuSeparator(menu)
@@ -410,7 +519,6 @@ func (c *windowsStatusBarController) showContextMenu(hwnd uintptr) {
 	// Required by Windows so the menu closes consistently when clicking elsewhere.
 	postMessage(hwnd, wmUser, 0, 0)
 }
-
 
 func addMenuText(menu uintptr, id int, label string, disabled bool) {
 	flags := uintptr(mfString)
@@ -448,8 +556,6 @@ func (c *windowsStatusBarController) dispatchMenuCommand(id int) {
 		action = StatusBarActionBreakNow
 	case menuPause:
 		action = StatusBarActionPause
-	case menuPause30:
-		action = StatusBarActionPause30
 	case menuResume:
 		action = StatusBarActionResume
 	case menuOpen:
@@ -457,6 +563,14 @@ func (c *windowsStatusBarController) dispatchMenuCommand(id int) {
 	case menuQuit:
 		action = StatusBarActionQuit
 	default:
+		if id >= StatusBarActionPauseReminderBase && id < StatusBarActionPauseReminderBase+1000 {
+			action = id
+			break
+		}
+		if id >= StatusBarActionResumeReminderBase && id < StatusBarActionResumeReminderBase+1000 {
+			action = id
+			break
+		}
 		return
 	}
 
@@ -518,7 +632,6 @@ func windowsStatusbarWndProc(hwnd uintptr, msg uint32, wParam uintptr, lParam ui
 		return ret
 	}
 }
-
 
 func shellNotifyIcon(message uint32, data *notifyIconData) bool {
 	ret, _, _ := procShellNotifyIconW.Call(

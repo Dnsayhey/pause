@@ -2,12 +2,16 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"pause/internal/core/config"
+	"pause/internal/core/history"
 	"pause/internal/core/service"
 	"pause/internal/logx"
 	"pause/internal/meta"
@@ -18,6 +22,7 @@ import (
 type App struct {
 	ctx           context.Context
 	engine        *service.Engine
+	history       *history.Store
 	notifier      platform.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
@@ -40,6 +45,18 @@ func NewApp(configPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	historyPath := defaultHistoryPath(configPath)
+	historyExisted := fileExists(historyPath)
+	historyStore, err := history.OpenStore(historyPath)
+	if err != nil {
+		return nil, err
+	}
+	if !historyExisted {
+		if err := syncHistoryRemindersFromSettings(historyStore, store.Get()); err != nil {
+			_ = historyStore.Close()
+			return nil, err
+		}
+	}
 
 	adapters := platform.NewAdapters(meta.EffectiveAppBundleID())
 	engine := service.NewEngine(
@@ -47,17 +64,24 @@ func NewApp(configPath string) (*App, error) {
 		adapters.IdleProvider,
 		adapters.SoundPlayer,
 		adapters.StartupManager,
+		historyStore,
 	)
+	if err := syncEngineRemindersFromHistory(engine, historyStore); err != nil {
+		_ = historyStore.Close()
+		return nil, err
+	}
 
 	logx.Infof(
-		"app.init bundle_id=%s config_path=%s config_created=%t",
+		"app.init bundle_id=%s config_path=%s history_path=%s config_created=%t",
 		meta.EffectiveAppBundleID(),
 		configPath,
+		historyPath,
 		store.WasCreated(),
 	)
 
 	return &App{
 		engine:   engine,
+		history:  historyStore,
 		notifier: adapters.Notifier,
 		desktop:  newDesktopController(),
 	}, nil
@@ -80,6 +104,9 @@ func (a *App) GetSettings() config.Settings {
 }
 
 func (a *App) UpdateSettings(patch config.SettingsPatch) (config.Settings, error) {
+	// Reminder configuration uses dedicated reminder APIs and DB storage.
+	patch.Reminders = nil
+
 	settings, err := a.engine.UpdateSettings(patch)
 	if err != nil {
 		logx.Warnf("app.update_settings_err err=%v", err)
@@ -88,16 +115,44 @@ func (a *App) UpdateSettings(patch config.SettingsPatch) (config.Settings, error
 	return settings, nil
 }
 
+func (a *App) GetReminders() ([]config.ReminderConfig, error) {
+	if a == nil || a.history == nil {
+		return nil, errors.New("history store unavailable")
+	}
+	defs, err := a.history.ListReminders()
+	if err != nil {
+		return nil, err
+	}
+	return historyDefsToConfig(defs), nil
+}
+
+func (a *App) UpdateReminders(patches []config.ReminderPatch) ([]config.ReminderConfig, error) {
+	if a == nil || a.history == nil {
+		return nil, errors.New("history store unavailable")
+	}
+	if err := applyReminderPatchToHistory(a.history, patches); err != nil {
+		return nil, err
+	}
+	reminderPatch, err := buildReminderPatchFromHistory(a.history)
+	if err != nil {
+		return nil, err
+	}
+	_, err = a.engine.UpdateSettings(config.SettingsPatch{
+		Reminders: reminderPatch,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return a.GetReminders()
+}
+
 func (a *App) GetRuntimeState() config.RuntimeState {
 	state := a.engine.GetRuntimeState(time.Now())
 	return a.decorateRuntimeState(state)
 }
 
-func (a *App) Pause(mode string, durationSec int) (config.RuntimeState, error) {
-	if mode == service.PauseModeTemporary && durationSec == 0 {
-		durationSec = 15 * 60
-	}
-	state, err := a.engine.Pause(mode, durationSec, time.Now())
+func (a *App) Pause() (config.RuntimeState, error) {
+	state, err := a.engine.Pause(time.Now())
 	if err != nil {
 		return config.RuntimeState{}, err
 	}
@@ -106,6 +161,22 @@ func (a *App) Pause(mode string, durationSec int) (config.RuntimeState, error) {
 
 func (a *App) Resume() config.RuntimeState {
 	return a.decorateRuntimeState(a.engine.Resume(time.Now()))
+}
+
+func (a *App) PauseReminder(reason string) (config.RuntimeState, error) {
+	state, err := a.engine.PauseReminder(reason, time.Now())
+	if err != nil {
+		return config.RuntimeState{}, err
+	}
+	return a.decorateRuntimeState(state), nil
+}
+
+func (a *App) ResumeReminder(reason string) (config.RuntimeState, error) {
+	state, err := a.engine.ResumeReminder(reason, time.Now())
+	if err != nil {
+		return config.RuntimeState{}, err
+	}
+	return a.decorateRuntimeState(state), nil
 }
 
 func (a *App) SkipCurrentBreak() (config.RuntimeState, error) {
@@ -176,6 +247,13 @@ func buildBreakNotificationBody(state config.RuntimeState) string {
 			parts = append(parts, "Eye")
 		case "stand":
 			parts = append(parts, "Stand")
+		default:
+			cleaned := strings.TrimSpace(reason)
+			if cleaned != "" {
+				runes := []rune(cleaned)
+				runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+				parts = append(parts, string(runes))
+			}
 		}
 	}
 
@@ -199,6 +277,179 @@ func joinReasons(reasons []string) string {
 
 func defaultConfigPath() (string, error) {
 	return paths.ConfigFile("settings.json")
+}
+
+func defaultHistoryPath(configPath string) string {
+	return filepath.Join(filepath.Dir(configPath), "history.db")
+}
+
+func fileExists(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
+}
+
+func reminderDefaultName(reminderID string) string {
+	switch strings.ToLower(strings.TrimSpace(reminderID)) {
+	case "eye":
+		return "护眼"
+	case "stand":
+		return "站立"
+	default:
+		return strings.TrimSpace(reminderID)
+	}
+}
+
+func historyDefsToConfig(defs []history.ReminderDefinition) []config.ReminderConfig {
+	result := make([]config.ReminderConfig, 0, len(defs))
+	for _, def := range defs {
+		id := strings.ToLower(strings.TrimSpace(def.ID))
+		if id == "" {
+			continue
+		}
+		result = append(result, config.ReminderConfig{
+			ID:           id,
+			Name:         strings.TrimSpace(def.Name),
+			Enabled:      def.Enabled,
+			IntervalSec:  def.IntervalSec,
+			BreakSec:     def.BreakSec,
+			DeliveryType: strings.TrimSpace(def.DeliveryType),
+		})
+	}
+	return result
+}
+
+func syncHistoryRemindersFromSettings(store *history.Store, settings config.Settings) error {
+	if store == nil {
+		return nil
+	}
+	reminders := make([]history.ReminderDefinition, 0, len(settings.Reminders))
+	for _, reminder := range settings.Reminders {
+		id := strings.ToLower(strings.TrimSpace(reminder.ID))
+		if id == "" {
+			continue
+		}
+		reminders = append(reminders, history.ReminderDefinition{
+			ID:           id,
+			Name:         reminderDefaultName(id),
+			Enabled:      reminder.Enabled,
+			IntervalSec:  reminder.IntervalSec,
+			BreakSec:     reminder.BreakSec,
+			DeliveryType: "overlay",
+		})
+	}
+	return store.SyncReminders(reminders)
+}
+
+func buildReminderPatchFromHistory(store *history.Store) ([]config.ReminderPatch, error) {
+	if store == nil {
+		return nil, nil
+	}
+	reminders, err := store.ListReminders()
+	if err != nil {
+		return nil, err
+	}
+	patches := make([]config.ReminderPatch, 0, len(reminders))
+	for _, reminder := range reminders {
+		enabled := reminder.Enabled
+		intervalSec := reminder.IntervalSec
+		breakSec := reminder.BreakSec
+		name := reminder.Name
+		deliveryType := reminder.DeliveryType
+		patches = append(patches, config.ReminderPatch{
+			ID:           reminder.ID,
+			Name:         &name,
+			Enabled:      &enabled,
+			IntervalSec:  &intervalSec,
+			BreakSec:     &breakSec,
+			DeliveryType: &deliveryType,
+		})
+	}
+	return patches, nil
+}
+
+func syncEngineRemindersFromHistory(engine *service.Engine, store *history.Store) error {
+	if engine == nil || store == nil {
+		return nil
+	}
+	patches, err := buildReminderPatchFromHistory(store)
+	if err != nil {
+		return err
+	}
+	if len(patches) == 0 {
+		return nil
+	}
+	_, err = engine.UpdateSettings(config.SettingsPatch{
+		Reminders: patches,
+	})
+	return err
+}
+
+func applyReminderPatchToHistory(store *history.Store, patches []config.ReminderPatch) error {
+	if store == nil || len(patches) == 0 {
+		return nil
+	}
+	mutations := make([]history.ReminderMutation, 0, len(patches))
+	for _, patch := range patches {
+		id := strings.ToLower(strings.TrimSpace(patch.ID))
+		if id == "" {
+			continue
+		}
+		mutations = append(mutations, history.ReminderMutation{
+			ID:           id,
+			Name:         patch.Name,
+			Enabled:      patch.Enabled,
+			IntervalSec:  patch.IntervalSec,
+			BreakSec:     patch.BreakSec,
+			DeliveryType: patch.DeliveryType,
+		})
+	}
+	return store.UpdateReminders(mutations)
+}
+
+func currentWeekRange(now time.Time) (time.Time, time.Time) {
+	local := now.Local()
+	weekday := int(local.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	start := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location()).
+		AddDate(0, 0, -(weekday - 1))
+	end := start.AddDate(0, 0, 7)
+	return start, end
+}
+
+func (a *App) GetReminderWeeklyStats(weekStartSec int64, weekEndSec int64) (history.WeeklyStats, error) {
+	if a == nil || a.history == nil {
+		return history.WeeklyStats{}, errors.New("history store unavailable")
+	}
+
+	var weekStart time.Time
+	var weekEnd time.Time
+	if weekStartSec == 0 && weekEndSec == 0 {
+		weekStart, weekEnd = currentWeekRange(time.Now())
+	} else {
+		if weekEndSec <= weekStartSec {
+			return history.WeeklyStats{}, errors.New("invalid time range")
+		}
+		weekStart = time.Unix(weekStartSec, 0)
+		weekEnd = time.Unix(weekEndSec, 0)
+	}
+	return a.history.QueryWeeklyStats(weekStart, weekEnd)
+}
+
+func (a *App) Shutdown(_ context.Context) {
+	if a == nil || a.history == nil {
+		return
+	}
+	if err := a.history.Close(); err != nil {
+		logx.Warnf("app.shutdown history_close_err=%v", err)
+	}
 }
 
 func (a *App) decorateRuntimeState(state config.RuntimeState) config.RuntimeState {

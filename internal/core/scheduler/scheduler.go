@@ -11,8 +11,8 @@ const mergeWindowSec = 60
 type ReminderType string
 
 const (
-	ReminderEye   ReminderType = "eye"
-	ReminderStand ReminderType = "stand"
+	ReminderEye   ReminderType = ReminderType(config.ReminderIDEye)
+	ReminderStand ReminderType = ReminderType(config.ReminderIDStand)
 )
 
 type Event struct {
@@ -21,25 +21,23 @@ type Event struct {
 }
 
 type Scheduler struct {
-	eyeElapsedSec   int
-	standElapsedSec int
+	elapsedSec map[string]int
 }
 
 func New() *Scheduler {
-	return &Scheduler{}
+	return &Scheduler{elapsedSec: map[string]int{}}
 }
 
 func (s *Scheduler) Reset() {
-	s.eyeElapsedSec = 0
-	s.standElapsedSec = 0
+	s.elapsedSec = map[string]int{}
 }
 
-func (s *Scheduler) ResetEye() {
-	s.eyeElapsedSec = 0
-}
-
-func (s *Scheduler) ResetStand() {
-	s.standElapsedSec = 0
+func (s *Scheduler) ResetByID(id string) {
+	norm := config.NormalizeReminderID(id)
+	if norm == "" {
+		return
+	}
+	delete(s.elapsedSec, norm)
 }
 
 func (s *Scheduler) OnActiveSeconds(activeSec int, settings config.Settings) *Event {
@@ -47,72 +45,83 @@ func (s *Scheduler) OnActiveSeconds(activeSec int, settings config.Settings) *Ev
 		return nil
 	}
 
-	if settings.Eye.Enabled {
-		s.eyeElapsedSec += activeSec
-	}
-	if settings.Stand.Enabled {
-		s.standElapsedSec += activeSec
-	}
-
-	eyeDue := settings.Eye.Enabled && s.eyeElapsedSec >= settings.Eye.IntervalSec
-	standDue := settings.Stand.Enabled && s.standElapsedSec >= settings.Stand.IntervalSec
-
-	// Merge reminders if they are due in the same minute-sized window to avoid double interruptions.
-	if eyeDue && !standDue && settings.Stand.Enabled {
-		if settings.Stand.IntervalSec-s.standElapsedSec <= mergeWindowSec {
-			standDue = true
-		}
-	}
-	if standDue && !eyeDue && settings.Eye.Enabled {
-		if settings.Eye.IntervalSec-s.eyeElapsedSec <= mergeWindowSec {
-			eyeDue = true
-		}
-	}
-
-	if !eyeDue && !standDue {
+	enabled := enabledReminders(settings)
+	if len(enabled) == 0 {
 		return nil
 	}
 
-	reasons := make([]ReminderType, 0, 2)
-	breakSec := 0
+	for _, reminder := range enabled {
+		s.elapsedSec[reminder.ID] += activeSec
+	}
 
-	if eyeDue {
-		reasons = append(reasons, ReminderEye)
-		s.eyeElapsedSec = 0
-		if settings.Eye.BreakSec > breakSec {
-			breakSec = settings.Eye.BreakSec
+	dueIDs := map[string]struct{}{}
+	for _, reminder := range enabled {
+		if s.elapsedSec[reminder.ID] >= reminder.IntervalSec {
+			dueIDs[reminder.ID] = struct{}{}
 		}
 	}
-	if standDue {
-		reasons = append(reasons, ReminderStand)
-		s.standElapsedSec = 0
-		if settings.Stand.BreakSec > breakSec {
-			breakSec = settings.Stand.BreakSec
+	if len(dueIDs) == 0 {
+		return nil
+	}
+
+	// Merge reminders that are close enough to avoid back-to-back interruptions.
+	for _, reminder := range enabled {
+		if _, alreadyDue := dueIDs[reminder.ID]; alreadyDue {
+			continue
 		}
+		remaining := reminder.IntervalSec - s.elapsedSec[reminder.ID]
+		if remaining <= mergeWindowSec {
+			dueIDs[reminder.ID] = struct{}{}
+		}
+	}
+
+	reasons := make([]ReminderType, 0, len(dueIDs))
+	breakSec := 0
+	for _, reminder := range enabled {
+		if _, ok := dueIDs[reminder.ID]; !ok {
+			continue
+		}
+		reasons = append(reasons, ReminderType(reminder.ID))
+		s.elapsedSec[reminder.ID] = 0
+		if reminder.BreakSec > breakSec {
+			breakSec = reminder.BreakSec
+		}
+	}
+	if len(reasons) == 0 {
+		return nil
 	}
 
 	sort.Slice(reasons, func(i, j int) bool { return reasons[i] < reasons[j] })
 	return &Event{Reasons: reasons, BreakSec: breakSec}
 }
 
-func (s *Scheduler) NextEyeInSec(settings config.Settings) int {
-	if !settings.Eye.Enabled {
+func (s *Scheduler) NextInSec(settings config.Settings, reminderID string) int {
+	reminder, ok := settings.ReminderByID(reminderID)
+	if !ok || !reminder.Enabled {
 		return -1
 	}
-	remaining := settings.Eye.IntervalSec - s.eyeElapsedSec
+	remaining := reminder.IntervalSec - s.elapsedSec[reminder.ID]
 	if remaining < 0 {
 		return 0
 	}
 	return remaining
 }
 
-func (s *Scheduler) NextStandInSec(settings config.Settings) int {
-	if !settings.Stand.Enabled {
-		return -1
+func (s *Scheduler) NextByID(settings config.Settings) map[string]int {
+	next := map[string]int{}
+	for _, reminder := range settings.Reminders {
+		next[reminder.ID] = s.NextInSec(settings, reminder.ID)
 	}
-	remaining := settings.Stand.IntervalSec - s.standElapsedSec
-	if remaining < 0 {
-		return 0
+	return next
+}
+
+func enabledReminders(settings config.Settings) []config.ReminderConfig {
+	result := make([]config.ReminderConfig, 0, len(settings.Reminders))
+	for _, reminder := range settings.Reminders {
+		if !reminder.Enabled {
+			continue
+		}
+		result = append(result, reminder)
 	}
-	return remaining
+	return result
 }

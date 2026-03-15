@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { skipCurrentBreak } from './api';
-import { resolveLocale, t } from './i18n';
+import { localizeReason, resolveLocale, t } from './i18n';
 import { HeroHeader } from './components/HeroHeader';
 import { ReminderCard } from './components/ReminderCard';
 import { SystemSettingsCard } from './components/SystemSettingsCard';
@@ -8,6 +8,8 @@ import { BreakOverlay } from './components/BreakOverlay';
 import { InlineError } from './components/ui';
 import { useRuntimePolling } from './hooks/useRuntimePolling';
 import { useSettings } from './hooks/useSettings';
+import { reminderFieldSpecByID, toDraftBreakValue, toDraftIntervalValue } from './reminderFields';
+import type { ReminderConfig } from './types';
 
 function detectPlatformClass(): string {
   if (typeof navigator === 'undefined') return 'other';
@@ -18,6 +20,20 @@ function detectPlatformClass(): string {
   if (platform.includes('win') || ua.includes('windows')) return 'win';
   if (platform.includes('linux') || ua.includes('linux')) return 'linux';
   return 'other';
+}
+
+function reminderTitle(reminder: ReminderConfig, locale: ReturnType<typeof resolveLocale>): string {
+  const id = reminder.id;
+  if (id === 'eye') {
+    return t(locale, 'eyeReminder');
+  }
+  if (id === 'stand') {
+    return t(locale, 'standReminder');
+  }
+  if (reminder.name.trim() !== '') {
+    return reminder.name;
+  }
+  return localizeReason(id, locale);
 }
 
 export function App() {
@@ -31,21 +47,16 @@ export function App() {
 
   const {
     settings,
+    reminders,
+    reminderDrafts,
     launchAtLogin,
     applyLaunchAtLogin,
     applyPatch,
-    eyeIntervalMinDraft,
-    setEyeIntervalMinDraft,
-    eyeBreakSecDraft,
-    setEyeBreakSecDraft,
-    standIntervalHourDraft,
-    setStandIntervalHourDraft,
-    standBreakMinDraft,
-    setStandBreakMinDraft,
-    commitEyeIntervalDraft,
-    commitEyeBreakDraft,
-    commitStandIntervalDraft,
-    commitStandBreakDraft,
+    applyReminderPatch,
+    setReminderIntervalDraft,
+    setReminderBreakDraft,
+    commitReminderIntervalDraft,
+    commitReminderBreakDraft,
     idleModeSelectValue,
     soundModeSelectValue
   } = useSettings({
@@ -142,45 +153,40 @@ export function App() {
         {error && <InlineError message={error} />}
 
         <section className="mt-3 grid grid-cols-1 gap-3 min-[721px]:grid-cols-2">
-          <ReminderCard
-            title={t(locale, 'eyeReminder')}
-            enabledLabel={t(locale, 'enabled')}
-            enabled={settings.eye.enabled}
-            onEnabledChange={(checked) => {
-              void applyPatch({ eye: { enabled: checked } });
-            }}
-            intervalLabel={t(locale, 'eyeIntervalMin')}
-            intervalValue={eyeIntervalMinDraft}
-            intervalMin={1}
-            onIntervalChange={setEyeIntervalMinDraft}
-            onIntervalCommit={commitEyeIntervalDraft}
-            breakLabel={t(locale, 'eyeBreakSec')}
-            breakValue={eyeBreakSecDraft}
-            breakMin={10}
-            breakMax={60}
-            onBreakChange={setEyeBreakSecDraft}
-            onBreakCommit={commitEyeBreakDraft}
-          />
+          {reminders.map((reminder) => {
+            const spec = reminderFieldSpecByID(reminder.id);
+            const draft = reminderDrafts[reminder.id];
+            const intervalValue = draft?.interval ?? String(toDraftIntervalValue(reminder.intervalSec, spec));
+            const breakValue = draft?.break ?? String(toDraftBreakValue(reminder.breakSec, spec));
 
-          <ReminderCard
-            title={t(locale, 'standReminder')}
-            enabledLabel={t(locale, 'enabled')}
-            enabled={settings.stand.enabled}
-            onEnabledChange={(checked) => {
-              void applyPatch({ stand: { enabled: checked } });
-            }}
-            intervalLabel={t(locale, 'standIntervalHour')}
-            intervalValue={standIntervalHourDraft}
-            intervalMin={1}
-            onIntervalChange={setStandIntervalHourDraft}
-            onIntervalCommit={commitStandIntervalDraft}
-            breakLabel={t(locale, 'standBreakMin')}
-            breakValue={standBreakMinDraft}
-            breakMin={1}
-            breakMax={10}
-            onBreakChange={setStandBreakMinDraft}
-            onBreakCommit={commitStandBreakDraft}
-          />
+            return (
+              <ReminderCard
+                key={reminder.id}
+                title={reminderTitle(reminder, locale)}
+                enabledLabel={t(locale, 'enabled')}
+                enabled={reminder.enabled}
+                onEnabledChange={(checked) => {
+                  void applyReminderPatch(reminder.id, { enabled: checked });
+                }}
+                intervalLabel={t(locale, spec.intervalLabelKey)}
+                intervalValue={intervalValue}
+                intervalMin={spec.intervalMin}
+                intervalMax={spec.intervalMax}
+                onIntervalChange={(value) => {
+                  setReminderIntervalDraft(reminder.id, value);
+                }}
+                onIntervalCommit={(value) => commitReminderIntervalDraft(reminder.id, value)}
+                breakLabel={t(locale, spec.breakLabelKey)}
+                breakValue={breakValue}
+                breakMin={spec.breakMin}
+                breakMax={spec.breakMax}
+                onBreakChange={(value) => {
+                  setReminderBreakDraft(reminder.id, value);
+                }}
+                onBreakCommit={(value) => commitReminderBreakDraft(reminder.id, value)}
+              />
+            );
+          })}
         </section>
 
         <SystemSettingsCard

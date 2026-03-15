@@ -1,16 +1,15 @@
 package desktop
 
 type StatusBarLocaleStrings struct {
-	PopoverTitle   string
-	BreakNowButton string
-	PauseButton    string
-	Pause30Button  string
-	ResumeButton   string
-	OpenAppButton  string
-	AboutMenuItem  string
-	QuitMenuItem   string
-	MoreButtonTip  string
-	Tooltip        string
+	PopoverTitle          string
+	BreakNowButton        string
+	PauseButton           string
+	ResumeButton          string
+	OpenAppButton         string
+	AboutMenuItem         string
+	QuitMenuItem          string
+	MoreButtonTip         string
+	Tooltip               string
 	StatusLineFallback    string
 	NextBreakLineFallback string
 }
@@ -18,15 +17,17 @@ type StatusBarLocaleStrings struct {
 const (
 	StatusBarActionBreakNow   = 1
 	StatusBarActionPause      = 2
-	StatusBarActionPause30    = 3
 	StatusBarActionResume     = 4
 	StatusBarActionOpenWindow = 5
 	StatusBarActionQuit       = 6
+
+	StatusBarActionPauseReminderBase  = 1000
+	StatusBarActionResumeReminderBase = 2000
 )
 
 type StatusBarController interface {
 	Init(onAction func(actionID int))
-	Update(status, countdown, title string, paused bool, progress float64)
+	Update(status, countdown, title string, paused bool, progress float64, remindersPayload string)
 	SetLocale(strings StatusBarLocaleStrings)
 	Destroy()
 }

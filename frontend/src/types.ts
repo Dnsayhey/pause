@@ -1,13 +1,32 @@
-export type ReminderRule = {
+export type ReminderConfig = {
+  id: string;
+  name: string;
+  deliveryType: 'overlay' | 'notification';
   enabled: boolean;
+  intervalSec: number;
+  breakSec: number;
+};
+
+export type ReminderPatch = {
+  id: string;
+  name?: string;
+  deliveryType?: 'overlay' | 'notification';
+  enabled?: boolean;
+  intervalSec?: number;
+  breakSec?: number;
+};
+
+export type ReminderRuntime = {
+  id: string;
+  enabled: boolean;
+  paused: boolean;
+  nextInSec: number;
   intervalSec: number;
   breakSec: number;
 };
 
 export type Settings = {
   globalEnabled: boolean;
-  eye: ReminderRule;
-  stand: ReminderRule;
   enforcement: {
     overlaySkipAllowed: boolean;
   };
@@ -27,19 +46,19 @@ export type Settings = {
 };
 
 export type RuntimeState = {
-  paused: boolean;
-  pauseMode?: string;
-  pausedUntil?: string;
   currentSession?: {
     status: string;
     reasons: string[];
     remainingSec: number;
     canSkip: boolean;
   };
-  nextEyeInSec: number;
-  nextStandInSec: number;
+  reminders: ReminderRuntime[];
+  nextBreakReason: string[];
   globalEnabled: boolean;
   timerMode: string;
+  idleThresholdSec: number;
+  lastTickActive: boolean;
+  showTrayCountdown: boolean;
   currentIdleSec: number;
   overlaySkipAllowed: boolean;
   overlayNative: boolean;
@@ -49,8 +68,6 @@ export type RuntimeState = {
 
 export type SettingsPatch = Partial<{
   globalEnabled: boolean;
-  eye: Partial<ReminderRule>;
-  stand: Partial<ReminderRule>;
   enforcement: Partial<Settings['enforcement']>;
   sound: Partial<Settings['sound']>;
   timer: Partial<Settings['timer']>;

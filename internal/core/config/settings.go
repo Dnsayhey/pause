@@ -1,16 +1,27 @@
 package config
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 const (
 	TimerModeIdlePause = "idle_pause"
 	TimerModeRealTime  = "real_time"
 )
 
-type ReminderRule struct {
-	Enabled     bool `json:"enabled"`
-	IntervalSec int  `json:"intervalSec"`
-	BreakSec    int  `json:"breakSec"`
+const (
+	ReminderIDEye   = "eye"
+	ReminderIDStand = "stand"
+)
+
+type ReminderConfig struct {
+	ID           string `json:"id"`
+	Name         string `json:"name,omitempty"`
+	Enabled      bool   `json:"enabled"`
+	IntervalSec  int    `json:"intervalSec"`
+	BreakSec     int    `json:"breakSec"`
+	DeliveryType string `json:"deliveryType,omitempty"`
 }
 
 type EnforcementSettings struct {
@@ -35,18 +46,20 @@ type UISettings struct {
 
 type Settings struct {
 	GlobalEnabled bool                `json:"globalEnabled"`
-	Eye           ReminderRule        `json:"eye"`
-	Stand         ReminderRule        `json:"stand"`
+	Reminders     []ReminderConfig    `json:"reminders,omitempty"`
 	Enforcement   EnforcementSettings `json:"enforcement"`
 	Sound         SoundSettings       `json:"sound"`
 	Timer         TimerSettings       `json:"timer"`
 	UI            UISettings          `json:"ui"`
 }
 
-type ReminderRulePatch struct {
-	Enabled     *bool `json:"enabled,omitempty"`
-	IntervalSec *int  `json:"intervalSec,omitempty"`
-	BreakSec    *int  `json:"breakSec,omitempty"`
+type ReminderPatch struct {
+	ID           string  `json:"id"`
+	Name         *string `json:"name,omitempty"`
+	Enabled      *bool   `json:"enabled,omitempty"`
+	IntervalSec  *int    `json:"intervalSec,omitempty"`
+	BreakSec     *int    `json:"breakSec,omitempty"`
+	DeliveryType *string `json:"deliveryType,omitempty"`
 }
 
 type EnforcementSettingsPatch struct {
@@ -71,22 +84,26 @@ type UISettingsPatch struct {
 
 type SettingsPatch struct {
 	GlobalEnabled *bool                     `json:"globalEnabled,omitempty"`
-	Eye           *ReminderRulePatch        `json:"eye,omitempty"`
-	Stand         *ReminderRulePatch        `json:"stand,omitempty"`
+	Reminders     []ReminderPatch           `json:"reminders,omitempty"`
 	Enforcement   *EnforcementSettingsPatch `json:"enforcement,omitempty"`
 	Sound         *SoundSettingsPatch       `json:"sound,omitempty"`
 	Timer         *TimerSettingsPatch       `json:"timer,omitempty"`
 	UI            *UISettingsPatch          `json:"ui,omitempty"`
 }
 
+type ReminderRuntime struct {
+	ID          string `json:"id"`
+	Enabled     bool   `json:"enabled"`
+	Paused      bool   `json:"paused"`
+	NextInSec   int    `json:"nextInSec"`
+	IntervalSec int    `json:"intervalSec"`
+	BreakSec    int    `json:"breakSec"`
+}
+
 type RuntimeState struct {
 	Now                time.Time         `json:"now"`
-	Paused             bool              `json:"paused"`
-	PauseMode          string            `json:"pauseMode,omitempty"`
-	PausedUntil        *time.Time        `json:"pausedUntil,omitempty"`
 	CurrentSession     *BreakSessionView `json:"currentSession,omitempty"`
-	NextEyeInSec       int               `json:"nextEyeInSec"`
-	NextStandInSec     int               `json:"nextStandInSec"`
+	Reminders          []ReminderRuntime `json:"reminders"`
 	NextBreakReason    []string          `json:"nextBreakReason"`
 	GlobalEnabled      bool              `json:"globalEnabled"`
 	TimerMode          string            `json:"timerMode"`
@@ -112,23 +129,12 @@ type BreakSessionView struct {
 func DefaultSettings() Settings {
 	return Settings{
 		GlobalEnabled: true,
-		Eye: ReminderRule{
-			Enabled:     true,
-			IntervalSec: 20 * 60,
-			BreakSec:    20,
+		Reminders: []ReminderConfig{
+			{ID: ReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20},
+			{ID: ReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60},
 		},
-		Stand: ReminderRule{
-			Enabled:     true,
-			IntervalSec: 60 * 60,
-			BreakSec:    5 * 60,
-		},
-		Enforcement: EnforcementSettings{
-			OverlaySkipAllowed: true,
-		},
-		Sound: SoundSettings{
-			Enabled: true,
-			Volume:  70,
-		},
+		Enforcement: EnforcementSettings{OverlaySkipAllowed: true},
+		Sound:       SoundSettings{Enabled: true, Volume: 70},
 		Timer: TimerSettings{
 			Mode:                  TimerModeIdlePause,
 			IdlePauseThresholdSec: 300,
@@ -141,20 +147,16 @@ func DefaultSettings() Settings {
 	}
 }
 
+func NormalizeReminderID(id string) string {
+	return strings.ToLower(strings.TrimSpace(id))
+}
+
 func (s Settings) Normalize() Settings {
 	d := DefaultSettings()
 
-	if s.Eye.IntervalSec <= 0 {
-		s.Eye.IntervalSec = d.Eye.IntervalSec
-	}
-	if s.Eye.BreakSec <= 0 {
-		s.Eye.BreakSec = d.Eye.BreakSec
-	}
-	if s.Stand.IntervalSec <= 0 {
-		s.Stand.IntervalSec = d.Stand.IntervalSec
-	}
-	if s.Stand.BreakSec <= 0 {
-		s.Stand.BreakSec = d.Stand.BreakSec
+	s.Reminders = normalizeReminders(s.Reminders)
+	if len(s.Reminders) == 0 {
+		s.Reminders = d.Reminders
 	}
 	if s.Sound.Volume <= 0 || s.Sound.Volume > 100 {
 		s.Sound.Volume = d.Sound.Volume
@@ -177,30 +179,79 @@ func (s Settings) Normalize() Settings {
 	return s
 }
 
+func normalizeReminders(reminders []ReminderConfig) []ReminderConfig {
+	if len(reminders) == 0 {
+		return nil
+	}
+
+	result := make([]ReminderConfig, 0, len(reminders))
+	indexByID := map[string]int{}
+	for _, reminder := range reminders {
+		id := NormalizeReminderID(reminder.ID)
+		if id == "" {
+			continue
+		}
+		intervalDef, breakDef := reminderDefaultsForID(id)
+		next := ReminderConfig{
+			ID:           id,
+			Name:         strings.TrimSpace(reminder.Name),
+			Enabled:      reminder.Enabled,
+			IntervalSec:  reminder.IntervalSec,
+			BreakSec:     reminder.BreakSec,
+			DeliveryType: normalizeReminderDeliveryType(reminder.DeliveryType),
+		}
+		if next.IntervalSec <= 0 {
+			next.IntervalSec = intervalDef
+		}
+		if next.BreakSec <= 0 {
+			next.BreakSec = breakDef
+		}
+
+		if idx, ok := indexByID[id]; ok {
+			result[idx] = next
+			continue
+		}
+		indexByID[id] = len(result)
+		result = append(result, next)
+	}
+	return result
+}
+
+func reminderDefaultsForID(id string) (intervalSec int, breakSec int) {
+	switch NormalizeReminderID(id) {
+	case ReminderIDEye:
+		return 20 * 60, 20
+	case ReminderIDStand:
+		return 60 * 60, 5 * 60
+	default:
+		return 20 * 60, 20
+	}
+}
+
+func (s Settings) ReminderByID(id string) (ReminderConfig, bool) {
+	norm := NormalizeReminderID(id)
+	for _, reminder := range s.Reminders {
+		if reminder.ID == norm {
+			return reminder, true
+		}
+	}
+	return ReminderConfig{}, false
+}
+
 func (s Settings) ApplyPatch(p SettingsPatch) Settings {
+	s.Reminders = append([]ReminderConfig(nil), s.Reminders...)
 	if p.GlobalEnabled != nil {
 		s.GlobalEnabled = *p.GlobalEnabled
 	}
-	if p.Eye != nil {
-		if p.Eye.Enabled != nil {
-			s.Eye.Enabled = *p.Eye.Enabled
-		}
-		if p.Eye.IntervalSec != nil {
-			s.Eye.IntervalSec = *p.Eye.IntervalSec
-		}
-		if p.Eye.BreakSec != nil {
-			s.Eye.BreakSec = *p.Eye.BreakSec
-		}
-	}
-	if p.Stand != nil {
-		if p.Stand.Enabled != nil {
-			s.Stand.Enabled = *p.Stand.Enabled
-		}
-		if p.Stand.IntervalSec != nil {
-			s.Stand.IntervalSec = *p.Stand.IntervalSec
-		}
-		if p.Stand.BreakSec != nil {
-			s.Stand.BreakSec = *p.Stand.BreakSec
+	if len(p.Reminders) > 0 {
+		for _, reminderPatch := range p.Reminders {
+			s.Reminders = applyReminderPatch(s.Reminders, reminderPatch.ID, reminderPatchMutation{
+				Name:         reminderPatch.Name,
+				Enabled:      reminderPatch.Enabled,
+				IntervalSec:  reminderPatch.IntervalSec,
+				BreakSec:     reminderPatch.BreakSec,
+				DeliveryType: reminderPatch.DeliveryType,
+			})
 		}
 	}
 	if p.Enforcement != nil {
@@ -236,4 +287,66 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 		}
 	}
 	return s.Normalize()
+}
+
+type reminderPatchMutation struct {
+	Name         *string
+	Enabled      *bool
+	IntervalSec  *int
+	BreakSec     *int
+	DeliveryType *string
+}
+
+func applyReminderPatch(reminders []ReminderConfig, reminderID string, patch reminderPatchMutation) []ReminderConfig {
+	id := NormalizeReminderID(reminderID)
+	if id == "" {
+		return reminders
+	}
+
+	idx := -1
+	for i, reminder := range reminders {
+		if reminder.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		intervalDef, breakDef := reminderDefaultsForID(id)
+		reminders = append(reminders, ReminderConfig{ID: id, Enabled: true, IntervalSec: intervalDef, BreakSec: breakDef})
+		idx = len(reminders) - 1
+	}
+
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		if name != "" {
+			reminders[idx].Name = name
+		}
+	}
+	if patch.Enabled != nil {
+		reminders[idx].Enabled = *patch.Enabled
+	}
+	if patch.IntervalSec != nil {
+		reminders[idx].IntervalSec = *patch.IntervalSec
+	}
+	if patch.BreakSec != nil {
+		reminders[idx].BreakSec = *patch.BreakSec
+	}
+	if patch.DeliveryType != nil {
+		deliveryType := normalizeReminderDeliveryType(*patch.DeliveryType)
+		if deliveryType != "" {
+			reminders[idx].DeliveryType = deliveryType
+		}
+	}
+	return reminders
+}
+
+func normalizeReminderDeliveryType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "overlay":
+		return "overlay"
+	case "notification":
+		return "notification"
+	default:
+		return ""
+	}
 }

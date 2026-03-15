@@ -107,7 +107,12 @@ func (s *Store) saveLocked() error {
 		return err
 	}
 
-	payload, err := json.MarshalIndent(s.settings, "", "  ")
+	// Reminder rules are persisted in history.db and mirrored into runtime state.
+	// Keep settings.json focused on non-reminder app settings.
+	persisted := s.settings
+	persisted.Reminders = nil
+
+	payload, err := json.MarshalIndent(persisted, "", "  ")
 	if err != nil {
 		return err
 	}
