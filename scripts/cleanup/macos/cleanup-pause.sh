@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 source "${ROOT_DIR}/scripts/app_identity.sh"
 LEGACY_APP_BUNDLE_ID="com.wails.Pause"
 APP_PATH="/Applications/Pause.app"
@@ -47,4 +47,4 @@ for target in "${TARGETS[@]}"; do
   fi
 done
 
-echo "Pause uninstall complete."
+echo "Pause full cleanup complete."

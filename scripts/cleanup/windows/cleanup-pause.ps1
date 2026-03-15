@@ -2,9 +2,9 @@
 <#
 Usage:
   1) Preview only:
-     powershell -ExecutionPolicy Bypass -File .\scripts\windows\uninstall-pause.ps1 -DryRun
+     powershell -ExecutionPolicy Bypass -File .\scripts\cleanup\windows\cleanup-pause.ps1 -DryRun
   2) Execute cleanup:
-     powershell -ExecutionPolicy Bypass -File .\scripts\windows\uninstall-pause.ps1
+     powershell -ExecutionPolicy Bypass -File .\scripts\cleanup\windows\cleanup-pause.ps1
 
 Notes:
 - Removes Pause-related files and registry entries.

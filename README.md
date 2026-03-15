@@ -137,42 +137,81 @@ go test ./...
 go test -tags wails ./...
 ```
 
-## 打包 DMG（macOS）
+## 版本管理
+
+版本号单一来源：`VERSION`
+
+- 校验版本一致性：
+
+```bash
+./scripts/check-version-sync.sh
+```
+
+- 一次性更新版本（同步 `VERSION` + `wails.json` + `frontend/package.json` + `frontend/package-lock.json`）：
+
+```bash
+./scripts/bump-version.sh 0.1.1
+```
+
+## 打包与发布（macOS / Windows）
+
+完整规范见：`docs/packaging.md`
+
+### 1) 打包 macOS DMG
 
 ```bash
 ./scripts/build-dmg.sh
 ```
 
-- 产物：`build/bin/Pause.dmg`
-- Bundle ID 默认来源：`internal/meta/bundle_id.txt`（可通过环境变量 `APP_BUNDLE_ID` 临时覆盖）
-- 图标默认来源：`assets/branding/app-icon-1024.png`（可通过环境变量 `APP_ICON_SOURCE` 临时覆盖）
-- 脚本会优先使用本机 `wails` 命令；如果未安装，会自动回退到：
-  - `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`
+- 默认产物：`build/bin/macos-universal/Pause.dmg`
+- 常用参数：
+  - `./scripts/build-dmg.sh --version 0.1.0 --no-clean`
+  - `./scripts/build-dmg.sh --bundle-id com.pause.app --codesign "-" --output-dir build/bin/macos-universal`
+- 查看全部参数：`./scripts/build-dmg.sh --help`
 
-## 打包 Windows 安装器（x64）
+### 2) 打包 Windows 安装器
 
 ```bash
 ./scripts/build-windows-installer.sh
 ```
 
 - 依赖：本机安装 `NSIS`（macOS 可用 `brew install nsis`）。
-- 默认产物目录：`build/bin/windows-x64/`（与 macOS 产物分开存放）。
-- 脚本会优先使用本机 `wails` 命令；如果未安装，会自动回退到：
-  - `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`
-- 默认不加 `-clean`，避免清理掉其它平台已有产物；如需清理再打包：
-  - `USE_CLEAN=1 ./scripts/build-windows-installer.sh`
-- 可选参数示例：
-  - `WINDOWS_WEBVIEW2=browser ./scripts/build-windows-installer.sh`
-  - `WINDOWS_OUTPUT_DIR=build/bin/win-release ./scripts/build-windows-installer.sh`
-- NSIS 模板默认来自 `scripts/windows-installer/project.nsi`（脚本会在构建前同步到 `build/windows/installer/project.nsi`）；该模板已包含把 `assets/branding/icon.ico` 安装到应用目录。
+- 默认产物目录：`build/bin/windows-x64/`
+- 常用参数：
+  - `./scripts/build-windows-installer.sh --platform windows/amd64 --webview2 browser`
+  - `./scripts/build-windows-installer.sh --output-dir build/bin/win-release --clean`
+- 脚本默认会在输出目录生成 `SHA256SUMS.txt`（可用 `--no-checksums` 关闭）
+- 查看全部参数：`./scripts/build-windows-installer.sh --help`
 
-## 卸载（macOS）
+### 3) 生成统一发布清单与校验和
 
 ```bash
-./scripts/uninstall-pause.sh
+./scripts/generate-release-manifest.sh --version 0.1.0 --channel stable
 ```
 
-会移除应用、用户数据、启动项与相关缓存/偏好设置。
+- 默认扫描目录：`build/bin`
+- 默认输出目录：`build/bin/release`
+- 生成文件：
+  - `build/bin/release/release-manifest.txt`
+  - `build/bin/release/SHA256SUMS`
+
+## 完全清理
+
+macOS：
+
+```bash
+./scripts/cleanup/macos/cleanup-pause.sh
+```
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\cleanup\windows\cleanup-pause.ps1 -DryRun
+powershell -ExecutionPolicy Bypass -File .\scripts\cleanup\windows\cleanup-pause.ps1
+```
+
+说明：
+- 清理脚本已统一放在 `scripts/cleanup/` 下。
 
 ## 平台状态
 

@@ -2,7 +2,11 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "Pause",
   "info": {
-    "productVersion": "0.1.0"
+    "companyName": "Pause",
+    "productName": "Pause",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright (c) 2026 Pause",
+    "comments": "Pause break reminder"
   },
   "outputfilename": "Pause",
   "frontend:install": "npm install",

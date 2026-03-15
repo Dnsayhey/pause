@@ -3,25 +3,131 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="${APP_NAME:-Pause}"
 source "${ROOT_DIR}/scripts/app_identity.sh"
+
+APP_NAME="${APP_NAME:-Pause}"
 APP_ICON_SOURCE="${APP_ICON_SOURCE:-${ROOT_DIR}/assets/branding/app-icon-1024.png}"
 APP_ICON_TARGET="${ROOT_DIR}/build/appicon.png"
 HELPER_NAME="${HELPER_NAME:-PauseLoginHelper}"
 CODE_SIGN_IDENTITY="${PAUSE_CODESIGN_IDENTITY:--}"
-APP_BUNDLE="${ROOT_DIR}/build/bin/${APP_NAME}.app"
-DMG_OUTPUT="${ROOT_DIR}/build/bin/${APP_NAME}.dmg"
 STAGING_DIR="${ROOT_DIR}/build/.dmg-staging"
-APP_INFO_PLIST="${APP_BUNDLE}/Contents/Info.plist"
 APP_VERSION="1.0.0"
+APP_VERSION_OVERRIDE="${APP_VERSION_OVERRIDE:-}"
+USE_CLEAN="${USE_CLEAN:-1}"
+MACOS_ARCH_LABEL="${MACOS_ARCH_LABEL:-macos-universal}"
+MACOS_OUTPUT_DIR="${MACOS_OUTPUT_DIR:-${ROOT_DIR}/build/bin/${MACOS_ARCH_LABEL}}"
+
+APP_BUNDLE=""
+DMG_OUTPUT=""
+APP_INFO_PLIST=""
+
+print_help() {
+  cat <<'EOF'
+Usage:
+  ./scripts/build-dmg.sh [options]
+
+Options:
+  --name <app_name>          Override app name (default: Pause)
+  --output <abs_or_rel_path> Override DMG output path
+  --output-dir <path>        Override DMG output directory
+  --icon <path>              Override app icon source
+  --bundle-id <bundle_id>    Override app bundle id
+  --codesign <identity>      Override codesign identity ("-" means ad-hoc)
+  --version <version>        Override CFBundleShortVersionString/CFBundleVersion
+  --clean                    Force wails build -clean (default)
+  --no-clean                 Skip wails build -clean
+  -h, --help                 Show this help
+
+Environment variables (compatible with existing flow):
+  APP_NAME, APP_ICON_SOURCE, APP_BUNDLE_ID, PAUSE_CODESIGN_IDENTITY,
+  APP_VERSION_OVERRIDE, USE_CLEAN, MACOS_ARCH_LABEL, MACOS_OUTPUT_DIR
+EOF
+}
+
+refresh_paths() {
+  APP_BUNDLE="${ROOT_DIR}/build/bin/${APP_NAME}.app"
+  APP_INFO_PLIST="${APP_BUNDLE}/Contents/Info.plist"
+  if [[ -z "${DMG_OUTPUT}" ]]; then
+    DMG_OUTPUT="${MACOS_OUTPUT_DIR}/${APP_NAME}.dmg"
+  fi
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --name)
+      APP_NAME="$2"
+      shift 2
+      ;;
+    --output)
+      DMG_OUTPUT="$2"
+      shift 2
+      ;;
+    --output-dir)
+      MACOS_OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --icon)
+      APP_ICON_SOURCE="$2"
+      shift 2
+      ;;
+    --bundle-id)
+      APP_BUNDLE_ID="$2"
+      shift 2
+      ;;
+    --codesign)
+      CODE_SIGN_IDENTITY="$2"
+      shift 2
+      ;;
+    --version)
+      APP_VERSION_OVERRIDE="$2"
+      shift 2
+      ;;
+    --clean)
+      USE_CLEAN="1"
+      shift
+      ;;
+    --no-clean)
+      USE_CLEAN="0"
+      shift
+      ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown option '$1'" >&2
+      print_help >&2
+      exit 1
+      ;;
+  esac
+done
+
+refresh_paths
+
+require_tool() {
+  local name="$1"
+  if ! command -v "${name}" >/dev/null 2>&1; then
+    echo "ERROR: missing required command: ${name}" >&2
+    exit 1
+  fi
+}
 
 cd "${ROOT_DIR}"
+
+require_tool hdiutil
+require_tool codesign
+require_tool clang
+if [[ ! -x "/usr/libexec/PlistBuddy" ]]; then
+  echo "ERROR: missing required command: /usr/libexec/PlistBuddy" >&2
+  exit 1
+fi
 
 if [[ ! -f "${APP_ICON_SOURCE}" ]]; then
   echo "ERROR: app icon source not found: ${APP_ICON_SOURCE}" >&2
   exit 1
 fi
 mkdir -p "$(dirname "${APP_ICON_TARGET}")"
+mkdir -p "$(dirname "${DMG_OUTPUT}")"
 cp "${APP_ICON_SOURCE}" "${APP_ICON_TARGET}"
 
 echo "[1/4] Building ${APP_NAME}.app"
@@ -32,7 +138,23 @@ else
   WAILS_CMD=(go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2)
 fi
 WAILS_LDFLAGS="-X pause/internal/meta.AppBundleID=${APP_BUNDLE_ID}"
-"${WAILS_CMD[@]}" build -platform darwin/universal -clean -skipbindings -tags wails -ldflags "${WAILS_LDFLAGS}"
+WAILS_ARGS=(build -platform darwin/universal -skipbindings -tags wails -ldflags "${WAILS_LDFLAGS}")
+if [[ "${USE_CLEAN}" == "1" ]]; then
+  WAILS_ARGS+=(-clean)
+fi
+
+echo "build config:"
+echo "  app_name=${APP_NAME}"
+echo "  app_bundle_id=${APP_BUNDLE_ID}"
+echo "  helper_bundle_id=${HELPER_BUNDLE_ID}"
+echo "  codesign_identity=${CODE_SIGN_IDENTITY}"
+echo "  app_icon_source=${APP_ICON_SOURCE}"
+echo "  macos_arch_label=${MACOS_ARCH_LABEL}"
+echo "  macos_output_dir=${MACOS_OUTPUT_DIR}"
+echo "  dmg_output=${DMG_OUTPUT}"
+echo "  use_clean=${USE_CLEAN}"
+
+"${WAILS_CMD[@]}" "${WAILS_ARGS[@]}"
 
 if [[ ! -d "${APP_BUNDLE}" ]]; then
   echo "ERROR: app bundle not found: ${APP_BUNDLE}" >&2
@@ -45,6 +167,12 @@ if [[ -f "${APP_INFO_PLIST}" ]]; then
     || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string ${APP_BUNDLE_ID}" "${APP_INFO_PLIST}" >/dev/null
 fi
 if [[ -f "${APP_INFO_PLIST}" ]]; then
+  if [[ -n "${APP_VERSION_OVERRIDE}" ]]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${APP_VERSION_OVERRIDE}" "${APP_INFO_PLIST}" >/dev/null 2>&1 \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${APP_VERSION_OVERRIDE}" "${APP_INFO_PLIST}" >/dev/null
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${APP_VERSION_OVERRIDE}" "${APP_INFO_PLIST}" >/dev/null 2>&1 \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${APP_VERSION_OVERRIDE}" "${APP_INFO_PLIST}" >/dev/null
+  fi
   APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${APP_INFO_PLIST}" 2>/dev/null || echo '1.0.0')"
 fi
 
