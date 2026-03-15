@@ -28,7 +28,7 @@ jobs:
       channel: ${{ steps.channel.outputs.value }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check version sync
         run: ./scripts/check-version-sync.sh
@@ -55,20 +55,29 @@ jobs:
     needs: validate
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Build frontend assets
+        run: npm --prefix frontend run build
+
+      - name: Verify frontend dist
+        run: test -f frontend/dist/index.html
 
       - name: Install Wails CLI
         run: |
@@ -91,20 +100,29 @@ jobs:
     needs: validate
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Build frontend assets
+        run: npm --prefix frontend run build
+
+      - name: Verify frontend dist
+        run: test -f frontend/dist/index.html
 
       - name: Install Linux build dependencies
         run: |
@@ -135,7 +153,7 @@ jobs:
       - build-windows
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
