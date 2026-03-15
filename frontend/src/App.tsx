@@ -37,6 +37,7 @@ function reminderTitle(reminder: ReminderConfig, locale: ReturnType<typeof resol
 }
 
 export function App() {
+  const platformClass = detectPlatformClass();
   const [error, setError] = useState('');
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const hasAssignedInitialFocusRef = useRef(false);
@@ -65,12 +66,11 @@ export function App() {
   });
 
   useEffect(() => {
-    const platformClass = detectPlatformClass();
     document.body.dataset.platform = platformClass;
     return () => {
       delete document.body.dataset.platform;
     };
-  }, []);
+  }, [platformClass]);
 
   useEffect(() => {
     const language = runtime?.effectiveLanguage;
@@ -195,6 +195,7 @@ export function App() {
           launchAtLogin={launchAtLogin}
           idleModeSelectValue={idleModeSelectValue}
           soundModeSelectValue={soundModeSelectValue}
+          showTrayCountdownOption={platformClass !== 'win'}
           onLaunchAtLoginChange={applyLaunchAtLogin}
           onPatch={applyPatch}
         />

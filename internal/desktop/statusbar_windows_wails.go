@@ -431,9 +431,9 @@ func composeTrayTip(status, countdown, title, fallbackTip string) string {
 	if countdown != "" {
 		parts = append(parts, countdown)
 	}
-	if title != "" {
-		parts = append(parts, title)
-	}
+	// The countdown payload already contains per-reminder remaining time.
+	// Avoid appending an extra standalone countdown (title), which appears duplicated in tooltip.
+	_ = title
 	if len(parts) == 0 {
 		return fallback(fallbackTip, "Pause")
 	}

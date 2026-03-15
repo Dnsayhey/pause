@@ -9,6 +9,7 @@ type SystemSettingsCardProps = {
   launchAtLogin: boolean;
   idleModeSelectValue: string;
   soundModeSelectValue: string;
+  showTrayCountdownOption: boolean;
   onLaunchAtLoginChange: (enabled: boolean) => Promise<void>;
   onPatch: (patch: SettingsPatch) => Promise<void>;
 };
@@ -19,6 +20,7 @@ export function SystemSettingsCard({
   launchAtLogin,
   idleModeSelectValue,
   soundModeSelectValue,
+  showTrayCountdownOption,
   onLaunchAtLoginChange,
   onPatch
 }: SystemSettingsCardProps) {
@@ -95,13 +97,15 @@ export function SystemSettingsCard({
             ]}
           />
         </div>
-        <ToggleSwitchRow
-          label={t(locale, 'showTrayCountdown')}
-          checked={settings.ui.showTrayCountdown}
-          onChange={(checked) => {
-            void onPatch({ ui: { showTrayCountdown: checked } });
-          }}
-        />
+        {showTrayCountdownOption && (
+          <ToggleSwitchRow
+            label={t(locale, 'showTrayCountdown')}
+            checked={settings.ui.showTrayCountdown}
+            onChange={(checked) => {
+              void onPatch({ ui: { showTrayCountdown: checked } });
+            }}
+          />
+        )}
       </div>
     </GlassCard>
   );
