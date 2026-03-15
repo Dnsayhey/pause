@@ -38,6 +38,11 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
   - Linux：`$XDG_CONFIG_HOME/Pause/settings.json`（通常为 `~/.config/Pause/settings.json`）
   - Windows：`%AppData%/Pause/settings.json`
   - 当系统目录不可用时，回退到 `~/.pause/settings.json`
+- 提醒配置与会话历史数据库默认路径：
+  - macOS：`~/Library/Application Support/Pause/history.db`
+  - Linux：`$XDG_CONFIG_HOME/Pause/history.db`（通常为 `~/.config/Pause/history.db`）
+  - Windows：`%AppData%/Pause/history.db`
+  - 当系统目录不可用时，回退到 `~/.pause/history.db`
 - 日志文件默认路径（统一日志）：
   - macOS：`~/Library/Logs/Pause/app.log`
   - Linux：`$XDG_CACHE_HOME/Pause/logs/app.log`（通常为 `~/.cache/Pause/logs/app.log`）
@@ -46,18 +51,17 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 - 日志级别默认 `info`，可通过 `PAUSE_LOG_LEVEL=debug|info|warn|error` 调整。
 - 日志文件超过 `2MB` 会自动轮转为 `app.log.1`（仅保留 1 份备份）。
 - 配置文件损坏时自动回退默认值，并备份为 `settings.json.corrupt.<timestamp>.bak`。
+- `settings.json` 仅持久化非提醒设置；提醒规则（名称、开关、间隔、时长、投递方式）持久化在 `history.db` 的 `reminders` 表。
 - 支持开机启动：
   - macOS 13+：`SMAppService`
   - macOS 10.13 ~ 12：`SMLoginItemSetEnabled`（helper 方案）
   - Windows：当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
 
-## 配置结构
+## 配置结构（settings.json）
 
 ```json
 {
   "globalEnabled": true,
-  "eye": { "enabled": true, "intervalSec": 1200, "breakSec": 20 },
-  "stand": { "enabled": true, "intervalSec": 3600, "breakSec": 300 },
   "enforcement": { "overlaySkipAllowed": true },
   "sound": { "enabled": true, "volume": 70 },
   "timer": { "mode": "idle_pause", "idlePauseThresholdSec": 300 },
@@ -65,17 +69,27 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 }
 ```
 
+## 提醒结构（history.db / reminders）
+
+提醒规则不写入 `settings.json`，而是通过 `GetReminders/UpdateReminders` 读写。运行时会由应用编排层组装为统一状态供调度器消费。
+
 ## Wails 绑定 API
 
 - `GetSettings() -> Settings`
 - `UpdateSettings(patch) -> Settings`
+- `GetReminders() -> []ReminderConfig`
+- `UpdateReminders(patches) -> []ReminderConfig`
 - `GetRuntimeState() -> RuntimeState`
 - `GetLaunchAtLogin() -> bool`
 - `SetLaunchAtLogin(enabled) -> bool`
-- `Pause(mode, durationSec) -> RuntimeState`
+- `Pause() -> RuntimeState`
 - `Resume() -> RuntimeState`
+- `PauseReminder(reason) -> RuntimeState`
+- `ResumeReminder(reason) -> RuntimeState`
 - `SkipCurrentBreak() -> RuntimeState`
 - `StartBreakNow() -> RuntimeState`
+- `StartBreakNowForReason(reason) -> RuntimeState`
+- `GetReminderWeeklyStats(weekStartSec, weekEndSec) -> WeeklyStats`
 
 ## 代码结构（当前）
 
