@@ -125,13 +125,54 @@ func (a *App) UpdateReminders(patches []config.ReminderPatch) ([]config.Reminder
 		logx.Warnf("app.update_reminders_err stage=history_apply patches=%s err=%v", patchesJSON, err)
 		return nil, err
 	}
-	reminders, err := loadReminderConfigsFromHistory(a.history)
+	reminders, err := reloadAndSyncReminders(a.engine, a.history)
 	if err != nil {
 		logx.Warnf("app.update_reminders_err stage=history_reload patches=%s err=%v", patchesJSON, err)
 		return nil, err
 	}
-	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminders_updated patches=%s count=%d", patchesJSON, len(reminders))
+	return reminders, nil
+}
+
+func (a *App) CreateReminder(reminder config.ReminderPatch) ([]config.ReminderConfig, error) {
+	if a == nil || a.history == nil {
+		return nil, errors.New("history store unavailable")
+	}
+	id := strings.ToLower(strings.TrimSpace(reminder.ID))
+	if id == "" {
+		return nil, errors.New("reminder id is required")
+	}
+	if err := createReminderInHistory(a.history, reminder); err != nil {
+		logx.Warnf("app.create_reminder_err stage=history_create id=%s err=%v", id, err)
+		return nil, err
+	}
+	reminders, err := reloadAndSyncReminders(a.engine, a.history)
+	if err != nil {
+		logx.Warnf("app.create_reminder_err stage=history_reload id=%s err=%v", id, err)
+		return nil, err
+	}
+	logx.Infof("app.reminder_created id=%s count=%d", id, len(reminders))
+	return reminders, nil
+}
+
+func (a *App) DeleteReminder(reminderID string) ([]config.ReminderConfig, error) {
+	if a == nil || a.history == nil {
+		return nil, errors.New("history store unavailable")
+	}
+	id := strings.ToLower(strings.TrimSpace(reminderID))
+	if id == "" {
+		return nil, errors.New("reminder id is required")
+	}
+	if err := deleteReminderInHistory(a.history, id); err != nil {
+		logx.Warnf("app.delete_reminder_err stage=history_delete id=%s err=%v", id, err)
+		return nil, err
+	}
+	reminders, err := reloadAndSyncReminders(a.engine, a.history)
+	if err != nil {
+		logx.Warnf("app.delete_reminder_err stage=history_reload id=%s err=%v", id, err)
+		return nil, err
+	}
+	logx.Infof("app.reminder_deleted id=%s count=%d", id, len(reminders))
 	return reminders, nil
 }
 
@@ -288,7 +329,7 @@ func historyDefsToConfig(defs []history.ReminderDefinition) []config.ReminderCon
 			DeliveryType: strings.TrimSpace(def.DeliveryType),
 		})
 	}
-	return config.NormalizeReminderConfigs(result)
+	return config.NormalizeReminderConfigsKeepEmpty(result)
 }
 
 func loadReminderConfigsFromHistory(store *history.Store) ([]config.ReminderConfig, error) {
@@ -303,19 +344,24 @@ func loadReminderConfigsFromHistory(store *history.Store) ([]config.ReminderConf
 }
 
 func syncEngineRemindersFromHistory(engine *service.Engine, store *history.Store) error {
-	if engine == nil || store == nil {
-		return nil
-	}
-	reminders, err := loadReminderConfigsFromHistory(store)
+	reminders, err := reloadAndSyncReminders(engine, store)
 	if err != nil {
 		return err
 	}
-	if len(reminders) == 0 {
-		return nil
-	}
-	engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminders_synced source=history count=%d", len(reminders))
 	return nil
+}
+
+func reloadAndSyncReminders(engine *service.Engine, store *history.Store) ([]config.ReminderConfig, error) {
+	if engine == nil || store == nil {
+		return nil, nil
+	}
+	reminders, err := loadReminderConfigsFromHistory(store)
+	if err != nil {
+		return nil, err
+	}
+	engine.SetReminderConfigs(reminders)
+	return reminders, nil
 }
 
 func applyReminderPatchToHistory(store *history.Store, patches []config.ReminderPatch) error {
@@ -338,6 +384,31 @@ func applyReminderPatchToHistory(store *history.Store, patches []config.Reminder
 		})
 	}
 	return store.UpdateReminders(mutations)
+}
+
+func createReminderInHistory(store *history.Store, patch config.ReminderPatch) error {
+	if store == nil {
+		return nil
+	}
+	id := strings.ToLower(strings.TrimSpace(patch.ID))
+	if id == "" {
+		return errors.New("reminder id is required")
+	}
+	return store.CreateReminder(history.ReminderMutation{
+		ID:           id,
+		Name:         patch.Name,
+		Enabled:      patch.Enabled,
+		IntervalSec:  patch.IntervalSec,
+		BreakSec:     patch.BreakSec,
+		DeliveryType: patch.DeliveryType,
+	})
+}
+
+func deleteReminderInHistory(store *history.Store, reminderID string) error {
+	if store == nil {
+		return nil
+	}
+	return store.DeleteReminder(reminderID)
 }
 
 func currentWeekRange(now time.Time) (time.Time, time.Time) {

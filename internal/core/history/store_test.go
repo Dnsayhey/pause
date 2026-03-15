@@ -3,6 +3,7 @@ package history
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -155,5 +156,145 @@ func TestOpenStoreCancelsDanglingRunningSessions(t *testing.T) {
 	}
 	if runningCount != 0 {
 		t.Fatalf("expected zero running sessions after reopen cleanup, got %d", runningCount)
+	}
+}
+
+func TestCreateReminderInsertsNewRowWithDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer store.Close()
+
+	if err := store.CreateReminder(ReminderMutation{ID: "focus"}); err != nil {
+		t.Fatalf("CreateReminder() error = %v", err)
+	}
+
+	reminders, err := store.ListReminders()
+	if err != nil {
+		t.Fatalf("ListReminders() error = %v", err)
+	}
+	var found *ReminderDefinition
+	for idx := range reminders {
+		if reminders[idx].ID == "focus" {
+			found = &reminders[idx]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected newly created reminder to appear in list")
+	}
+	if !found.Enabled {
+		t.Fatalf("expected created reminder enabled by default")
+	}
+	if found.IntervalSec != 1200 {
+		t.Fatalf("expected default interval 1200, got %d", found.IntervalSec)
+	}
+	if found.BreakSec != 20 {
+		t.Fatalf("expected default break 20, got %d", found.BreakSec)
+	}
+	if found.DeliveryType != "overlay" {
+		t.Fatalf("expected default delivery type overlay, got %q", found.DeliveryType)
+	}
+}
+
+func TestCreateReminderRejectsExistingActiveReminder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer store.Close()
+
+	err = store.CreateReminder(ReminderMutation{ID: "eye"})
+	if !errors.Is(err, ErrReminderAlreadyExists) {
+		t.Fatalf("CreateReminder(existing) error = %v, want %v", err, ErrReminderAlreadyExists)
+	}
+}
+
+func TestCreateReminderRestoresSoftDeletedReminder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer store.Close()
+
+	if err := store.DeleteReminder("eye"); err != nil {
+		t.Fatalf("DeleteReminder(eye) error = %v", err)
+	}
+
+	name := "护眼-恢复"
+	enabled := false
+	intervalSec := 1800
+	breakSec := 30
+	delivery := "notification"
+	if err := store.CreateReminder(ReminderMutation{
+		ID:           "eye",
+		Name:         &name,
+		Enabled:      &enabled,
+		IntervalSec:  &intervalSec,
+		BreakSec:     &breakSec,
+		DeliveryType: &delivery,
+	}); err != nil {
+		t.Fatalf("CreateReminder(restore eye) error = %v", err)
+	}
+
+	reminders, err := store.ListReminders()
+	if err != nil {
+		t.Fatalf("ListReminders() error = %v", err)
+	}
+	var found *ReminderDefinition
+	for idx := range reminders {
+		if reminders[idx].ID == "eye" {
+			found = &reminders[idx]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected restored reminder to appear in list")
+	}
+	if found.Name != name {
+		t.Fatalf("expected restored reminder name %q, got %q", name, found.Name)
+	}
+	if found.Enabled != enabled {
+		t.Fatalf("expected restored reminder enabled=%t, got %t", enabled, found.Enabled)
+	}
+	if found.IntervalSec != intervalSec {
+		t.Fatalf("expected restored reminder interval=%d, got %d", intervalSec, found.IntervalSec)
+	}
+	if found.BreakSec != breakSec {
+		t.Fatalf("expected restored reminder break=%d, got %d", breakSec, found.BreakSec)
+	}
+	if found.DeliveryType != delivery {
+		t.Fatalf("expected restored reminder delivery=%q, got %q", delivery, found.DeliveryType)
+	}
+}
+
+func TestDeleteReminderSoftDeletesAndReturnsNotFoundForMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.db")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer store.Close()
+
+	if err := store.DeleteReminder("eye"); err != nil {
+		t.Fatalf("DeleteReminder(eye) error = %v", err)
+	}
+	reminders, err := store.ListReminders()
+	if err != nil {
+		t.Fatalf("ListReminders() error = %v", err)
+	}
+	for _, r := range reminders {
+		if r.ID == "eye" {
+			t.Fatalf("expected deleted reminder to be excluded from list")
+		}
+	}
+
+	err = store.DeleteReminder("eye")
+	if !errors.Is(err, ErrReminderNotFound) {
+		t.Fatalf("DeleteReminder(eye again) error = %v, want %v", err, ErrReminderNotFound)
 	}
 }

@@ -24,6 +24,13 @@ const (
 	statusCompleted          = "completed"
 	statusSkipped            = "skipped"
 	statusCanceled           = "canceled"
+	defaultIntervalSec       = 20 * 60
+	defaultBreakSec          = 20
+)
+
+var (
+	ErrReminderAlreadyExists = errors.New("reminder already exists")
+	ErrReminderNotFound      = errors.New("reminder not found")
 )
 
 //go:embed schema.sql
@@ -290,8 +297,8 @@ func (s *Store) UpdateReminders(mutations []ReminderMutation) error {
 			ID:           id,
 			Name:         id,
 			Enabled:      true,
-			IntervalSec:  20 * 60,
-			BreakSec:     20,
+			IntervalSec:  defaultIntervalSec,
+			BreakSec:     defaultBreakSec,
 			DeliveryType: deliveryTypeOverlay,
 		}
 
@@ -354,6 +361,115 @@ func (s *Store) UpdateReminders(mutations []ReminderMutation) error {
 	}
 
 	return tx.Commit()
+}
+
+func (s *Store) CreateReminder(mutation ReminderMutation) error {
+	if s == nil || s.db == nil {
+		return errors.New("history store is not initialized")
+	}
+
+	id := normalizeReminderID(mutation.ID)
+	if id == "" {
+		return errors.New("reminder id is required")
+	}
+
+	next := ReminderDefinition{
+		ID:           id,
+		Name:         id,
+		Enabled:      true,
+		IntervalSec:  defaultIntervalSec,
+		BreakSec:     defaultBreakSec,
+		DeliveryType: deliveryTypeOverlay,
+	}
+	if mutation.Name != nil {
+		name := strings.TrimSpace(*mutation.Name)
+		if name != "" {
+			next.Name = name
+		}
+	}
+	if mutation.Enabled != nil {
+		next.Enabled = *mutation.Enabled
+	}
+	if mutation.IntervalSec != nil {
+		next.IntervalSec = normalizePositive(*mutation.IntervalSec, next.IntervalSec)
+	}
+	if mutation.BreakSec != nil {
+		next.BreakSec = normalizePositive(*mutation.BreakSec, next.BreakSec)
+	}
+	if mutation.DeliveryType != nil {
+		next.DeliveryType = normalizeDeliveryType(*mutation.DeliveryType)
+	}
+
+	var deletedAt sql.NullInt64
+	err := s.db.QueryRowContext(
+		context.Background(),
+		`SELECT deleted_at
+		 FROM reminders
+		 WHERE id = ?`,
+		id,
+	).Scan(&deletedAt)
+	switch {
+	case err == nil && !deletedAt.Valid:
+		return ErrReminderAlreadyExists
+	case err == nil && deletedAt.Valid:
+	case errors.Is(err, sql.ErrNoRows):
+	default:
+		return err
+	}
+
+	_, err = s.db.ExecContext(
+		context.Background(),
+		`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, delivery_type)
+		 VALUES(?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   name=excluded.name,
+		   enabled=excluded.enabled,
+		   interval_sec=excluded.interval_sec,
+		   break_sec=excluded.break_sec,
+		   delivery_type=excluded.delivery_type,
+		   deleted_at=NULL,
+		   updated_at=unixepoch()
+		 WHERE reminders.deleted_at IS NOT NULL`,
+		next.ID,
+		next.Name,
+		boolToInt(next.Enabled),
+		next.IntervalSec,
+		next.BreakSec,
+		next.DeliveryType,
+	)
+	return err
+}
+
+func (s *Store) DeleteReminder(reminderID string) error {
+	if s == nil || s.db == nil {
+		return errors.New("history store is not initialized")
+	}
+
+	id := normalizeReminderID(reminderID)
+	if id == "" {
+		return errors.New("reminder id is required")
+	}
+
+	res, err := s.db.ExecContext(
+		context.Background(),
+		`UPDATE reminders
+		 SET deleted_at = unixepoch(),
+		     updated_at = unixepoch()
+		 WHERE id = ?
+		   AND deleted_at IS NULL`,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrReminderNotFound
+	}
+	return nil
 }
 
 func dedupeReminderIDs(reminderIDs []string) []string {

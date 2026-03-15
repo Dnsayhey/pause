@@ -245,7 +245,7 @@ func (e *Engine) SetReminderConfigs(reminders []config.ReminderConfig) []config.
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	next := config.NormalizeReminderConfigs(reminders)
+	next := config.NormalizeReminderConfigsKeepEmpty(reminders)
 	prev := cloneReminderConfigs(e.reminders)
 	e.reminders = cloneReminderConfigs(next)
 	e.applyReminderConfigPatchLocked(prev, next)

@@ -159,6 +159,13 @@ func NormalizeReminderConfigs(reminders []ReminderConfig) []ReminderConfig {
 	return normalizeReminders(reminders)
 }
 
+func NormalizeReminderConfigsKeepEmpty(reminders []ReminderConfig) []ReminderConfig {
+	if len(reminders) == 0 {
+		return nil
+	}
+	return normalizeReminders(reminders)
+}
+
 func ReminderByID(reminders []ReminderConfig, id string) (ReminderConfig, bool) {
 	norm := NormalizeReminderID(id)
 	for _, reminder := range reminders {

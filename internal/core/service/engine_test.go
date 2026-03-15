@@ -574,6 +574,25 @@ func TestSetLaunchAtLoginSync(t *testing.T) {
 	}
 }
 
+func TestSetReminderConfigsAllowsEmptySnapshot(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	engine := newTestEngine(t, idle, &fakeStartupManager{})
+
+	base := time.Unix(1_700_000_000, 0)
+	engine.SetReminderConfigs(nil)
+
+	state := engine.GetRuntimeState(base)
+	if len(state.Reminders) != 0 {
+		t.Fatalf("expected empty reminders snapshot, got %d", len(state.Reminders))
+	}
+	if len(state.NextBreakReason) != 0 {
+		t.Fatalf("expected no next break reasons, got %d", len(state.NextBreakReason))
+	}
+	if _, err := engine.StartBreakNow(base.Add(time.Second)); err == nil {
+		t.Fatalf("expected StartBreakNow to fail when reminders snapshot is empty")
+	}
+}
+
 func TestSyncPlatformSettingsBootstrapsOnFirstRun(t *testing.T) {
 	idle := &fakeIdleProvider{}
 	startup := &fakeStartupManager{}
