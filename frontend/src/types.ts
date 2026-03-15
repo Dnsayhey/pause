@@ -43,6 +43,8 @@ export type RuntimeState = {
   currentIdleSec: number;
   overlaySkipAllowed: boolean;
   overlayNative: boolean;
+  effectiveLanguage?: 'zh-CN' | 'en-US';
+  effectiveTheme?: 'light' | 'dark';
 };
 
 export type SettingsPatch = Partial<{

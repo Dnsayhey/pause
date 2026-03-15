@@ -64,9 +64,11 @@ func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 		})
 		go func() {
 			<-ctx.Done()
+			shutdownPreferredThemeProvider()
 			logx.ClearSink()
 		}()
 
+		initPreferredThemeProvider()
 		desktop.ConfigureDesktopWindowBehavior()
 		c.statusBar.Init(func(actionID int) {
 			c.handleStatusBarAction(ctx, app, actionID)

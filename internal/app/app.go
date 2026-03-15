@@ -90,18 +90,22 @@ func (a *App) UpdateSettings(patch config.SettingsPatch) (config.Settings, error
 
 func (a *App) GetRuntimeState() config.RuntimeState {
 	state := a.engine.GetRuntimeState(time.Now())
-	return decorateRuntimeStateForPlatform(state)
+	return a.decorateRuntimeState(state)
 }
 
 func (a *App) Pause(mode string, durationSec int) (config.RuntimeState, error) {
 	if mode == service.PauseModeTemporary && durationSec == 0 {
 		durationSec = 15 * 60
 	}
-	return a.engine.Pause(mode, durationSec, time.Now())
+	state, err := a.engine.Pause(mode, durationSec, time.Now())
+	if err != nil {
+		return config.RuntimeState{}, err
+	}
+	return a.decorateRuntimeState(state), nil
 }
 
 func (a *App) Resume() config.RuntimeState {
-	return a.engine.Resume(time.Now())
+	return a.decorateRuntimeState(a.engine.Resume(time.Now()))
 }
 
 func (a *App) SkipCurrentBreak() (config.RuntimeState, error) {
@@ -113,15 +117,27 @@ func (a *App) skipCurrentBreakEmergency() (config.RuntimeState, error) {
 }
 
 func (a *App) skipCurrentBreakWithMode(mode service.SkipMode) (config.RuntimeState, error) {
-	return a.engine.SkipCurrentBreak(time.Now(), mode)
+	state, err := a.engine.SkipCurrentBreak(time.Now(), mode)
+	if err != nil {
+		return config.RuntimeState{}, err
+	}
+	return a.decorateRuntimeState(state), nil
 }
 
 func (a *App) StartBreakNow() (config.RuntimeState, error) {
-	return a.engine.StartBreakNow(time.Now())
+	state, err := a.engine.StartBreakNow(time.Now())
+	if err != nil {
+		return config.RuntimeState{}, err
+	}
+	return a.decorateRuntimeState(state), nil
 }
 
 func (a *App) StartBreakNowForReason(reason string) (config.RuntimeState, error) {
-	return a.engine.StartBreakNowForReason(reason, time.Now())
+	state, err := a.engine.StartBreakNowForReason(reason, time.Now())
+	if err != nil {
+		return config.RuntimeState{}, err
+	}
+	return a.decorateRuntimeState(state), nil
 }
 
 func (a *App) GetLaunchAtLogin() (bool, error) {
@@ -183,4 +199,11 @@ func joinReasons(reasons []string) string {
 
 func defaultConfigPath() (string, error) {
 	return paths.ConfigFile("settings.json")
+}
+
+func (a *App) decorateRuntimeState(state config.RuntimeState) config.RuntimeState {
+	settings := a.engine.GetSettings()
+	state.EffectiveLanguage = resolveEffectiveLanguage(settings.UI.Language)
+	state.EffectiveTheme = resolveEffectiveTheme(settings.UI.Theme)
+	return decorateRuntimeStateForPlatform(state)
 }

@@ -61,6 +61,25 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const language = runtime?.effectiveLanguage;
+    const theme = runtime?.effectiveTheme;
+    if (language === 'zh-CN' || language === 'en-US') {
+      document.body.dataset.language = language;
+    } else {
+      delete document.body.dataset.language;
+    }
+    if (theme === 'light' || theme === 'dark') {
+      document.body.dataset.theme = theme;
+    } else {
+      delete document.body.dataset.theme;
+    }
+    return () => {
+      delete document.body.dataset.language;
+      delete document.body.dataset.theme;
+    };
+  }, [runtime?.effectiveLanguage, runtime?.effectiveTheme]);
+
   const focusTitleIfNeeded = useCallback(() => {
     if (hasAssignedInitialFocusRef.current) return;
     if (document.visibilityState !== 'visible') return;
@@ -90,7 +109,7 @@ export function App() {
       <div className="h-7 select-none [--wails-draggable:drag]" />
       <div className="h-[calc(100%-1.75rem)] overflow-hidden">
           <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
-          {t(resolveLocale('auto'), 'loading')}
+          {t(resolveLocale(undefined), 'loading')}
           {error && <InlineError message={error} />}
           </div>
         </div>
@@ -98,7 +117,8 @@ export function App() {
     );
   }
 
-  const locale = resolveLocale(settings.ui.language);
+  const locale = resolveLocale(runtime.effectiveLanguage);
+
   const overlayActive = Boolean(
     !runtime.overlayNative &&
       runtime.currentSession &&

@@ -96,6 +96,8 @@ type RuntimeState struct {
 	ShowTrayCountdown  bool              `json:"showTrayCountdown"`
 	OverlaySkipAllowed bool              `json:"overlaySkipAllowed"`
 	OverlayNative      bool              `json:"overlayNative"`
+	EffectiveLanguage  string            `json:"effectiveLanguage,omitempty"`
+	EffectiveTheme     string            `json:"effectiveTheme,omitempty"`
 }
 
 type BreakSessionView struct {
