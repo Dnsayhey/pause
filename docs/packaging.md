@@ -125,6 +125,18 @@
 4. 执行 `generate-release-manifest.sh`，生成统一清单与校验文件。
 5. 人工验收并归档发布目录。
 
+## GitHub Actions 自动打包
+
+- 工作流文件：`.github/workflows/package-desktop.yml`
+- 触发规则：
+  - `push` 到 `main`：自动构建 macOS + Windows 并上传 Actions artifacts
+  - `push` tag `v*`：在构建基础上自动发布 GitHub Release（附带产物与清单）
+  - `workflow_dispatch`：可手动触发打包
+- 产出内容：
+  - `pause-macos-universal`：DMG
+  - `pause-windows-x64`：Windows 安装包与校验文件
+  - `pause-release-manifest`：`release-manifest.txt` + `SHA256SUMS`
+
 ## 验收清单
 
 - macOS：DMG 可挂载，`Pause.app` 可拖拽安装，首次启动正常。
