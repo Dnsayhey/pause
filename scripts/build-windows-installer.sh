@@ -4,6 +4,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="${APP_NAME:-Pause}"
+APP_ICON_SOURCE="${APP_ICON_SOURCE:-${ROOT_DIR}/assets/branding/app-icon-1024.png}"
+APP_ICON_TARGET="${ROOT_DIR}/build/appicon.png"
+WINDOWS_ICON_SOURCE="${WINDOWS_ICON_SOURCE:-${ROOT_DIR}/assets/branding/icon.ico}"
+WINDOWS_ICON_TARGET="${ROOT_DIR}/build/windows/icon.ico"
 WINDOWS_PLATFORM="${WINDOWS_PLATFORM:-windows/amd64}"
 WINDOWS_ARCH_LABEL="${WINDOWS_ARCH_LABEL:-}"
 WINDOWS_OUTPUT_DIR="${WINDOWS_OUTPUT_DIR:-}"
@@ -23,6 +27,8 @@ Options:
   --platform <windows/amd64|windows/arm64|...>  Build target platform
   --arch-label <label>                          Artifact folder label (default derived from platform)
   --output-dir <path>                           Artifact output dir
+  --icon <path>                                 App icon source (png, used for app resources)
+  --windows-ico <path>                          Windows icon source (.ico)
   --webview2 <download|browser|embed|error>     Wails WebView2 mode
   --tags <go_build_tags>                        Build tags (default: wails)
   --nsis-template <path>                        NSIS template path
@@ -35,8 +41,9 @@ Options:
   -h, --help                                    Show this help
 
 Environment variables:
-  WINDOWS_PLATFORM, WINDOWS_ARCH_LABEL, WINDOWS_OUTPUT_DIR, WINDOWS_WEBVIEW2,
-  WINDOWS_NSIS_TEMPLATE, WAILS_TAGS, USE_CLEAN, GENERATE_CHECKSUMS, INCLUDE_PORTABLE_EXE
+  APP_ICON_SOURCE, WINDOWS_ICON_SOURCE, WINDOWS_PLATFORM, WINDOWS_ARCH_LABEL,
+  WINDOWS_OUTPUT_DIR, WINDOWS_WEBVIEW2, WINDOWS_NSIS_TEMPLATE, WAILS_TAGS,
+  USE_CLEAN, GENERATE_CHECKSUMS, INCLUDE_PORTABLE_EXE
 EOF
 }
 
@@ -52,6 +59,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --output-dir)
       WINDOWS_OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --icon)
+      APP_ICON_SOURCE="$2"
+      shift 2
+      ;;
+    --windows-ico)
+      WINDOWS_ICON_SOURCE="$2"
       shift 2
       ;;
     --webview2)
@@ -130,14 +145,29 @@ echo "  app_name=${APP_NAME}"
 echo "  windows_platform=${WINDOWS_PLATFORM}"
 echo "  windows_arch_label=${WINDOWS_ARCH_LABEL}"
 echo "  windows_output_dir=${WINDOWS_OUTPUT_DIR}"
+echo "  app_icon_source=${APP_ICON_SOURCE}"
+echo "  windows_icon_source=${WINDOWS_ICON_SOURCE}"
 echo "  windows_webview2=${WINDOWS_WEBVIEW2}"
 echo "  wails_tags=${WAILS_TAGS}"
 echo "  use_clean=${USE_CLEAN}"
 echo "  generate_checksums=${GENERATE_CHECKSUMS}"
 echo "  include_portable_exe=${INCLUDE_PORTABLE_EXE}"
 
+if [[ ! -f "${APP_ICON_SOURCE}" ]]; then
+  echo "ERROR: app icon source not found: ${APP_ICON_SOURCE}" >&2
+  exit 1
+fi
+if [[ ! -f "${WINDOWS_ICON_SOURCE}" ]]; then
+  echo "ERROR: windows icon source not found: ${WINDOWS_ICON_SOURCE}" >&2
+  exit 1
+fi
+
 mkdir -p "${ROOT_DIR}/build/bin"
 mkdir -p "${WINDOWS_OUTPUT_DIR}"
+mkdir -p "$(dirname "${APP_ICON_TARGET}")"
+mkdir -p "$(dirname "${WINDOWS_ICON_TARGET}")"
+cp "${APP_ICON_SOURCE}" "${APP_ICON_TARGET}"
+cp "${WINDOWS_ICON_SOURCE}" "${WINDOWS_ICON_TARGET}"
 
 if [[ -f "${WINDOWS_NSIS_TEMPLATE}" ]]; then
   mkdir -p "${ROOT_DIR}/build/windows/installer"
