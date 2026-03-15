@@ -61,6 +61,14 @@ type ReminderPatch struct {
 	DeliveryType *string `json:"deliveryType,omitempty"`
 }
 
+type ReminderCreateInput struct {
+	Name         string  `json:"name"`
+	IntervalSec  int     `json:"intervalSec"`
+	BreakSec     int     `json:"breakSec"`
+	Enabled      *bool   `json:"enabled,omitempty"`
+	DeliveryType *string `json:"deliveryType,omitempty"`
+}
+
 type EnforcementSettingsPatch struct {
 	OverlaySkipAllowed *bool `json:"overlaySkipAllowed,omitempty"`
 }

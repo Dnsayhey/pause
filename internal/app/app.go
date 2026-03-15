@@ -134,15 +134,18 @@ func (a *App) UpdateReminders(patches []config.ReminderPatch) ([]config.Reminder
 	return reminders, nil
 }
 
-func (a *App) CreateReminder(reminder config.ReminderPatch) ([]config.ReminderConfig, error) {
+func (a *App) CreateReminder(input config.ReminderCreateInput) ([]config.ReminderConfig, error) {
 	if a == nil || a.history == nil {
 		return nil, errors.New("history store unavailable")
 	}
-	id := strings.ToLower(strings.TrimSpace(reminder.ID))
-	if id == "" {
-		return nil, errors.New("reminder id is required")
+
+	normalized, err := normalizeReminderCreateInput(input)
+	if err != nil {
+		return nil, err
 	}
-	if err := createReminderInHistory(a.history, reminder); err != nil {
+
+	id, err := createReminderInHistory(a.history, normalized)
+	if err != nil {
 		logx.Warnf("app.create_reminder_err stage=history_create id=%s err=%v", id, err)
 		return nil, err
 	}
@@ -386,22 +389,89 @@ func applyReminderPatchToHistory(store *history.Store, patches []config.Reminder
 	return store.UpdateReminders(mutations)
 }
 
-func createReminderInHistory(store *history.Store, patch config.ReminderPatch) error {
-	if store == nil {
-		return nil
+func normalizeReminderCreateInput(input config.ReminderCreateInput) (config.ReminderCreateInput, error) {
+	next := input
+	next.Name = strings.TrimSpace(next.Name)
+	if next.Name == "" {
+		return config.ReminderCreateInput{}, errors.New("reminder name is required")
 	}
-	id := strings.ToLower(strings.TrimSpace(patch.ID))
+	if next.IntervalSec <= 0 {
+		return config.ReminderCreateInput{}, errors.New("reminder intervalSec must be > 0")
+	}
+	if next.BreakSec <= 0 {
+		return config.ReminderCreateInput{}, errors.New("reminder breakSec must be > 0")
+	}
+	return next, nil
+}
+
+func reminderIDBaseFromName(name string) string {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return "reminder"
+	}
+
+	var builder strings.Builder
+	lastDash := false
+	for _, ch := range lower {
+		switch {
+		case ch >= 'a' && ch <= 'z':
+			builder.WriteRune(ch)
+			lastDash = false
+		case ch >= '0' && ch <= '9':
+			builder.WriteRune(ch)
+			lastDash = false
+		case ch == '-' || ch == '_' || ch == ' ' || ch == '.':
+			if builder.Len() == 0 || lastDash {
+				continue
+			}
+			builder.WriteRune('-')
+			lastDash = true
+		}
+	}
+
+	id := strings.Trim(builder.String(), "-")
 	if id == "" {
-		return errors.New("reminder id is required")
+		return "reminder"
 	}
-	return store.CreateReminder(history.ReminderMutation{
-		ID:           id,
-		Name:         patch.Name,
-		Enabled:      patch.Enabled,
-		IntervalSec:  patch.IntervalSec,
-		BreakSec:     patch.BreakSec,
-		DeliveryType: patch.DeliveryType,
-	})
+	return id
+}
+
+func createReminderInHistory(store *history.Store, input config.ReminderCreateInput) (string, error) {
+	if store == nil {
+		return "", nil
+	}
+
+	baseID := reminderIDBaseFromName(input.Name)
+	name := strings.TrimSpace(input.Name)
+	enabled := true
+	if input.Enabled != nil {
+		enabled = *input.Enabled
+	}
+	intervalSec := input.IntervalSec
+	breakSec := input.BreakSec
+
+	for idx := 0; idx < 1000; idx++ {
+		id := baseID
+		if idx > 0 {
+			id = fmt.Sprintf("%s-%d", baseID, idx+1)
+		}
+		err := store.CreateReminder(history.ReminderMutation{
+			ID:           id,
+			Name:         &name,
+			Enabled:      &enabled,
+			IntervalSec:  &intervalSec,
+			BreakSec:     &breakSec,
+			DeliveryType: input.DeliveryType,
+		})
+		if err == nil {
+			return id, nil
+		}
+		if errors.Is(err, history.ErrReminderAlreadyExists) {
+			continue
+		}
+		return id, err
+	}
+	return "", errors.New("failed to allocate unique reminder id")
 }
 
 func deleteReminderInHistory(store *history.Store, reminderID string) error {
