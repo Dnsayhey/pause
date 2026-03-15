@@ -439,6 +439,10 @@ func TestStartBreakNowForReason_ResetsOnlySelectedReminder(t *testing.T) {
 func TestPauseReminder_AffectsOnlySelectedReminder(t *testing.T) {
 	idle := &fakeIdleProvider{}
 	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDEye, nil, nil, nil),
+		reminderPatch(config.ReminderIDStand, nil, nil, nil),
+	)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)

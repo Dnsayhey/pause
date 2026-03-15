@@ -153,25 +153,12 @@ func NormalizeReminderID(id string) string {
 	return strings.ToLower(strings.TrimSpace(id))
 }
 
-func DefaultReminderConfigs() []ReminderConfig {
-	return []ReminderConfig{
-		{ID: ReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, DeliveryType: "overlay"},
-		{ID: ReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, DeliveryType: "overlay"},
-	}
-}
-
 func NormalizeReminderConfigs(reminders []ReminderConfig) []ReminderConfig {
-	if len(reminders) == 0 {
-		reminders = DefaultReminderConfigs()
-	}
 	return normalizeReminders(reminders)
 }
 
 func NormalizeReminderConfigsKeepEmpty(reminders []ReminderConfig) []ReminderConfig {
-	if len(reminders) == 0 {
-		return nil
-	}
-	return normalizeReminders(reminders)
+	return NormalizeReminderConfigs(reminders)
 }
 
 func ReminderByID(reminders []ReminderConfig, id string) (ReminderConfig, bool) {

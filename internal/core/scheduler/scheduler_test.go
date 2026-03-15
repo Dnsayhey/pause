@@ -6,9 +6,16 @@ import (
 	"pause/internal/core/config"
 )
 
+func defaultReminderFixtures() []config.ReminderConfig {
+	return []config.ReminderConfig{
+		{ID: config.ReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, DeliveryType: "overlay"},
+		{ID: config.ReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, DeliveryType: "overlay"},
+	}
+}
+
 func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 	s := New()
-	reminders := config.DefaultReminderConfigs()
+	reminders := defaultReminderFixtures()
 	eye, _ := config.ReminderByID(reminders, config.ReminderIDEye)
 
 	evt := s.OnActiveSeconds(eye.IntervalSec-1, reminders)
@@ -50,7 +57,7 @@ func TestMergeConflictWithinWindow(t *testing.T) {
 
 func TestNextCountdown(t *testing.T) {
 	s := New()
-	reminders := config.DefaultReminderConfigs()
+	reminders := defaultReminderFixtures()
 	eye, _ := config.ReminderByID(reminders, config.ReminderIDEye)
 	stand, _ := config.ReminderByID(reminders, config.ReminderIDStand)
 
