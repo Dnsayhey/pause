@@ -12,6 +12,7 @@ WINDOWS_WEBVIEW2="${WINDOWS_WEBVIEW2:-download}"
 WAILS_TAGS="${WAILS_TAGS:-wails}"
 USE_CLEAN="${USE_CLEAN:-0}"
 GENERATE_CHECKSUMS="${GENERATE_CHECKSUMS:-1}"
+INCLUDE_PORTABLE_EXE="${INCLUDE_PORTABLE_EXE:-0}"
 
 print_help() {
   cat <<'EOF'
@@ -29,11 +30,13 @@ Options:
   --no-clean                                    Disable wails -clean (default)
   --checksums                                   Generate SHA256SUMS.txt (default)
   --no-checksums                                Skip checksum generation
+  --include-portable-exe                        Keep raw app exe in output directory
+  --no-portable-exe                             Drop raw app exe from output directory (default)
   -h, --help                                    Show this help
 
 Environment variables:
   WINDOWS_PLATFORM, WINDOWS_ARCH_LABEL, WINDOWS_OUTPUT_DIR, WINDOWS_WEBVIEW2,
-  WINDOWS_NSIS_TEMPLATE, WAILS_TAGS, USE_CLEAN, GENERATE_CHECKSUMS
+  WINDOWS_NSIS_TEMPLATE, WAILS_TAGS, USE_CLEAN, GENERATE_CHECKSUMS, INCLUDE_PORTABLE_EXE
 EOF
 }
 
@@ -77,6 +80,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-checksums)
       GENERATE_CHECKSUMS="0"
+      shift
+      ;;
+    --include-portable-exe)
+      INCLUDE_PORTABLE_EXE="1"
+      shift
+      ;;
+    --no-portable-exe)
+      INCLUDE_PORTABLE_EXE="0"
       shift
       ;;
     -h|--help)
@@ -123,6 +134,7 @@ echo "  windows_webview2=${WINDOWS_WEBVIEW2}"
 echo "  wails_tags=${WAILS_TAGS}"
 echo "  use_clean=${USE_CLEAN}"
 echo "  generate_checksums=${GENERATE_CHECKSUMS}"
+echo "  include_portable_exe=${INCLUDE_PORTABLE_EXE}"
 
 mkdir -p "${ROOT_DIR}/build/bin"
 mkdir -p "${WINDOWS_OUTPUT_DIR}"
@@ -187,6 +199,11 @@ fi
 
 for file in "${GENERATED_FILES[@]}"; do
   base="$(basename "${file}")"
+  if [[ "${INCLUDE_PORTABLE_EXE}" != "1" && "${base}" == "${APP_NAME}.exe" ]]; then
+    rm -f "${file}"
+    echo "dropped non-installer artifact: ${base}"
+    continue
+  fi
   target="${WINDOWS_OUTPUT_DIR}/${base}"
   mv -f "${file}" "${target}"
   echo "moved: ${target}"

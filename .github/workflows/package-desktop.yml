@@ -135,7 +135,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build Windows installer
-        run: ./scripts/build-windows-installer.sh --platform windows/amd64 --output-dir build/bin/windows-x64 --clean
+        run: ./scripts/build-windows-installer.sh --platform windows/amd64 --output-dir build/bin/windows-x64 --clean --no-checksums --no-portable-exe
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -213,5 +213,6 @@ jobs:
           generate_release_notes: true
           files: |
             build/bin/macos-universal/*.dmg
-            build/bin/windows-x64/*
-            build/bin/release/*
+            build/bin/windows-x64/*-installer.exe
+            build/bin/release/release-manifest.txt
+            build/bin/release/SHA256SUMS
