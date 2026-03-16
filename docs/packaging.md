@@ -35,7 +35,7 @@
 ## 产物目录规范
 
 - 原始构建产物根目录：`build/bin`
-- macOS 产物子目录（默认）：`build/bin/macos-universal`
+- macOS 产物子目录（默认）：`build/bin/macos-arm64` 与 `build/bin/macos-x64`
 - Windows 产物子目录（默认）：`build/bin/windows-x64` 或 `build/bin/windows-arm64`
 - 发布清单目录（默认）：`build/bin/release`
 
@@ -51,19 +51,31 @@
 
 常用参数：
 
+- `--platform <split|darwin/arm64|darwin/amd64|darwin/universal>`：构建目标（默认 `split`，即 arm64+x64 分开构建）
 - `--version <version>`：覆盖 `CFBundleShortVersionString/CFBundleVersion`
 - `--bundle-id <bundle_id>`：覆盖默认 Bundle ID（默认来自 `internal/meta/bundle_id.txt`）
 - `--codesign <identity>`：签名身份（`-` 表示 ad-hoc）
-- `--output <path>`：自定义 DMG 输出路径
-- `--output-dir <path>`：自定义 DMG 输出目录（默认 `build/bin/macos-universal`）
+- `--output <path>`：自定义 DMG 输出路径（仅单平台模式）
+- `--output-dir <path>`：自定义 DMG 输出目录（单平台）或输出根目录（split 模式）
 - `--clean|--no-clean`：是否执行 Wails `-clean`
 
 默认行为：
 
-- 产物路径：`build/bin/macos-universal/Pause.dmg`
+- 分别产出：
+  - `build/bin/macos-arm64/Pause-v<version>-macos-arm64.dmg`
+  - `build/bin/macos-x64/Pause-v<version>-macos-x64.dmg`
 - 图标来源：`assets/branding/app-icon-1024.png`
 - 会自动将登录项 helper 嵌入到 `.app` 并签名。
 - 优先使用本机 `wails`，缺失时回退到 `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`。
+
+示例：
+
+- 分开构建（默认）：
+  - `./scripts/build-dmg.sh`
+- 只构建 arm64：
+  - `./scripts/build-dmg.sh --platform darwin/arm64`
+- 只构建 x64：
+  - `./scripts/build-dmg.sh --platform darwin/amd64`
 
 ## Windows 打包规范
 
@@ -84,14 +96,13 @@
 - `--output-dir <path>`
 - `--webview2 <download|browser|embed|error>`
 - `--clean|--no-clean`
-- `--checksums|--no-checksums`
 
 默认行为：
 
 - 默认平台：`windows/amd64`
 - 默认目录：`build/bin/windows-x64`
+- 默认安装包文件名：`Pause-v<version>-windows-x64-setup.exe`
 - 默认从 `scripts/windows-installer/project.nsi` 同步 NSIS 模板到 `build/windows/installer/project.nsi`
-- 默认在输出目录生成 `SHA256SUMS.txt`
 - 优先使用本机 `wails`，缺失时回退到 `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`
 
 ## 发布清单规范
@@ -133,7 +144,8 @@
   - `push` tag `v*`：在构建基础上自动发布 GitHub Release（附带产物与清单）
   - `workflow_dispatch`：可手动触发打包
 - 产出内容：
-  - `pause-macos-universal`：DMG
+  - `pause-macos-arm64`：macOS Apple Silicon DMG
+  - `pause-macos-x64`：macOS Intel x64 DMG
   - `pause-windows-x64`：Windows 安装包与校验文件
   - `pause-release-manifest`：`release-manifest.txt` + `SHA256SUMS`
 

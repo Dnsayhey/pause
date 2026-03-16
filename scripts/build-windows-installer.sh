@@ -11,12 +11,13 @@ WINDOWS_ICON_TARGET="${ROOT_DIR}/build/windows/icon.ico"
 WINDOWS_PLATFORM="${WINDOWS_PLATFORM:-windows/amd64}"
 WINDOWS_ARCH_LABEL="${WINDOWS_ARCH_LABEL:-}"
 WINDOWS_OUTPUT_DIR="${WINDOWS_OUTPUT_DIR:-}"
+APP_VERSION_OVERRIDE="${APP_VERSION_OVERRIDE:-}"
 WINDOWS_NSIS_TEMPLATE="${WINDOWS_NSIS_TEMPLATE:-${ROOT_DIR}/scripts/windows-installer/project.nsi}"
 WINDOWS_WEBVIEW2="${WINDOWS_WEBVIEW2:-download}"
 WAILS_TAGS="${WAILS_TAGS:-wails}"
 USE_CLEAN="${USE_CLEAN:-0}"
-GENERATE_CHECKSUMS="${GENERATE_CHECKSUMS:-1}"
 INCLUDE_PORTABLE_EXE="${INCLUDE_PORTABLE_EXE:-0}"
+ARTIFACT_VERSION=""
 
 print_help() {
   cat <<'EOF'
@@ -27,6 +28,7 @@ Options:
   --platform <windows/amd64|windows/arm64|...>  Build target platform
   --arch-label <label>                          Artifact folder label (default derived from platform)
   --output-dir <path>                           Artifact output dir
+  --version <version>                           Version used in output filename
   --icon <path>                                 App icon source (png, used for app resources)
   --windows-ico <path>                          Windows icon source (.ico)
   --webview2 <download|browser|embed|error>     Wails WebView2 mode
@@ -34,16 +36,14 @@ Options:
   --nsis-template <path>                        NSIS template path
   --clean                                       Enable wails -clean
   --no-clean                                    Disable wails -clean (default)
-  --checksums                                   Generate SHA256SUMS.txt (default)
-  --no-checksums                                Skip checksum generation
   --include-portable-exe                        Keep raw app exe in output directory
   --no-portable-exe                             Drop raw app exe from output directory (default)
   -h, --help                                    Show this help
 
 Environment variables:
   APP_ICON_SOURCE, WINDOWS_ICON_SOURCE, WINDOWS_PLATFORM, WINDOWS_ARCH_LABEL,
-  WINDOWS_OUTPUT_DIR, WINDOWS_WEBVIEW2, WINDOWS_NSIS_TEMPLATE, WAILS_TAGS,
-  USE_CLEAN, GENERATE_CHECKSUMS, INCLUDE_PORTABLE_EXE
+  WINDOWS_OUTPUT_DIR, APP_VERSION_OVERRIDE, WINDOWS_WEBVIEW2, WINDOWS_NSIS_TEMPLATE, WAILS_TAGS,
+  USE_CLEAN, INCLUDE_PORTABLE_EXE
 EOF
 }
 
@@ -59,6 +59,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --output-dir)
       WINDOWS_OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --version)
+      APP_VERSION_OVERRIDE="$2"
       shift 2
       ;;
     --icon)
@@ -89,14 +93,6 @@ while [[ $# -gt 0 ]]; do
       USE_CLEAN="0"
       shift
       ;;
-    --checksums)
-      GENERATE_CHECKSUMS="1"
-      shift
-      ;;
-    --no-checksums)
-      GENERATE_CHECKSUMS="0"
-      shift
-      ;;
     --include-portable-exe)
       INCLUDE_PORTABLE_EXE="1"
       shift
@@ -116,6 +112,24 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+resolve_artifact_version() {
+  local version="${APP_VERSION_OVERRIDE}"
+  if [[ -z "${version}" && -f "${ROOT_DIR}/VERSION" ]]; then
+    version="$(head -n 1 "${ROOT_DIR}/VERSION" | tr -d '[:space:]')"
+  fi
+  if [[ -z "${version}" && -f "${ROOT_DIR}/wails.json" ]]; then
+    version="$(sed -n 's/.*"productVersion":[[:space:]]*"\([^"]*\)".*/\1/p' "${ROOT_DIR}/wails.json" | head -n 1)"
+  fi
+  version="$(echo "${version}" | tr -d '[:space:]')"
+  version="${version#v}"
+  if [[ -z "${version}" ]]; then
+    version="0.0.0"
+  fi
+  echo "${version}"
+}
+
+ARTIFACT_VERSION="$(resolve_artifact_version)"
 
 default_arch_label_from_platform() {
   case "${WINDOWS_PLATFORM}" in
@@ -145,12 +159,12 @@ echo "  app_name=${APP_NAME}"
 echo "  windows_platform=${WINDOWS_PLATFORM}"
 echo "  windows_arch_label=${WINDOWS_ARCH_LABEL}"
 echo "  windows_output_dir=${WINDOWS_OUTPUT_DIR}"
+echo "  artifact_version=${ARTIFACT_VERSION}"
 echo "  app_icon_source=${APP_ICON_SOURCE}"
 echo "  windows_icon_source=${WINDOWS_ICON_SOURCE}"
 echo "  windows_webview2=${WINDOWS_WEBVIEW2}"
 echo "  wails_tags=${WAILS_TAGS}"
 echo "  use_clean=${USE_CLEAN}"
-echo "  generate_checksums=${GENERATE_CHECKSUMS}"
 echo "  include_portable_exe=${INCLUDE_PORTABLE_EXE}"
 
 if [[ ! -f "${APP_ICON_SOURCE}" ]]; then
@@ -234,27 +248,18 @@ for file in "${GENERATED_FILES[@]}"; do
     echo "dropped non-installer artifact: ${base}"
     continue
   fi
+  if [[ "${base}" == *"-installer.exe" ]]; then
+    base="${APP_NAME}-v${ARTIFACT_VERSION}-${WINDOWS_ARCH_LABEL}-setup.exe"
+  fi
   target="${WINDOWS_OUTPUT_DIR}/${base}"
   mv -f "${file}" "${target}"
   echo "moved: ${target}"
 done
 
-if [[ "${GENERATE_CHECKSUMS}" == "1" ]]; then
-  CHECKSUM_FILE="${WINDOWS_OUTPUT_DIR}/SHA256SUMS.txt"
-  if command -v shasum >/dev/null 2>&1; then
-    (
-      cd "${WINDOWS_OUTPUT_DIR}"
-      shasum -a 256 *.exe *.msi *.zip *.blockmap *.msix *.appx 2>/dev/null > "SHA256SUMS.txt" || true
-    )
-  elif command -v sha256sum >/dev/null 2>&1; then
-    (
-      cd "${WINDOWS_OUTPUT_DIR}"
-      sha256sum *.exe *.msi *.zip *.blockmap *.msix *.appx 2>/dev/null > "SHA256SUMS.txt" || true
-    )
-  fi
-  if [[ -f "${CHECKSUM_FILE}" ]]; then
-    echo "checksums: ${CHECKSUM_FILE}"
-  fi
+EXPECTED_INSTALLER="${WINDOWS_OUTPUT_DIR}/${APP_NAME}-v${ARTIFACT_VERSION}-${WINDOWS_ARCH_LABEL}-setup.exe"
+if [[ ! -f "${EXPECTED_INSTALLER}" ]]; then
+  echo "ERROR: expected installer artifact missing: ${EXPECTED_INSTALLER}" >&2
+  exit 1
 fi
 
 echo "Done. Windows artifacts:"

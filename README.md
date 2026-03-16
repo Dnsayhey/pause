@@ -163,10 +163,13 @@ go test -tags wails ./...
 ./scripts/build-dmg.sh
 ```
 
-- 默认产物：`build/bin/macos-universal/Pause.dmg`
+- 默认产物：
+  - `build/bin/macos-arm64/Pause-v<version>-macos-arm64.dmg`
+  - `build/bin/macos-x64/Pause-v<version>-macos-x64.dmg`
 - 常用参数：
   - `./scripts/build-dmg.sh --version 0.1.0 --no-clean`
-  - `./scripts/build-dmg.sh --bundle-id com.pause.app --codesign "-" --output-dir build/bin/macos-universal`
+  - `./scripts/build-dmg.sh --platform darwin/arm64 --bundle-id com.pause.app --codesign "-" --output-dir build/bin/macos-arm64`
+  - `./scripts/build-dmg.sh --platform darwin/amd64 --bundle-id com.pause.app --codesign "-" --output-dir build/bin/macos-x64`
 - 查看全部参数：`./scripts/build-dmg.sh --help`
 
 ### 2) 打包 Windows 安装器
@@ -177,10 +180,10 @@ go test -tags wails ./...
 
 - 依赖：本机安装 `NSIS`（macOS 可用 `brew install nsis`）。
 - 默认产物目录：`build/bin/windows-x64/`
+- 默认安装包文件名：`Pause-v<version>-windows-x64-setup.exe`
 - 常用参数：
   - `./scripts/build-windows-installer.sh --platform windows/amd64 --webview2 browser`
   - `./scripts/build-windows-installer.sh --output-dir build/bin/win-release --clean`
-- 脚本默认会在输出目录生成 `SHA256SUMS.txt`（可用 `--no-checksums` 关闭）
 - 查看全部参数：`./scripts/build-windows-installer.sh --help`
 
 ### 3) 生成统一发布清单与校验和
