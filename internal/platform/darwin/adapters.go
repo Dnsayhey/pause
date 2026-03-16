@@ -3,13 +3,11 @@
 package darwin
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -22,10 +20,7 @@ import (
 const (
 	defaultMacSound = "/System/Library/Sounds/Glass.aiff"
 	idleSampleTTL   = 2 * time.Second
-	idleProbeTimeo  = 300 * time.Millisecond
 )
-
-var hidIdlePattern = regexp.MustCompile(`"HIDIdleTime" = ([0-9]+)`)
 
 type darwinIdleProvider struct {
 	mu           sync.Mutex
@@ -91,34 +86,18 @@ func (p *darwinIdleProvider) CurrentIdleSeconds() int {
 }
 
 func queryDarwinIdleSeconds() (int, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), idleProbeTimeo)
-	defer cancel()
-
-	out, err := exec.CommandContext(ctx, "ioreg", "-c", "IOHIDSystem").Output()
-	if err != nil {
+	idleNs, ok := queryDarwinIdleNanoseconds()
+	if !ok {
 		return 0, false
 	}
-	idleSec, err := parseDarwinIdleSeconds(out)
-	if err != nil {
-		return 0, false
-	}
-	return idleSec, true
+	return idleSecondsFromNanoseconds(idleNs), true
 }
 
-func parseDarwinIdleSeconds(raw []byte) (int, error) {
-	match := hidIdlePattern.FindSubmatch(raw)
-	if len(match) < 2 {
-		return 0, errors.New("HIDIdleTime not found")
+func idleSecondsFromNanoseconds(ns uint64) int {
+	if ns == 0 {
+		return 0
 	}
-	var ns int64
-	_, err := fmt.Sscanf(string(match[1]), "%d", &ns)
-	if err != nil {
-		return 0, err
-	}
-	if ns <= 0 {
-		return 0, nil
-	}
-	return int(ns / 1_000_000_000), nil
+	return int(ns / 1_000_000_000)
 }
 
 func (darwinNotifier) ShowReminder(title, body string) error {

@@ -9,14 +9,12 @@ import (
 	"pause/internal/meta"
 )
 
-func TestParseDarwinIdleSeconds(t *testing.T) {
-	raw := []byte(`| |   "HIDIdleTime" = 301000000000`)
-	sec, err := parseDarwinIdleSeconds(raw)
-	if err != nil {
-		t.Fatalf("parseDarwinIdleSeconds() error = %v", err)
+func TestIdleSecondsFromNanoseconds(t *testing.T) {
+	if got := idleSecondsFromNanoseconds(0); got != 0 {
+		t.Fatalf("expected 0, got %d", got)
 	}
-	if sec != 301 {
-		t.Fatalf("expected 301 seconds, got %d", sec)
+	if got := idleSecondsFromNanoseconds(301_999_999_999); got != 301 {
+		t.Fatalf("expected 301, got %d", got)
 	}
 }
 
