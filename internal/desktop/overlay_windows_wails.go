@@ -52,16 +52,21 @@ const (
 	dtNoPrefix   = 0x00000800
 	dtWordBreak  = 0x00000010
 
-	colorBlack                = 0x000000
-	colorWhite                = 0xFFFFFF
-	colorButtonDarkBg         = 0xFFFFFF
-	colorButtonDarkBgHover    = 0xF2F2F2
-	colorButtonDarkBgPressed  = 0xDADADA
-	colorButtonDarkFg         = 0x000000
-	colorButtonLightBg        = 0x000000
-	colorButtonLightBgHover   = 0x1C1C1C
-	colorButtonLightBgPressed = 0x353535
-	colorButtonLightFg        = 0xFFFFFF
+	colorBlack = 0x000000
+	colorWhite = 0xFFFFFF
+	// Keep Windows overlay button palette aligned with macOS: softer neutrals,
+	// no pure black/white blocks that feel harsh on full-screen overlays.
+	colorButtonDarkBg         = 0x212428
+	colorButtonDarkBgHover    = 0x2B2E36
+	colorButtonDarkBgPressed  = 0x171A1F
+	colorButtonDarkFg         = 0xEBEDF2
+	colorButtonLightBg        = 0xF5F5F5
+	colorButtonLightBgHover   = 0xEBEBEB
+	colorButtonLightBgPressed = 0xD6D9E0
+	colorButtonLightFg        = 0x141414
+	alphaButtonBase           = 220
+	alphaButtonHover          = 236
+	alphaButtonPressed        = 255
 
 	fwBold                   = 700
 	wmLButtonDownLocal       = 0x0201
@@ -573,6 +578,7 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 	fg := colorWhite
 	buttonBg := colorButtonDarkBg
 	buttonFg := colorButtonDarkFg
+	buttonAlpha := byte(alphaButtonBase)
 	if theme == "light" {
 		bg = colorWhite
 		fg = colorBlack
@@ -584,14 +590,18 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 		if theme == "light" {
 			if pressed {
 				buttonBg = colorButtonLightBgPressed
+				buttonAlpha = byte(alphaButtonPressed)
 			} else if wnd.buttonHot {
 				buttonBg = colorButtonLightBgHover
+				buttonAlpha = byte(alphaButtonHover)
 			}
 		} else {
 			if pressed {
 				buttonBg = colorButtonDarkBgPressed
+				buttonAlpha = byte(alphaButtonPressed)
 			} else if wnd.buttonHot {
 				buttonBg = colorButtonDarkBgHover
+				buttonAlpha = byte(alphaButtonHover)
 			}
 		}
 	}
@@ -652,7 +662,8 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 
 	if allowSkip {
 		btn := wnd.buttonRect
-		outerBrush, _, _ := procCreateSolidBrush.Call(uintptr(buttonBg))
+		blendedBg := blendOverlayColor(buttonBg, bg, buttonAlpha)
+		outerBrush, _, _ := procCreateSolidBrush.Call(uintptr(blendedBg))
 		if outerBrush != 0 {
 			_, _, _ = procFillRect.Call(hdc, uintptr(unsafe.Pointer(&btn)), outerBrush)
 			_, _, _ = procDeleteObject.Call(outerBrush)
@@ -1058,6 +1069,18 @@ func isOverlayBlockedShortcut(msgID uint32, wParam uintptr) bool {
 func isVirtualKeyDown(vk int) bool {
 	v, _, _ := procGetKeyState.Call(uintptr(vk))
 	return (v & 0x8000) != 0
+}
+
+func blendOverlayColor(fg int, bg int, alpha byte) int {
+	if alpha == 255 {
+		return fg
+	}
+	a := int(alpha)
+	inv := 255 - a
+	r := (((fg>>16)&0xFF)*a + ((bg>>16)&0xFF)*inv) / 255
+	g := (((fg>>8)&0xFF)*a + ((bg>>8)&0xFF)*inv) / 255
+	b := ((fg&0xFF)*a + (bg&0xFF)*inv) / 255
+	return (r << 16) | (g << 8) | b
 }
 
 func (c *windowsBreakOverlayController) reconcileOverlayWindows() {
