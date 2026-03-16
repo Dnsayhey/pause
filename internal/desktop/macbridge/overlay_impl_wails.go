@@ -50,7 +50,6 @@ static PauseOverlayHandler *pauseOverlayHandler;
 @property(nonatomic, assign) BOOL pauseOverlayHovered;
 @property(nonatomic, copy) NSString *pauseOverlayTheme;
 @property(nonatomic, copy) NSString *pauseOverlayTitle;
-- (void)pauseOverlayResetHighlight;
 @end
 
 @implementation PauseOverlaySkipButton
@@ -59,7 +58,6 @@ static PauseOverlayHandler *pauseOverlayHandler;
 @synthesize pauseOverlayTitle = _pauseOverlayTitle;
 
 - (void)dealloc {
-    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(pauseOverlayResetHighlight) object:nil];
     if (_pauseOverlayTrackingArea != nil) {
         [self removeTrackingArea:_pauseOverlayTrackingArea];
         [_pauseOverlayTrackingArea release];
@@ -90,16 +88,12 @@ static PauseOverlayHandler *pauseOverlayHandler;
 }
 
 - (void)mouseDown:(NSEvent *)event {
-    (void)event;
     if (![self isEnabled]) {
         return;
     }
     [self setHighlighted:YES];
-    if ([self target] != nil && [self action] != NULL) {
-        [NSApp sendAction:[self action] to:[self target] from:self];
-    }
-    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(pauseOverlayResetHighlight) object:nil];
-    [self performSelector:@selector(pauseOverlayResetHighlight) withObject:nil afterDelay:0.12];
+    [super mouseDown:event];
+    [self setHighlighted:NO];
 }
 
 - (void)mouseEntered:(NSEvent *)event {
@@ -120,10 +114,6 @@ static PauseOverlayHandler *pauseOverlayHandler;
     if (changed) {
         PauseOverlayUpdateSkipButtonStyleOnMain(self);
     }
-}
-
-- (void)pauseOverlayResetHighlight {
-    [self setHighlighted:NO];
 }
 @end
 
@@ -249,6 +239,14 @@ static NSButton *PauseOverlayBuildSkipButton(NSString *title, NSString *theme) {
     [button.layer setShadowRadius:6.0];
     [button.layer setShadowOpacity:0.18];
     [button.layer setOpacity:1.0];
+    [button.layer setActions:@{
+        @"backgroundColor": [NSNull null],
+        @"borderColor": [NSNull null],
+        @"borderWidth": [NSNull null],
+        @"opacity": [NSNull null],
+        @"shadowOffset": [NSNull null],
+        @"shadowOpacity": [NSNull null]
+    }];
     PauseOverlayUpdateSkipButtonStyleOnMain(button);
     return button;
 }
@@ -379,7 +377,6 @@ static void PauseOverlaySetAllowSkipOnMain(BOOL allowSkip) {
             [skipButton setPauseOverlayTheme:pauseOverlayTheme];
             if (!allowSkip) {
                 skipButton.pauseOverlayHovered = NO;
-                [NSObject cancelPreviousPerformRequestsWithTarget:skipButton selector:@selector(pauseOverlayResetHighlight) object:nil];
                 [skipButton setHighlighted:NO];
             }
         }
@@ -579,7 +576,6 @@ static void PauseOverlayHideOnMain(void) {
         for (NSButton *button in pauseOverlaySkipButtons) {
             if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
                 PauseOverlaySkipButton *skipButton = (PauseOverlaySkipButton *)button;
-                [NSObject cancelPreviousPerformRequestsWithTarget:skipButton selector:@selector(pauseOverlayResetHighlight) object:nil];
                 [skipButton setHighlighted:NO];
             }
         }
