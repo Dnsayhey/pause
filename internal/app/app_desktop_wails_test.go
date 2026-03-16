@@ -6,7 +6,26 @@ import (
 	"testing"
 
 	"pause/internal/core/config"
+	"pause/internal/core/service"
 )
+
+func TestOverlaySkipMode_AllowSkipUsesNormal(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Enforcement.OverlaySkipAllowed = true
+
+	if got := overlaySkipMode(settings); got != service.SkipModeNormal {
+		t.Fatalf("overlaySkipMode() = %q, want %q", got, service.SkipModeNormal)
+	}
+}
+
+func TestOverlaySkipMode_DisallowSkipUsesEmergency(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Enforcement.OverlaySkipAllowed = false
+
+	if got := overlaySkipMode(settings); got != service.SkipModeEmergency {
+		t.Fatalf("overlaySkipMode() = %q, want %q", got, service.SkipModeEmergency)
+	}
+}
 
 func TestBuildCountdownLabel_MultiReminderOrder(t *testing.T) {
 	state := config.RuntimeState{

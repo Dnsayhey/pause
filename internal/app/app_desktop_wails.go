@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"pause/internal/core/config"
+	"pause/internal/core/service"
 	"pause/internal/desktop"
 	"pause/internal/logx"
 )
@@ -66,6 +67,13 @@ func newDesktopController() desktopController {
 	return controller
 }
 
+func overlaySkipMode(settings config.Settings) service.SkipMode {
+	if settings.Enforcement.OverlaySkipAllowed {
+		return service.SkipModeNormal
+	}
+	return service.SkipModeEmergency
+}
+
 func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 	c.startOnce.Do(func() {
 		logx.SetSink(func(level logx.Level, message string) {
@@ -92,7 +100,8 @@ func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 			c.handleStatusBarEvent(ctx, app, event)
 		})
 		c.overlay.Init(func() {
-			_, err := app.skipCurrentBreakEmergency()
+			skipMode := overlaySkipMode(app.engine.GetSettings())
+			_, err := app.skipCurrentBreakWithMode(skipMode)
 			c.logErr(ctx, err)
 		})
 		settings := app.engine.GetSettings()

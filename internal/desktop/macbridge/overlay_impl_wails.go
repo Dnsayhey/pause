@@ -21,10 +21,11 @@ static id pauseOverlayKeyMonitor;
 static NSString *pauseOverlaySkipButtonTitle;
 static NSString *pauseOverlayCountdownText;
 static NSString *pauseOverlayTheme;
-static const NSTimeInterval pauseOverlayFadeDuration = 2.0;
+static const NSTimeInterval pauseOverlayFadeDuration = 1.0;
 static const NSTimeInterval pauseOverlayCmdQDoublePressWindow = 1.0;
 static NSTimeInterval pauseOverlayLastCmdQPress;
 static void PauseOverlayHideOnMain(void);
+static void PauseOverlayUpdateSkipButtonStyleOnMain(NSButton *button);
 
 @interface PauseOverlayHandler : NSObject
 - (void)onSkipButtonClick:(id)sender;
@@ -38,6 +39,93 @@ static void PauseOverlayHideOnMain(void);
 @end
 
 static PauseOverlayHandler *pauseOverlayHandler;
+
+@interface PauseOverlaySkipButton : NSButton {
+@private
+    NSTrackingArea *_pauseOverlayTrackingArea;
+    NSString *_pauseOverlayTheme;
+    NSString *_pauseOverlayTitle;
+    BOOL _pauseOverlayHovered;
+}
+@property(nonatomic, assign) BOOL pauseOverlayHovered;
+@property(nonatomic, copy) NSString *pauseOverlayTheme;
+@property(nonatomic, copy) NSString *pauseOverlayTitle;
+- (void)pauseOverlayResetHighlight;
+@end
+
+@implementation PauseOverlaySkipButton
+@synthesize pauseOverlayHovered = _pauseOverlayHovered;
+@synthesize pauseOverlayTheme = _pauseOverlayTheme;
+@synthesize pauseOverlayTitle = _pauseOverlayTitle;
+
+- (void)dealloc {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(pauseOverlayResetHighlight) object:nil];
+    if (_pauseOverlayTrackingArea != nil) {
+        [self removeTrackingArea:_pauseOverlayTrackingArea];
+        [_pauseOverlayTrackingArea release];
+        _pauseOverlayTrackingArea = nil;
+    }
+    [_pauseOverlayTheme release];
+    _pauseOverlayTheme = nil;
+    [_pauseOverlayTitle release];
+    _pauseOverlayTitle = nil;
+    [super dealloc];
+}
+
+- (void)updateTrackingAreas {
+    if (_pauseOverlayTrackingArea != nil) {
+        [self removeTrackingArea:_pauseOverlayTrackingArea];
+        [_pauseOverlayTrackingArea release];
+        _pauseOverlayTrackingArea = nil;
+    }
+    NSTrackingAreaOptions options = NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect;
+    _pauseOverlayTrackingArea = [[NSTrackingArea alloc] initWithRect:NSZeroRect options:options owner:self userInfo:nil];
+    [self addTrackingArea:_pauseOverlayTrackingArea];
+    [super updateTrackingAreas];
+}
+
+- (void)resetCursorRects {
+    [super resetCursorRects];
+    [self addCursorRect:[self bounds] cursor:[NSCursor pointingHandCursor]];
+}
+
+- (void)mouseDown:(NSEvent *)event {
+    (void)event;
+    if (![self isEnabled]) {
+        return;
+    }
+    [self setHighlighted:YES];
+    if ([self target] != nil && [self action] != NULL) {
+        [NSApp sendAction:[self action] to:[self target] from:self];
+    }
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(pauseOverlayResetHighlight) object:nil];
+    [self performSelector:@selector(pauseOverlayResetHighlight) withObject:nil afterDelay:0.12];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+    [super mouseEntered:event];
+    self.pauseOverlayHovered = YES;
+    PauseOverlayUpdateSkipButtonStyleOnMain(self);
+}
+
+- (void)mouseExited:(NSEvent *)event {
+    [super mouseExited:event];
+    self.pauseOverlayHovered = NO;
+    PauseOverlayUpdateSkipButtonStyleOnMain(self);
+}
+
+- (void)setHighlighted:(BOOL)flag {
+    BOOL changed = ([self isHighlighted] != flag);
+    [super setHighlighted:flag];
+    if (changed) {
+        PauseOverlayUpdateSkipButtonStyleOnMain(self);
+    }
+}
+
+- (void)pauseOverlayResetHighlight {
+    [self setHighlighted:NO];
+}
+@end
 
 static void PauseOverlayRunOnMain(void (^block)(void)) {
     if ([NSThread isMainThread]) {
@@ -82,29 +170,72 @@ static NSColor *PauseOverlayCountdownColorForTheme(NSString *theme) {
     return [NSColor colorWithSRGBRed:0.08 green:0.08 blue:0.08 alpha:1.0];
 }
 
-static NSColor *PauseOverlayButtonBackgroundColorForTheme(NSString *theme) {
+static NSColor *PauseOverlayButtonBackgroundColorForTheme(NSString *theme, BOOL hovered, BOOL pressed) {
     if (PauseOverlayThemeIsDark(theme)) {
+        if (pressed) {
+            return [NSColor colorWithSRGBRed:0.09 green:0.10 blue:0.12 alpha:1.0];
+        }
+        if (hovered) {
+            return [NSColor colorWithSRGBRed:0.17 green:0.18 blue:0.21 alpha:0.98];
+        }
         return [NSColor colorWithSRGBRed:0.13 green:0.14 blue:0.16 alpha:0.98];
+    }
+    if (pressed) {
+        return [NSColor colorWithSRGBRed:0.84 green:0.85 blue:0.88 alpha:1.0];
+    }
+    if (hovered) {
+        return [NSColor colorWithSRGBRed:0.92 green:0.92 blue:0.92 alpha:0.98];
     }
     return [NSColor colorWithSRGBRed:0.96 green:0.96 blue:0.96 alpha:0.98];
 }
 
-static NSColor *PauseOverlayButtonBorderColorForTheme(NSString *theme) {
+static NSColor *PauseOverlayButtonBorderColorForTheme(NSString *theme, BOOL hovered, BOOL pressed) {
     if (PauseOverlayThemeIsDark(theme)) {
+        if (pressed) {
+            return [NSColor colorWithSRGBRed:0.58 green:0.60 blue:0.64 alpha:0.98];
+        }
+        if (hovered) {
+            return [NSColor colorWithSRGBRed:0.46 green:0.47 blue:0.50 alpha:0.94];
+        }
         return [NSColor colorWithSRGBRed:0.36 green:0.37 blue:0.40 alpha:0.92];
+    }
+    if (pressed) {
+        return [NSColor colorWithSRGBRed:0.20 green:0.22 blue:0.26 alpha:0.42];
+    }
+    if (hovered) {
+        return [NSColor colorWithSRGBRed:0.20 green:0.20 blue:0.20 alpha:0.30];
     }
     return [NSColor colorWithSRGBRed:0.20 green:0.20 blue:0.20 alpha:0.22];
 }
 
-static NSColor *PauseOverlayButtonTextColorForTheme(NSString *theme) {
+static NSColor *PauseOverlayButtonTextColorForTheme(NSString *theme, BOOL hovered, BOOL pressed) {
     if (PauseOverlayThemeIsDark(theme)) {
+        if (pressed) {
+            return [NSColor colorWithSRGBRed:0.98 green:0.98 blue:0.99 alpha:1.0];
+        }
+        if (hovered) {
+            return [NSColor colorWithSRGBRed:0.95 green:0.96 blue:0.98 alpha:1.0];
+        }
         return [NSColor colorWithSRGBRed:0.92 green:0.93 blue:0.95 alpha:1.0];
+    }
+    if (pressed) {
+        return [NSColor colorWithSRGBRed:0.05 green:0.05 blue:0.06 alpha:1.0];
+    }
+    if (hovered) {
+        return [NSColor colorWithSRGBRed:0.06 green:0.06 blue:0.06 alpha:1.0];
     }
     return [NSColor colorWithSRGBRed:0.08 green:0.08 blue:0.08 alpha:1.0];
 }
 
 static NSButton *PauseOverlayBuildSkipButton(NSString *title, NSString *theme) {
-    NSButton *button = [NSButton buttonWithTitle:title target:pauseOverlayHandler action:@selector(onSkipButtonClick:)];
+    NSString *resolvedTitle = (title != nil ? title : @"Emergency Skip");
+    PauseOverlaySkipButton *button = [[[PauseOverlaySkipButton alloc] initWithFrame:NSMakeRect(0, 0, 170, 36)] autorelease];
+    [button setPauseOverlayTitle:resolvedTitle];
+    [button setPauseOverlayTheme:(theme != nil ? theme : @"dark")];
+    [button setTitle:resolvedTitle];
+    [button setTarget:pauseOverlayHandler];
+    [button setAction:@selector(onSkipButtonClick:)];
+    [button setButtonType:NSButtonTypeMomentaryChange];
     [button setBezelStyle:NSBezelStyleRegularSquare];
     [button setBordered:NO];
     [button setControlSize:NSControlSizeRegular];
@@ -114,36 +245,43 @@ static NSButton *PauseOverlayBuildSkipButton(NSString *title, NSString *theme) {
     [button.layer setCornerRadius:10.0];
     [button.layer setBorderWidth:1.0];
     [button.layer setMasksToBounds:YES];
-    NSDictionary *attrs = @{
-        NSForegroundColorAttributeName: PauseOverlayButtonTextColorForTheme(theme),
-        NSFontAttributeName: [NSFont systemFontOfSize:14 weight:NSFontWeightSemibold]
-    };
-    NSAttributedString *styledTitle = [[[NSAttributedString alloc] initWithString:title attributes:attrs] autorelease];
-    [button setAttributedTitle:styledTitle];
-    [button.layer setBackgroundColor:[PauseOverlayButtonBackgroundColorForTheme(theme) CGColor]];
-    [button.layer setBorderColor:[PauseOverlayButtonBorderColorForTheme(theme) CGColor]];
+    [button.layer setShadowOffset:CGSizeMake(0.0, 2.0)];
+    [button.layer setShadowRadius:6.0];
+    [button.layer setShadowOpacity:0.18];
+    [button.layer setOpacity:1.0];
+    PauseOverlayUpdateSkipButtonStyleOnMain(button);
     return button;
 }
 
-static void PauseOverlayUpdateSkipButtonStyleOnMain(NSButton *button, NSString *title, NSString *theme) {
-    if (button == nil) {
+static void PauseOverlayUpdateSkipButtonStyleOnMain(NSButton *button) {
+    if (button == nil || ![button isKindOfClass:[PauseOverlaySkipButton class]]) {
         return;
     }
-    if (title == nil) {
-        title = @"Emergency Skip";
+    PauseOverlaySkipButton *skipButton = (PauseOverlaySkipButton *)button;
+    NSString *title = skipButton.pauseOverlayTitle;
+    if (title == nil || [title length] == 0) {
+        title = @"Skip";
     }
+    NSString *theme = skipButton.pauseOverlayTheme;
     if (theme == nil) {
         theme = @"dark";
     }
 
+    BOOL hovered = skipButton.pauseOverlayHovered;
+    BOOL pressed = skipButton.isHighlighted;
     NSDictionary *attrs = @{
-        NSForegroundColorAttributeName: PauseOverlayButtonTextColorForTheme(theme),
+        NSForegroundColorAttributeName: PauseOverlayButtonTextColorForTheme(theme, hovered, pressed),
         NSFontAttributeName: [NSFont systemFontOfSize:14 weight:NSFontWeightSemibold]
     };
+    [skipButton setTitle:title];
     NSAttributedString *styledTitle = [[[NSAttributedString alloc] initWithString:title attributes:attrs] autorelease];
-    [button setAttributedTitle:styledTitle];
-    [button.layer setBackgroundColor:[PauseOverlayButtonBackgroundColorForTheme(theme) CGColor]];
-    [button.layer setBorderColor:[PauseOverlayButtonBorderColorForTheme(theme) CGColor]];
+    [skipButton setAttributedTitle:styledTitle];
+    [skipButton.layer setBackgroundColor:[PauseOverlayButtonBackgroundColorForTheme(theme, hovered, pressed) CGColor]];
+    [skipButton.layer setBorderColor:[PauseOverlayButtonBorderColorForTheme(theme, hovered, pressed) CGColor]];
+    [skipButton.layer setBorderWidth:(pressed ? 1.35 : 1.0)];
+    [skipButton.layer setOpacity:(pressed ? 0.93 : 1.0)];
+    [skipButton.layer setShadowOffset:(pressed ? CGSizeMake(0.0, 1.0) : CGSizeMake(0.0, 2.0))];
+    [skipButton.layer setShadowOpacity:(pressed ? 0.08 : (hovered ? 0.26 : 0.18))];
 }
 
 static void PauseOverlayUpdateCountdownTextOnMain(NSString *countdownText) {
@@ -235,6 +373,17 @@ static void PauseOverlaySetAllowSkipOnMain(BOOL allowSkip) {
     }
     for (NSButton *button in pauseOverlaySkipButtons) {
         [button setHidden:!allowSkip];
+        if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
+            PauseOverlaySkipButton *skipButton = (PauseOverlaySkipButton *)button;
+            [skipButton setPauseOverlayTitle:pauseOverlaySkipButtonTitle];
+            [skipButton setPauseOverlayTheme:pauseOverlayTheme];
+            if (!allowSkip) {
+                skipButton.pauseOverlayHovered = NO;
+                [NSObject cancelPreviousPerformRequestsWithTarget:skipButton selector:@selector(pauseOverlayResetHighlight) object:nil];
+                [skipButton setHighlighted:NO];
+            }
+        }
+        PauseOverlayUpdateSkipButtonStyleOnMain(button);
     }
 }
 
@@ -261,7 +410,12 @@ static void PauseOverlayUpdateThemeOnMain(NSString *theme) {
     }
     if (pauseOverlaySkipButtons != nil) {
         for (NSButton *button in pauseOverlaySkipButtons) {
-            PauseOverlayUpdateSkipButtonStyleOnMain(button, pauseOverlaySkipButtonTitle, pauseOverlayTheme);
+            if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
+                PauseOverlaySkipButton *skipButton = (PauseOverlaySkipButton *)button;
+                [skipButton setPauseOverlayTheme:pauseOverlayTheme];
+                [skipButton setPauseOverlayTitle:pauseOverlaySkipButtonTitle];
+            }
+            PauseOverlayUpdateSkipButtonStyleOnMain(button);
         }
     }
 }
@@ -280,7 +434,12 @@ static void PauseOverlayUpdateSkipButtonTitleOnMain(NSString *title) {
         return;
     }
     for (NSButton *button in pauseOverlaySkipButtons) {
-        PauseOverlayUpdateSkipButtonStyleOnMain(button, pauseOverlaySkipButtonTitle, pauseOverlayTheme);
+        if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
+            PauseOverlaySkipButton *skipButton = (PauseOverlaySkipButton *)button;
+            [skipButton setPauseOverlayTitle:pauseOverlaySkipButtonTitle];
+            [skipButton setPauseOverlayTheme:pauseOverlayTheme];
+        }
+        PauseOverlayUpdateSkipButtonStyleOnMain(button);
     }
 }
 
@@ -417,6 +576,13 @@ static void PauseOverlayHideOnMain(void) {
         pauseOverlayCountdownLabels = nil;
     }
     if (pauseOverlaySkipButtons != nil) {
+        for (NSButton *button in pauseOverlaySkipButtons) {
+            if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
+                PauseOverlaySkipButton *skipButton = (PauseOverlaySkipButton *)button;
+                [NSObject cancelPreviousPerformRequestsWithTarget:skipButton selector:@selector(pauseOverlayResetHighlight) object:nil];
+                [skipButton setHighlighted:NO];
+            }
+        }
         [pauseOverlaySkipButtons release];
         pauseOverlaySkipButtons = nil;
     }
