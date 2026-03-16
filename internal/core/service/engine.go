@@ -106,6 +106,15 @@ func (e *Engine) SyncPlatformSettings() error {
 func (e *Engine) Start(ctx context.Context) {
 	e.startOnce.Do(func() {
 		logx.Infof("engine.start")
+		e.mu.Lock()
+		if e.lastTick.IsZero() {
+			// Seed the baseline once at startup so the first scheduler tick accounts
+			// for the first elapsed second instead of waiting an extra cycle.
+			e.lastTick = time.Now()
+			e.tickRemainder = 0
+		}
+		e.mu.Unlock()
+
 		ticker := time.NewTicker(time.Second)
 		go func() {
 			defer ticker.Stop()

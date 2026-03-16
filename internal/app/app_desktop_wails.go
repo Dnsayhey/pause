@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -29,6 +30,15 @@ type wailsDesktopController struct {
 	lastLanguage            string
 	reminderActionOrder     []string
 	reminderOrderMu         sync.RWMutex
+	lastStatusBarStatus     string
+	lastStatusBarCountdown  string
+	lastStatusBarTitle      string
+	lastStatusBarPaused     bool
+	lastRemindersPayload    string
+	lastDetailsVisible      bool
+	hasStatusBarSnapshot    bool
+	statusBarSyncMu         sync.Mutex
+	statusBarDetailsVisible atomic.Bool
 	statusBar               desktop.StatusBarController
 	overlay                 desktop.BreakOverlayController
 	startOnce               sync.Once
@@ -48,10 +58,12 @@ type reminderStatusView struct {
 }
 
 func newDesktopController() desktopController {
-	return &wailsDesktopController{
+	controller := &wailsDesktopController{
 		statusBar: desktop.NewStatusBarController(),
 		overlay:   desktop.NewBreakOverlayController(),
 	}
+	controller.statusBarDetailsVisible.Store(true)
+	return controller
 }
 
 func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
@@ -76,8 +88,8 @@ func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 
 		initPreferredThemeProvider()
 		desktop.ConfigureDesktopWindowBehavior()
-		c.statusBar.Init(func(actionID int) {
-			c.handleStatusBarAction(ctx, app, actionID)
+		c.statusBar.Init(func(event desktop.StatusBarEvent) {
+			c.handleStatusBarEvent(ctx, app, event)
 		})
 		c.overlay.Init(func() {
 			_, err := app.skipCurrentBreakEmergency()
@@ -91,10 +103,24 @@ func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 }
 
 func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
+	const statusLoopOffset = 150 * time.Millisecond
+	offsetTimer := time.NewTimer(statusLoopOffset)
+	defer offsetTimer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-offsetTimer.C:
+	}
+
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	defer c.statusBar.Destroy()
 	defer c.overlay.Destroy()
+
+	settings := app.engine.GetSettings()
+	state := app.engine.GetRuntimeState(time.Now())
+	c.syncStatusBarWithLock(state, settings)
+	c.syncOverlay(ctx, app, state, settings)
 
 	for {
 		select {
@@ -103,10 +129,16 @@ func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
 		case now := <-ticker.C:
 			settings := app.engine.GetSettings()
 			state := app.engine.GetRuntimeState(now)
-			c.syncStatusBar(state, settings)
+			c.syncStatusBarWithLock(state, settings)
 			c.syncOverlay(ctx, app, state, settings)
 		}
 	}
+}
+
+func (c *wailsDesktopController) syncStatusBarWithLock(state config.RuntimeState, settings config.Settings) {
+	c.statusBarSyncMu.Lock()
+	defer c.statusBarSyncMu.Unlock()
+	c.syncStatusBar(state, settings)
 }
 
 func (c *wailsDesktopController) syncStatusBar(state config.RuntimeState, settings config.Settings) {
@@ -119,10 +151,48 @@ func (c *wailsDesktopController) syncStatusBar(state config.RuntimeState, settin
 	status := buildPauseLabel(state, language)
 	countdown := buildCountdownLabel(state, language)
 	title := buildStatusBarTitle(state)
+	paused := !state.GlobalEnabled
+	detailsVisible := c.statusBarDetailsVisible.Load()
+	remindersPayload := ""
+	if detailsVisible {
+		payload, reminderOrder := buildRemindersPayload(state, language)
+		remindersPayload = payload
+		c.setReminderActionOrder(reminderOrder)
+	}
+
+	if c.hasStatusBarSnapshot &&
+		c.lastStatusBarStatus == status &&
+		c.lastStatusBarCountdown == countdown &&
+		c.lastStatusBarTitle == title &&
+		c.lastStatusBarPaused == paused &&
+		c.lastRemindersPayload == remindersPayload &&
+		c.lastDetailsVisible == detailsVisible {
+		return
+	}
+
 	progress := buildStatusBarProgress(state)
-	remindersPayload, reminderOrder := buildRemindersPayload(state, language)
-	c.setReminderActionOrder(reminderOrder)
-	c.statusBar.Update(status, countdown, title, !state.GlobalEnabled, progress, remindersPayload)
+	c.statusBar.Update(status, countdown, title, paused, progress, remindersPayload)
+	c.lastStatusBarStatus = status
+	c.lastStatusBarCountdown = countdown
+	c.lastStatusBarTitle = title
+	c.lastStatusBarPaused = paused
+	c.lastRemindersPayload = remindersPayload
+	c.lastDetailsVisible = detailsVisible
+	c.hasStatusBarSnapshot = true
+}
+
+func (c *wailsDesktopController) handleStatusBarEvent(ctx context.Context, app *App, event desktop.StatusBarEvent) {
+	switch event.Kind {
+	case desktop.StatusBarEventAction:
+		c.handleStatusBarAction(ctx, app, event.ActionID)
+	case desktop.StatusBarEventVisibilityChanged:
+		c.statusBarDetailsVisible.Store(event.Visible)
+		if event.Visible {
+			settings := app.engine.GetSettings()
+			state := app.engine.GetRuntimeState(time.Now())
+			c.syncStatusBarWithLock(state, settings)
+		}
+	}
 }
 
 func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app *App, actionID int) {

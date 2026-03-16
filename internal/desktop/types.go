@@ -25,8 +25,21 @@ const (
 	StatusBarActionResumeReminderBase = 2000
 )
 
+type StatusBarEventKind int
+
+const (
+	StatusBarEventAction StatusBarEventKind = iota + 1
+	StatusBarEventVisibilityChanged
+)
+
+type StatusBarEvent struct {
+	Kind     StatusBarEventKind
+	ActionID int
+	Visible  bool
+}
+
 type StatusBarController interface {
-	Init(onAction func(actionID int))
+	Init(onEvent func(event StatusBarEvent))
 	Update(status, countdown, title string, paused bool, progress float64, remindersPayload string)
 	SetLocale(strings StatusBarLocaleStrings)
 	Destroy()

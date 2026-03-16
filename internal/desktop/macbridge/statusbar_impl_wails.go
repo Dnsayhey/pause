@@ -10,6 +10,7 @@ package macbridge
 #import <dispatch/dispatch.h>
 
 extern void statusBarMenuCallbackGo(int callbackID);
+extern void statusBarPopoverVisibilityCallbackGo(int visible);
 
 enum {
     PauseStatusBarActionBreakNow = 1,
@@ -33,6 +34,8 @@ static void PauseStatusBarAdjustLengthForTitle(NSString *text);
 static void PauseUpdateStatusItemTooltipVisibility(void);
 static void PauseClearReminderRows(void);
 static void PauseRebuildReminderRows(NSString *remindersPayload);
+static void PauseSetLatestRemindersPayload(NSString *remindersPayload);
+static void PauseRefreshReminderRowsIfNeeded(void);
 static NSString *PauseNoRemindersText(void);
 static void PauseAppendNoReminderRow(NSString *titleText);
 static void PauseUpdatePopoverSize(void);
@@ -75,6 +78,8 @@ static const CGFloat pauseStatusItemWidthIconOnly = 26.0;
         [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
     }
     [pausePopover showRelativeToRect:pauseStatusItem.button.bounds ofView:pauseStatusItem.button preferredEdge:NSRectEdgeMinY];
+    statusBarPopoverVisibilityCallbackGo(1);
+    PauseRefreshReminderRowsIfNeeded();
     PauseUpdateStatusItemTooltipVisibility();
     NSWindow *popoverWindow = pausePopover.contentViewController.view.window;
     if (popoverWindow != nil) {
@@ -174,6 +179,9 @@ NSString *pausePauseButtonTooltip;
 NSString *pauseResumeButtonTooltip;
 NSString *pauseGlobalPauseButtonTitle;
 NSString *pauseGlobalResumeButtonTitle;
+NSString *pauseLatestRemindersPayload;
+NSString *pauseRenderedRemindersPayload;
+NSString *pauseStatusCurrentTitle;
 id pauseLocalMonitor;
 id pauseGlobalMonitor;
 PauseStatusBarHandler *pauseStatusHandler;
@@ -182,6 +190,8 @@ NSImage *pauseStatusIconAlt;
 NSTimer *pauseStatusBlinkTimer;
 BOOL pauseStatusBlinkVisible;
 BOOL pauseStatusPaused;
+BOOL pauseStatusLayoutHasText;
+BOOL pauseStatusLayoutHasTextKnown;
 
 static void PauseRunOnMain(void (^block)(void)) {
     if ([NSThread isMainThread]) {
@@ -255,11 +265,14 @@ static void PauseStatusBarApplyIcon(BOOL blinkingOnPhase) {
     if (pauseStatusItem == nil || pauseStatusItem.button == nil) {
         return;
     }
+    NSImage *target = pauseStatusIcon;
     if (pauseStatusPaused && !blinkingOnPhase && pauseStatusIconAlt != nil) {
-        [pauseStatusItem.button setImage:pauseStatusIconAlt];
+        target = pauseStatusIconAlt;
+    }
+    if ([pauseStatusItem.button image] == target) {
         return;
     }
-    [pauseStatusItem.button setImage:pauseStatusIcon];
+    [pauseStatusItem.button setImage:target];
 }
 
 static void PauseStatusBarSetTitleText(NSString *text) {
@@ -267,13 +280,21 @@ static void PauseStatusBarSetTitleText(NSString *text) {
         return;
     }
     NSString *safeText = text ? text : @"";
+    if (pauseStatusCurrentTitle != nil) {
+        [pauseStatusCurrentTitle release];
+        pauseStatusCurrentTitle = nil;
+    }
+    pauseStatusCurrentTitle = [safeText copy];
     PauseStatusBarAdjustLengthForTitle(safeText);
     NSDictionary *attrs = @{
         NSFontAttributeName: [NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightSemibold],
-        NSForegroundColorAttributeName: [NSColor labelColor],
         NSBaselineOffsetAttributeName: @(-1.0),
     };
     NSAttributedString *title = [[[NSAttributedString alloc] initWithString:safeText attributes:attrs] autorelease];
+    NSAttributedString *currentTitle = [pauseStatusItem.button attributedTitle];
+    if (currentTitle != nil && [currentTitle isEqualToAttributedString:title]) {
+        return;
+    }
     [pauseStatusItem.button setAttributedTitle:title];
 }
 
@@ -282,16 +303,29 @@ static void PauseStatusBarAdjustLengthForTitle(NSString *text) {
         return;
     }
     BOOL hasText = text != nil && [text length] > 0;
+    if (pausePopover != nil && [pausePopover isShown]) {
+        return;
+    }
+    if (pauseStatusLayoutHasTextKnown && pauseStatusLayoutHasText == hasText) {
+        return;
+    }
+    pauseStatusLayoutHasText = hasText;
+    pauseStatusLayoutHasTextKnown = YES;
     [pauseStatusItem setLength:(hasText ? pauseStatusItemWidthWithTime : pauseStatusItemWidthIconOnly)];
     [pauseStatusItem.button setImagePosition:(hasText ? NSImageLeft : NSImageOnly)];
 }
 
 static void PauseStatusBarSetPausedBlinking(BOOL paused) {
+    BOOL wasPaused = pauseStatusPaused;
+    BOOL hadBlinkTimer = (pauseStatusBlinkTimer != nil);
     pauseStatusPaused = paused;
     if (!paused) {
-        if (pauseStatusBlinkTimer != nil) {
+        if (hadBlinkTimer) {
             [pauseStatusBlinkTimer invalidate];
             pauseStatusBlinkTimer = nil;
+        }
+        if (!wasPaused && !hadBlinkTimer && pauseStatusBlinkVisible) {
+            return;
         }
         pauseStatusBlinkVisible = YES;
         PauseStatusBarApplyIcon(YES);
@@ -338,11 +372,17 @@ static void PauseRemovePopoverAutoClose(void) {
 }
 
 static void PauseClosePopover(void) {
+    BOOL wasShown = NO;
     if (pausePopover != nil && [pausePopover isShown]) {
+        wasShown = YES;
         [pausePopover close];
     }
     PauseRemovePopoverAutoClose();
     PauseUpdateStatusItemTooltipVisibility();
+    if (wasShown) {
+        PauseStatusBarAdjustLengthForTitle(pauseStatusCurrentTitle);
+        statusBarPopoverVisibilityCallbackGo(0);
+    }
 }
 
 static void PauseInstallPopoverAutoClose(void) {
@@ -589,6 +629,34 @@ static void PauseRebuildReminderRows(NSString *remindersPayload) {
     PauseUpdatePopoverSize();
 }
 
+static void PauseSetLatestRemindersPayload(NSString *remindersPayload) {
+    NSString *safePayload = remindersPayload ? remindersPayload : @"";
+    if (pauseLatestRemindersPayload != nil && [pauseLatestRemindersPayload isEqualToString:safePayload]) {
+        return;
+    }
+    if (pauseLatestRemindersPayload != nil) {
+        [pauseLatestRemindersPayload release];
+        pauseLatestRemindersPayload = nil;
+    }
+    pauseLatestRemindersPayload = [safePayload copy];
+}
+
+static void PauseRefreshReminderRowsIfNeeded(void) {
+    if (pauseRemindersStack == nil) {
+        return;
+    }
+    NSString *latestPayload = pauseLatestRemindersPayload ? pauseLatestRemindersPayload : @"";
+    if (pauseRenderedRemindersPayload != nil && [pauseRenderedRemindersPayload isEqualToString:latestPayload]) {
+        return;
+    }
+    PauseRebuildReminderRows(latestPayload);
+    if (pauseRenderedRemindersPayload != nil) {
+        [pauseRenderedRemindersPayload release];
+        pauseRenderedRemindersPayload = nil;
+    }
+    pauseRenderedRemindersPayload = [latestPayload copy];
+}
+
 static void BuildPopoverContent(void) {
     NSView *contentView = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 250)];
     [contentView setTranslatesAutoresizingMaskIntoConstraints:NO];
@@ -630,7 +698,8 @@ static void BuildPopoverContent(void) {
     pauseReminderPauseButtons = [[NSMutableArray alloc] init];
     pauseReminderResumeButtons = [[NSMutableArray alloc] init];
     pauseReminderProgressBars = [[NSMutableArray alloc] init];
-    PauseRebuildReminderRows(@"");
+    PauseSetLatestRemindersPayload(@"");
+    PauseRefreshReminderRowsIfNeeded();
 
     pauseGlobalToggleButton = MakeActionButton(@"Pause", PauseStatusBarActionPause);
     pauseBreakNowButton = MakeActionButton(@"zzZ", PauseStatusBarActionBreakNow);
@@ -732,6 +801,7 @@ void PauseStatusBarInit(void) {
         PauseStatusBarSetTitleText(@"");
         [pauseStatusItem.button setImagePosition:NSImageLeft];
         [pauseStatusItem.button setImageScaling:NSImageScaleProportionallyDown];
+        [pauseStatusItem.button setFont:[NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightRegular]];
         [pauseStatusItem.button setImage:pauseStatusIcon];
         pauseStatusTooltipText = [@"Pause break reminder" copy];
         [pauseStatusItem.button setToolTip:pauseStatusTooltipText];
@@ -761,7 +831,10 @@ void PauseStatusBarUpdate(const char *status, const char *countdown, const char 
         }
         (void)countdownText;
         (void)progress;
-        PauseRebuildReminderRows(remindersText);
+        PauseSetLatestRemindersPayload(remindersText);
+        if (pausePopover != nil && [pausePopover isShown]) {
+            PauseRefreshReminderRowsIfNeeded();
+        }
         PauseSetActionButtonsPausedState(paused != 0);
     });
 }
@@ -907,6 +980,15 @@ void PauseStatusBarDestroy(void) {
         if (pauseGlobalResumeButtonTitle != nil) {
             [pauseGlobalResumeButtonTitle release];
         }
+        if (pauseLatestRemindersPayload != nil) {
+            [pauseLatestRemindersPayload release];
+        }
+        if (pauseRenderedRemindersPayload != nil) {
+            [pauseRenderedRemindersPayload release];
+        }
+        if (pauseStatusCurrentTitle != nil) {
+            [pauseStatusCurrentTitle release];
+        }
         if (pauseReminderPauseButtons != nil) {
             [pauseReminderPauseButtons release];
         }
@@ -942,6 +1024,9 @@ void PauseStatusBarDestroy(void) {
         pauseResumeButtonTooltip = nil;
         pauseGlobalPauseButtonTitle = nil;
         pauseGlobalResumeButtonTitle = nil;
+        pauseLatestRemindersPayload = nil;
+        pauseRenderedRemindersPayload = nil;
+        pauseStatusCurrentTitle = nil;
         pauseLocalMonitor = nil;
         pauseGlobalMonitor = nil;
         pauseStatusHandler = nil;
@@ -950,6 +1035,8 @@ void PauseStatusBarDestroy(void) {
         pauseStatusBlinkTimer = nil;
         pauseStatusBlinkVisible = YES;
         pauseStatusPaused = NO;
+        pauseStatusLayoutHasText = NO;
+        pauseStatusLayoutHasTextKnown = NO;
     });
 }
 */

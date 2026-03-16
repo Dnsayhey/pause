@@ -36,18 +36,22 @@ type darwinStatusBarController struct{}
 
 var (
 	statusBarCallbackMu sync.RWMutex
-	statusBarCallback   func(actionID int)
+	statusBarCallback   func(event StatusBarEvent)
 )
 
 func NewStatusBarController() StatusBarController {
 	return darwinStatusBarController{}
 }
 
-func (darwinStatusBarController) Init(onAction func(actionID int)) {
+func (darwinStatusBarController) Init(onEvent func(event StatusBarEvent)) {
 	statusBarCallbackMu.Lock()
-	statusBarCallback = onAction
+	statusBarCallback = onEvent
 	statusBarCallbackMu.Unlock()
 	C.PauseStatusBarInit()
+	emitStatusBarEvent(StatusBarEvent{
+		Kind:    StatusBarEventVisibilityChanged,
+		Visible: false,
+	})
 }
 
 func (darwinStatusBarController) Update(status, countdown, title string, paused bool, progress float64, remindersPayload string) {
@@ -108,11 +112,25 @@ func (darwinStatusBarController) Destroy() {
 
 //export statusBarMenuCallbackGo
 func statusBarMenuCallbackGo(actionID C.int) {
-	action := int(actionID)
+	emitStatusBarEvent(StatusBarEvent{
+		Kind:     StatusBarEventAction,
+		ActionID: int(actionID),
+	})
+}
+
+//export statusBarPopoverVisibilityCallbackGo
+func statusBarPopoverVisibilityCallbackGo(visible C.int) {
+	emitStatusBarEvent(StatusBarEvent{
+		Kind:    StatusBarEventVisibilityChanged,
+		Visible: visible != 0,
+	})
+}
+
+func emitStatusBarEvent(event StatusBarEvent) {
 	statusBarCallbackMu.RLock()
 	cb := statusBarCallback
 	statusBarCallbackMu.RUnlock()
 	if cb != nil {
-		cb(action)
+		cb(event)
 	}
 }

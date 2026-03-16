@@ -88,8 +88,8 @@ var (
 type windowsStatusBarController struct {
 	mu sync.RWMutex
 
-	onAction func(int)
-	locale   StatusBarLocaleStrings
+	onEvent func(StatusBarEvent)
+	locale  StatusBarLocaleStrings
 
 	status    string
 	countdown string
@@ -166,9 +166,9 @@ func NewStatusBarController() StatusBarController {
 	}
 }
 
-func (c *windowsStatusBarController) Init(onAction func(actionID int)) {
+func (c *windowsStatusBarController) Init(onEvent func(event StatusBarEvent)) {
 	c.mu.Lock()
-	c.onAction = onAction
+	c.onEvent = onEvent
 	c.mu.Unlock()
 
 	c.startOnce.Do(func() {
@@ -575,10 +575,13 @@ func (c *windowsStatusBarController) dispatchMenuCommand(id int) {
 	}
 
 	c.mu.RLock()
-	cb := c.onAction
+	cb := c.onEvent
 	c.mu.RUnlock()
 	if cb != nil {
-		cb(action)
+		cb(StatusBarEvent{
+			Kind:     StatusBarEventAction,
+			ActionID: action,
+		})
 	}
 }
 
