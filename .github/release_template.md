@@ -27,12 +27,5 @@
         <a href="https://github.com/REPO/releases/download/vVERSION/Pause-vVERSION-macos-x64.dmg"><img src="https://img.shields.io/badge/DMG-Intel%20X64-%2300A9E0.svg?logo=apple"></a>
       </td>
     </tr>
-    <tr>
-      <td>Checksums</td>
-      <td>
-        <a href="https://github.com/REPO/releases/download/vVERSION/SHA256SUMS">SHA256SUMS</a> |
-        <a href="https://github.com/REPO/releases/download/vVERSION/release-manifest.txt">release-manifest.txt</a>
-      </td>
-    </tr>
   </tbody>
 </table>
