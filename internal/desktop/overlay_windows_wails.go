@@ -25,6 +25,7 @@ const (
 
 	wsExTopmost    = 0x00000008
 	wsExToolWindow = 0x00000080
+	wsExLayered    = 0x00080000
 
 	swHide = 0
 	swShow = 5
@@ -35,14 +36,15 @@ const (
 	swpShowWindow = 0x0040
 	swpHideWindow = 0x0080
 	swpNoZOrder   = 0x0004
+	gwlExStyleIdx = ^uintptr(19) // -20 casted to uintptr for WinAPI
 
-	smXVirtualScreen  = 76
-	smYVirtualScreen  = 77
-	smCXVirtualScreen = 78
-	smCYVirtualScreen = 79
+	smXVirtualScreen        = 76
+	smYVirtualScreen        = 77
+	smCXVirtualScreen       = 78
+	smCYVirtualScreen       = 79
 	monitorDefaultToNearest = 0x00000002
-	smCXScreen        = 0
-	smCYScreen        = 1
+	smCXScreen              = 0
+	smCYScreen              = 1
 
 	dtCenter     = 0x00000001
 	dtVCenter    = 0x00000004
@@ -50,51 +52,70 @@ const (
 	dtNoPrefix   = 0x00000800
 	dtWordBreak  = 0x00000010
 
-	colorBlack = 0x000000
-	colorWhite = 0xFFFFFF
-	colorButtonDarkBg  = 0xFFFFFF
-	colorButtonDarkFg  = 0x000000
-	colorButtonLightBg = 0x000000
-	colorButtonLightFg = 0xFFFFFF
+	colorBlack                = 0x000000
+	colorWhite                = 0xFFFFFF
+	colorButtonDarkBg         = 0xFFFFFF
+	colorButtonDarkBgHover    = 0xF2F2F2
+	colorButtonDarkBgPressed  = 0xDADADA
+	colorButtonDarkFg         = 0x000000
+	colorButtonLightBg        = 0x000000
+	colorButtonLightBgHover   = 0x1C1C1C
+	colorButtonLightBgPressed = 0x353535
+	colorButtonLightFg        = 0xFFFFFF
 
-	fwBold = 700
-	wmLButtonUpLocal = 0x0202
-	wmKeyDownLocal   = 0x0100
-	wmSysKeyDown     = 0x0104
-	idcArrow = 32512
-	vkEscape = 0x1B
-	vkF4     = 0x73
-	vkSpace  = 0x20
-	vkW      = 0x57
-	vkControl = 0x11
-	vkMenu    = 0x12 // Alt
+	fwBold                   = 700
+	wmLButtonDownLocal       = 0x0201
+	wmLButtonUpLocal         = 0x0202
+	wmMouseMoveLocal         = 0x0200
+	wmMouseLeaveLocal        = 0x02A3
+	wmKeyDownLocal           = 0x0100
+	wmSysKeyDown             = 0x0104
+	tmeLeave                 = 0x00000002
+	overlayFadeInDurationMs  = 1000
+	overlayFadeOutDurationMs = 1000
+	overlayFadeStepMs        = 16
+	lwaAlpha                 = 0x00000002
+	idcArrow                 = 32512
+	vkEscape                 = 0x1B
+	vkF4                     = 0x73
+	vkSpace                  = 0x20
+	vkW                      = 0x57
+	vkControl                = 0x11
+	vkMenu                   = 0x12 // Alt
 )
 
 var (
 	gdi32DLL = syscall.NewLazyDLL("gdi32.dll")
 
-	procShowWindow       = user32DLL.NewProc("ShowWindow")
-	procLoadCursorW      = user32DLL.NewProc("LoadCursorW")
-	procGetKeyState      = user32DLL.NewProc("GetKeyState")
-	procSetWindowPos     = user32DLL.NewProc("SetWindowPos")
-	procGetSystemMetrics = user32DLL.NewProc("GetSystemMetrics")
-	procMoveWindow       = user32DLL.NewProc("MoveWindow")
-	procGetClientRect    = user32DLL.NewProc("GetClientRect")
-	procEnumDisplayMonitors = user32DLL.NewProc("EnumDisplayMonitors")
-	procMonitorFromWindow = user32DLL.NewProc("MonitorFromWindow")
-	procGetMonitorInfoW  = user32DLL.NewProc("GetMonitorInfoW")
-	procInvalidateRect   = user32DLL.NewProc("InvalidateRect")
-	procBeginPaint       = user32DLL.NewProc("BeginPaint")
-	procEndPaint         = user32DLL.NewProc("EndPaint")
-	procDrawTextW        = user32DLL.NewProc("DrawTextW")
-	procSetTextColor     = gdi32DLL.NewProc("SetTextColor")
-	procSetBkMode        = gdi32DLL.NewProc("SetBkMode")
-	procCreateFontW      = gdi32DLL.NewProc("CreateFontW")
-	procSelectObject     = gdi32DLL.NewProc("SelectObject")
-	procCreateSolidBrush = gdi32DLL.NewProc("CreateSolidBrush")
-	procFillRect         = user32DLL.NewProc("FillRect")
-	procDeleteObject     = gdi32DLL.NewProc("DeleteObject")
-	procSetWindowTextW   = user32DLL.NewProc("SetWindowTextW")
+	procShowWindow                 = user32DLL.NewProc("ShowWindow")
+	procLoadCursorW                = user32DLL.NewProc("LoadCursorW")
+	procGetKeyState                = user32DLL.NewProc("GetKeyState")
+	procSetCapture                 = user32DLL.NewProc("SetCapture")
+	procReleaseCapture             = user32DLL.NewProc("ReleaseCapture")
+	procTrackMouseEvent            = user32DLL.NewProc("TrackMouseEvent")
+	procGetWindowLongPtrWOvl       = user32DLL.NewProc("GetWindowLongPtrW")
+	procSetWindowLongPtrWOvl       = user32DLL.NewProc("SetWindowLongPtrW")
+	procSetLayeredWindowAttributes = user32DLL.NewProc("SetLayeredWindowAttributes")
+	procSetWindowPos               = user32DLL.NewProc("SetWindowPos")
+	procGetSystemMetrics           = user32DLL.NewProc("GetSystemMetrics")
+	procMoveWindow                 = user32DLL.NewProc("MoveWindow")
+	procGetClientRect              = user32DLL.NewProc("GetClientRect")
+	procUpdateWindow               = user32DLL.NewProc("UpdateWindow")
+	procEnumDisplayMonitors        = user32DLL.NewProc("EnumDisplayMonitors")
+	procMonitorFromWindow          = user32DLL.NewProc("MonitorFromWindow")
+	procGetMonitorInfoW            = user32DLL.NewProc("GetMonitorInfoW")
+	procInvalidateRect             = user32DLL.NewProc("InvalidateRect")
+	procBeginPaint                 = user32DLL.NewProc("BeginPaint")
+	procEndPaint                   = user32DLL.NewProc("EndPaint")
+	procDrawTextW                  = user32DLL.NewProc("DrawTextW")
+	procSetTextColor               = gdi32DLL.NewProc("SetTextColor")
+	procSetBkMode                  = gdi32DLL.NewProc("SetBkMode")
+	procCreateFontW                = gdi32DLL.NewProc("CreateFontW")
+	procSelectObject               = gdi32DLL.NewProc("SelectObject")
+	procCreateSolidBrush           = gdi32DLL.NewProc("CreateSolidBrush")
+	procFillRect                   = user32DLL.NewProc("FillRect")
+	procDeleteObject               = gdi32DLL.NewProc("DeleteObject")
+	procSetWindowTextW             = user32DLL.NewProc("SetWindowTextW")
 )
 
 type windowsBreakOverlayController struct {
@@ -102,30 +123,34 @@ type windowsBreakOverlayController struct {
 
 	onSkip func()
 
-	allowSkip       bool
-	skipButtonTitle string
-	countdownText   string
-	theme           string
-	visible         bool
-	className       string
-	emergencySkipVisible bool
+	allowSkip             bool
+	skipButtonTitle       string
+	countdownText         string
+	theme                 string
+	visible               bool
+	className             string
+	emergencySkipVisible  bool
 	lastBlockedShortcutAt time.Time
 	blockedShortcutCount  int
 
 	windows   []windowsOverlayWindow
-	started    bool
-	startOnce  sync.Once
-	ready      chan bool
-	done       chan struct{}
+	started   bool
+	startOnce sync.Once
+	ready     chan bool
+	done      chan struct{}
 }
 
 type windowsOverlayWindow struct {
-	hwnd       uintptr
-	x          int
-	y          int
-	w          int
-	h          int
-	buttonRect ovlRect
+	hwnd          uintptr
+	x             int
+	y             int
+	w             int
+	h             int
+	buttonRect    ovlRect
+	buttonHot     bool
+	buttonPressed bool
+	trackingMouse bool
+	shown         bool
 }
 
 type ovlWndClassEx struct {
@@ -173,10 +198,17 @@ type ovlMonitorBounds struct {
 	h int
 }
 
+type ovlTrackMouseEvent struct {
+	cbSize      uint32
+	dwFlags     uint32
+	hwndTrack   uintptr
+	dwHoverTime uint32
+}
+
 var (
-	overlayWndProcMu sync.RWMutex
-	overlayByHwnd    = map[uintptr]*windowsBreakOverlayController{}
-	overlayWndProc   = syscall.NewCallback(windowsOverlayWndProc)
+	overlayWndProcMu     sync.RWMutex
+	overlayByHwnd        = map[uintptr]*windowsBreakOverlayController{}
+	overlayWndProc       = syscall.NewCallback(windowsOverlayWndProc)
 	overlayMonitorEnumMu sync.Mutex
 	overlayMonitorsOut   *[]ovlMonitorBounds
 	overlayMonitorEnumCb = syscall.NewCallback(windowsMonitorEnumProc)
@@ -320,11 +352,11 @@ func (c *windowsBreakOverlayController) loop() {
 		}
 
 		created = append(created, windowsOverlayWindow{
-			hwnd:       hwnd,
-			x:          m.x,
-			y:          m.y,
-			w:          m.w,
-			h:          m.h,
+			hwnd: hwnd,
+			x:    m.x,
+			y:    m.y,
+			w:    m.w,
+			h:    m.h,
 		})
 	}
 
@@ -406,6 +438,8 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 	btnH := 58
 	btnX := (w - btnW) / 2
 	btnY := h/2 + 44
+	allowSkip := c.allowSkip || c.emergencySkipVisible
+	releaseCapture := false
 	c.mu.Lock()
 	for i := range c.windows {
 		if c.windows[i].hwnd == hwnd {
@@ -415,26 +449,96 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 				right:  int32(btnX + btnW),
 				bottom: int32(btnY + btnH),
 			}
+			if !allowSkip {
+				if c.windows[i].buttonPressed {
+					releaseCapture = true
+				}
+				c.windows[i].buttonHot = false
+				c.windows[i].buttonPressed = false
+				c.windows[i].trackingMouse = false
+			}
 			break
 		}
 	}
 	c.mu.Unlock()
+	if releaseCapture {
+		_, _, _ = procReleaseCapture.Call()
+	}
+	ensureOverlayWindowLayered(hwnd)
 	if visible {
 		_, _, _ = procSetWindowPos.Call(
 			hwnd,
 			hwndTopmost,
 			uintptr(x), uintptr(y), uintptr(w), uintptr(h),
-			swpShowWindow,
+			swpNoActivate,
 		)
-		_, _, _ = procShowWindow.Call(hwnd, swShow)
+		if !wnd.shown {
+			setOverlayWindowAlpha(hwnd, 0)
+			_, _, _ = procSetWindowPos.Call(
+				hwnd,
+				hwndTopmost,
+				uintptr(x), uintptr(y), uintptr(w), uintptr(h),
+				swpShowWindow,
+			)
+			_, _, _ = procShowWindow.Call(hwnd, swShow)
+			_, _, _ = procInvalidateRect.Call(hwnd, 0, 1)
+			_, _, _ = procUpdateWindow.Call(hwnd)
+			fadeOverlayWindowAlpha(hwnd, 0, 255, overlayFadeInDurationMs)
+			c.mu.Lock()
+			for i := range c.windows {
+				if c.windows[i].hwnd == hwnd {
+					c.windows[i].shown = true
+					break
+				}
+			}
+			c.mu.Unlock()
+		} else {
+			setOverlayWindowAlpha(hwnd, 255)
+			_, _, _ = procSetWindowPos.Call(
+				hwnd,
+				hwndTopmost,
+				uintptr(x), uintptr(y), uintptr(w), uintptr(h),
+				swpShowWindow,
+			)
+			_, _, _ = procShowWindow.Call(hwnd, swShow)
+		}
 	} else {
-		_, _, _ = procSetWindowPos.Call(
-			hwnd,
-			hwndTopmost,
-			uintptr(x), uintptr(y), uintptr(w), uintptr(h),
-			swpNoActivate|swpHideWindow|swpNoZOrder,
-		)
-		_, _, _ = procShowWindow.Call(hwnd, swHide)
+		if wnd.shown {
+			fadeOverlayWindowAlpha(hwnd, 255, 0, overlayFadeOutDurationMs)
+			_, _, _ = procSetWindowPos.Call(
+				hwnd,
+				hwndTopmost,
+				uintptr(x), uintptr(y), uintptr(w), uintptr(h),
+				swpNoActivate|swpHideWindow|swpNoZOrder,
+			)
+			_, _, _ = procShowWindow.Call(hwnd, swHide)
+			setOverlayWindowAlpha(hwnd, 255)
+			c.mu.Lock()
+			for i := range c.windows {
+				if c.windows[i].hwnd == hwnd {
+					if c.windows[i].buttonPressed {
+						releaseCapture = true
+					}
+					c.windows[i].shown = false
+					c.windows[i].buttonHot = false
+					c.windows[i].buttonPressed = false
+					c.windows[i].trackingMouse = false
+					break
+				}
+			}
+			c.mu.Unlock()
+			if releaseCapture {
+				_, _, _ = procReleaseCapture.Call()
+			}
+		} else {
+			_, _, _ = procSetWindowPos.Call(
+				hwnd,
+				hwndTopmost,
+				uintptr(x), uintptr(y), uintptr(w), uintptr(h),
+				swpNoActivate|swpHideWindow|swpNoZOrder,
+			)
+			_, _, _ = procShowWindow.Call(hwnd, swHide)
+		}
 	}
 	_, _, _ = procInvalidateRect.Call(hwnd, 0, 1)
 }
@@ -474,6 +578,22 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 		fg = colorBlack
 		buttonBg = colorButtonLightBg
 		buttonFg = colorButtonLightFg
+	}
+	if allowSkip {
+		pressed := wnd.buttonPressed && wnd.buttonHot
+		if theme == "light" {
+			if pressed {
+				buttonBg = colorButtonLightBgPressed
+			} else if wnd.buttonHot {
+				buttonBg = colorButtonLightBgHover
+			}
+		} else {
+			if pressed {
+				buttonBg = colorButtonDarkBgPressed
+			} else if wnd.buttonHot {
+				buttonBg = colorButtonDarkBgHover
+			}
+		}
 	}
 
 	var ps ovlPaintStruct
@@ -598,6 +718,22 @@ func windowsOverlayWndProc(hwnd uintptr, msgID uint32, wParam uintptr, lParam ui
 	case msgOverlayApply:
 		ctrl.apply(hwnd)
 		return 0
+	case wmMouseMoveLocal:
+		x := int(int16(uint16(lParam & 0xFFFF)))
+		y := int(int16(uint16((lParam >> 16) & 0xFFFF)))
+		if ctrl.handleMouseMove(hwnd, x, y) {
+			return 0
+		}
+	case wmMouseLeaveLocal:
+		if ctrl.handleMouseLeave(hwnd) {
+			return 0
+		}
+	case wmLButtonDownLocal:
+		x := int(int16(uint16(lParam & 0xFFFF)))
+		y := int(int16(uint16((lParam >> 16) & 0xFFFF)))
+		if ctrl.handleLButtonDown(hwnd, x, y) {
+			return 0
+		}
 	case wmKeyDownLocal, wmSysKeyDown:
 		if ctrl.handleBlockedShortcut(msgID, wParam) {
 			return 0
@@ -605,7 +741,7 @@ func windowsOverlayWndProc(hwnd uintptr, msgID uint32, wParam uintptr, lParam ui
 	case wmLButtonUpLocal:
 		x := int(int16(uint16(lParam & 0xFFFF)))
 		y := int(int16(uint16((lParam >> 16) & 0xFFFF)))
-		if ctrl.hitSkipButton(hwnd, x, y) {
+		if ctrl.handleLButtonUp(hwnd, x, y) {
 			ctrl.handleSkipClick()
 			return 0
 		}
@@ -665,7 +801,204 @@ func (c *windowsBreakOverlayController) hitSkipButton(hwnd uintptr, x int, y int
 		return false
 	}
 	r := wnd.buttonRect
+	return pointInOverlayRect(r, x, y)
+}
+
+func pointInOverlayRect(r ovlRect, x int, y int) bool {
 	return x >= int(r.left) && x < int(r.right) && y >= int(r.top) && y < int(r.bottom)
+}
+
+func trackOverlayMouseLeave(hwnd uintptr) {
+	tme := ovlTrackMouseEvent{
+		cbSize:    uint32(unsafe.Sizeof(ovlTrackMouseEvent{})),
+		dwFlags:   tmeLeave,
+		hwndTrack: hwnd,
+	}
+	_, _, _ = procTrackMouseEvent.Call(uintptr(unsafe.Pointer(&tme)))
+}
+
+func ensureOverlayWindowLayered(hwnd uintptr) {
+	exStyle, _, _ := procGetWindowLongPtrWOvl.Call(hwnd, gwlExStyleIdx)
+	if exStyle&wsExLayered != 0 {
+		return
+	}
+	_, _, _ = procSetWindowLongPtrWOvl.Call(hwnd, gwlExStyleIdx, exStyle|wsExLayered)
+}
+
+func setOverlayWindowAlpha(hwnd uintptr, alpha byte) {
+	_, _, _ = procSetLayeredWindowAttributes.Call(hwnd, 0, uintptr(alpha), lwaAlpha)
+}
+
+func fadeOverlayWindowAlpha(hwnd uintptr, from byte, to byte, durationMs int) {
+	if durationMs <= 0 || from == to {
+		setOverlayWindowAlpha(hwnd, to)
+		return
+	}
+
+	steps := durationMs / overlayFadeStepMs
+	if steps < 1 {
+		steps = 1
+	}
+	stepDuration := time.Duration(durationMs/steps) * time.Millisecond
+	delta := int(to) - int(from)
+	for i := 0; i <= steps; i++ {
+		// Keep 1s duration but make fade-in perceptible from the first frames.
+		t := float64(i) / float64(steps)
+		var eased float64
+		if delta > 0 {
+			// Ease-out for fade-in: appears quickly instead of looking like a 1s delay.
+			eased = 1 - (1-t)*(1-t)
+		} else {
+			// Ease-in for fade-out: leaves a cleaner tail when exiting.
+			eased = t * t
+		}
+		alpha := int(from) + int(float64(delta)*eased)
+		if alpha < 0 {
+			alpha = 0
+		}
+		if alpha > 255 {
+			alpha = 255
+		}
+		setOverlayWindowAlpha(hwnd, byte(alpha))
+		if i < steps {
+			time.Sleep(stepDuration)
+		}
+	}
+}
+
+func (c *windowsBreakOverlayController) handleMouseMove(hwnd uintptr, x int, y int) bool {
+	needsInvalidate := false
+	needTrack := false
+
+	c.mu.Lock()
+	allowSkip := c.allowSkip || c.emergencySkipVisible
+	for i := range c.windows {
+		if c.windows[i].hwnd != hwnd {
+			continue
+		}
+		hot := allowSkip && pointInOverlayRect(c.windows[i].buttonRect, x, y)
+		if c.windows[i].buttonHot != hot {
+			c.windows[i].buttonHot = hot
+			needsInvalidate = true
+		}
+		if !c.windows[i].trackingMouse {
+			c.windows[i].trackingMouse = true
+			needTrack = true
+		}
+		break
+	}
+	c.mu.Unlock()
+
+	if needTrack {
+		trackOverlayMouseLeave(hwnd)
+	}
+	if needsInvalidate {
+		_, _, _ = procInvalidateRect.Call(hwnd, 0, 1)
+	}
+	return false
+}
+
+func (c *windowsBreakOverlayController) handleMouseLeave(hwnd uintptr) bool {
+	needsInvalidate := false
+
+	c.mu.Lock()
+	for i := range c.windows {
+		if c.windows[i].hwnd != hwnd {
+			continue
+		}
+		if c.windows[i].buttonHot {
+			c.windows[i].buttonHot = false
+			needsInvalidate = true
+		}
+		c.windows[i].trackingMouse = false
+		break
+	}
+	c.mu.Unlock()
+
+	if needsInvalidate {
+		_, _, _ = procInvalidateRect.Call(hwnd, 0, 1)
+	}
+	return false
+}
+
+func (c *windowsBreakOverlayController) handleLButtonDown(hwnd uintptr, x int, y int) bool {
+	handled := false
+	needsInvalidate := false
+	needTrack := false
+
+	c.mu.Lock()
+	allowSkip := c.allowSkip || c.emergencySkipVisible
+	for i := range c.windows {
+		if c.windows[i].hwnd != hwnd {
+			continue
+		}
+		if allowSkip && pointInOverlayRect(c.windows[i].buttonRect, x, y) {
+			handled = true
+			if !c.windows[i].buttonPressed {
+				c.windows[i].buttonPressed = true
+				needsInvalidate = true
+			}
+			if !c.windows[i].buttonHot {
+				c.windows[i].buttonHot = true
+				needsInvalidate = true
+			}
+			if !c.windows[i].trackingMouse {
+				c.windows[i].trackingMouse = true
+				needTrack = true
+			}
+		}
+		break
+	}
+	c.mu.Unlock()
+
+	if !handled {
+		return false
+	}
+	_, _, _ = procSetCapture.Call(hwnd)
+	if needTrack {
+		trackOverlayMouseLeave(hwnd)
+	}
+	if needsInvalidate {
+		_, _, _ = procInvalidateRect.Call(hwnd, 0, 1)
+	}
+	return true
+}
+
+func (c *windowsBreakOverlayController) handleLButtonUp(hwnd uintptr, x int, y int) bool {
+	trigger := false
+	wasPressed := false
+	needsInvalidate := false
+
+	c.mu.Lock()
+	allowSkip := c.allowSkip || c.emergencySkipVisible
+	for i := range c.windows {
+		if c.windows[i].hwnd != hwnd {
+			continue
+		}
+		hot := allowSkip && pointInOverlayRect(c.windows[i].buttonRect, x, y)
+		if c.windows[i].buttonHot != hot {
+			c.windows[i].buttonHot = hot
+			needsInvalidate = true
+		}
+		if c.windows[i].buttonPressed {
+			wasPressed = true
+			c.windows[i].buttonPressed = false
+			needsInvalidate = true
+			if hot && allowSkip {
+				trigger = true
+			}
+		}
+		break
+	}
+	c.mu.Unlock()
+
+	if wasPressed {
+		_, _, _ = procReleaseCapture.Call()
+	}
+	if needsInvalidate {
+		_, _, _ = procInvalidateRect.Call(hwnd, 0, 1)
+	}
+	return trigger
 }
 
 func (c *windowsBreakOverlayController) handleBlockedShortcut(msgID uint32, wParam uintptr) bool {
@@ -801,11 +1134,11 @@ func (c *windowsBreakOverlayController) createOverlayWindowForMonitor(className 
 		return windowsOverlayWindow{}, false
 	}
 	return windowsOverlayWindow{
-		hwnd:       hwnd,
-		x:          m.x,
-		y:          m.y,
-		w:          m.w,
-		h:          m.h,
+		hwnd: hwnd,
+		x:    m.x,
+		y:    m.y,
+		w:    m.w,
+		h:    m.h,
 	}, true
 }
 
