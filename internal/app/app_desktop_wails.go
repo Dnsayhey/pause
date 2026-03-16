@@ -287,15 +287,9 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, stat
 		return
 	}
 
-	if overlayActive != c.lastOverlayActive {
-		if overlayActive {
-			desktop.ShowMainWindowForOverlay(ctx)
-			runtime.WindowSetAlwaysOnTop(ctx, true)
-			runtime.EventsEmit(ctx, "break:overlay", map[string]any{"active": true})
-		} else {
-			runtime.WindowSetAlwaysOnTop(ctx, false)
-			runtime.EventsEmit(ctx, "break:overlay", map[string]any{"active": false})
-		}
+	if overlayActive && !c.overlayFallbackNotified && app != nil {
+		app.SendBreakFallbackNotification(state)
+		c.overlayFallbackNotified = true
 	}
 	c.lastOverlayActive = overlayActive
 	c.lastOverlaySkip = overlaySkipAllowed

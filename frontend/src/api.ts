@@ -90,12 +90,3 @@ export function onRuntimeTick(callback: (state: RuntimeState) => void): () => vo
     callback(normalized as RuntimeState);
   });
 }
-
-export function onOverlayEvent(callback: (active: boolean) => void): () => void {
-  const bridge = requireRuntimeBridge();
-  return bridge.EventsOn('break:overlay', (payload) => {
-    const normalized = Array.isArray(payload) ? payload[0] : payload;
-    const active = Boolean((normalized as { active?: boolean })?.active);
-    callback(active);
-  });
-}

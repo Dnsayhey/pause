@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { skipCurrentBreak } from './api';
 import { localizeReason, resolveLocale, t } from './i18n';
 import { HeroHeader } from './components/HeroHeader';
 import { ReminderCard } from './components/ReminderCard';
 import { SystemSettingsCard } from './components/SystemSettingsCard';
-import { BreakOverlay } from './components/BreakOverlay';
 import { InlineError } from './components/ui';
 import { useRuntimePolling } from './hooks/useRuntimePolling';
 import { useSettings } from './hooks/useSettings';
@@ -42,7 +40,7 @@ export function App() {
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const hasAssignedInitialFocusRef = useRef(false);
 
-  const { runtime, setRuntime, refreshRuntime } = useRuntimePolling({
+  const { runtime, refreshRuntime } = useRuntimePolling({
     setError
   });
 
@@ -130,12 +128,6 @@ export function App() {
 
   const locale = resolveLocale(runtime.effectiveLanguage);
 
-  const overlayActive = Boolean(
-    !runtime.overlayNative &&
-      runtime.currentSession &&
-      runtime.currentSession.status === 'resting'
-  );
-
   return (
     <div className="h-full select-none overflow-hidden">
       <div className="h-7 select-none [--wails-draggable:drag]" />
@@ -199,19 +191,6 @@ export function App() {
           onLaunchAtLoginChange={applyLaunchAtLogin}
           onPatch={applyPatch}
         />
-
-        {overlayActive && (
-          <BreakOverlay
-            locale={locale}
-            runtime={runtime}
-            onSkip={() => {
-              setError('');
-              void skipCurrentBreak()
-                .then(setRuntime)
-                .catch((e) => setError(String(e)));
-            }}
-          />
-        )}
         </div>
       </div>
     </div>

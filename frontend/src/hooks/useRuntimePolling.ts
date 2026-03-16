@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getRuntimeState, onOverlayEvent } from '../api';
+import { getRuntimeState } from '../api';
 import type { RuntimeState } from '../types';
 
 type UseRuntimePollingOptions = {
@@ -50,26 +50,12 @@ export function useRuntimePolling({ setError }: UseRuntimePollingOptions) {
       }
     };
 
-    let offOverlayEvent: () => void = () => undefined;
-    try {
-      offOverlayEvent = onOverlayEvent((active) => {
-        if (!mountedRef.current) return;
-        if (!active) return;
-        document.body.requestFullscreen?.().catch(() => undefined);
-      });
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(String(err));
-      }
-    }
-
     void refreshRuntime();
     document.addEventListener('visibilitychange', handleVisibilityChange);
     handleVisibilityChange();
 
     return () => {
       mountedRef.current = false;
-      offOverlayEvent();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopPolling();
     };
