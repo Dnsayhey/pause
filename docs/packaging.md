@@ -140,9 +140,8 @@
 
 - 工作流文件：`.github/workflows/package-desktop.yml`
 - 触发规则：
-  - `push` 到 `main`：自动构建 macOS + Windows 并上传 Actions artifacts
-  - `push` tag `v*`：在构建基础上自动发布 GitHub Release（附带产物与清单）
-  - `workflow_dispatch`：可手动触发打包
+  - `push` tag `v*`：自动构建并发布 GitHub Release（附带产物与清单）
+  - `workflow_dispatch`：可在 GitHub Actions 页面手动触发构建
 - 产出内容：
   - `pause-macos-arm64`：macOS Apple Silicon DMG
   - `pause-macos-x64`：macOS Intel x64 DMG
