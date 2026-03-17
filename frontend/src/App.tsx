@@ -3,6 +3,7 @@ import { localizeReason, resolveLocale, t } from './i18n';
 import { HeroHeader } from './components/HeroHeader';
 import { ReminderCard } from './components/ReminderCard';
 import { SystemSettingsCard } from './components/SystemSettingsCard';
+import { AnalyticsPanel } from './components/AnalyticsPanel';
 import { InlineError } from './components/ui';
 import { useRuntimePolling } from './hooks/useRuntimePolling';
 import { useSettings } from './hooks/useSettings';
@@ -116,7 +117,7 @@ export function App() {
     return (
       <div className="h-full select-none overflow-hidden">
       <div className="h-7 select-none [--wails-draggable:drag]" />
-      <div className="h-[calc(100%-1.75rem)] overflow-hidden">
+      <div className="h-[calc(100%-1.75rem)] overflow-y-auto">
           <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
           {t(resolveLocale(undefined), 'loading')}
           {error && <InlineError message={error} />}
@@ -131,7 +132,7 @@ export function App() {
   return (
     <div className="h-full select-none overflow-hidden">
       <div className="h-7 select-none [--wails-draggable:drag]" />
-      <div className="h-[calc(100%-1.75rem)] overflow-hidden">
+      <div className="h-[calc(100%-1.75rem)] overflow-y-auto">
         <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
         <HeroHeader
           locale={locale}
@@ -191,6 +192,8 @@ export function App() {
           onLaunchAtLoginChange={applyLaunchAtLogin}
           onPatch={applyPatch}
         />
+
+        <AnalyticsPanel locale={locale} />
         </div>
       </div>
     </div>
