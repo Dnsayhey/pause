@@ -89,7 +89,11 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 - `SkipCurrentBreak() -> RuntimeState`
 - `StartBreakNow() -> RuntimeState`
 - `StartBreakNowForReason(reason) -> RuntimeState`
-- `GetReminderWeeklyStats(weekStartSec, weekEndSec) -> WeeklyStats`
+- `GetAnalyticsWeeklyStats(fromSec, toSec) -> AnalyticsWeeklyStats`
+- `GetAnalyticsSummary(fromSec, toSec) -> AnalyticsSummary`
+- `GetAnalyticsTrendByDay(fromSec, toSec) -> AnalyticsTrend`
+- `GetAnalyticsBreakTypeDistribution(fromSec, toSec) -> AnalyticsBreakTypeDistribution`
+- `GetAnalyticsHourlyHeatmap(fromSec, toSec, metric) -> AnalyticsHourlyHeatmap`
 
 ## 代码结构（当前）
 

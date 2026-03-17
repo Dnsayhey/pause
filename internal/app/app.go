@@ -501,23 +501,70 @@ func marshalReminderPatchesForLog(patches []config.ReminderPatch) string {
 	return string(raw)
 }
 
-func (a *App) GetReminderWeeklyStats(weekStartSec int64, weekEndSec int64) (history.WeeklyStats, error) {
+func (a *App) GetAnalyticsWeeklyStats(fromSec int64, toSec int64) (history.AnalyticsWeeklyStats, error) {
 	if a == nil || a.history == nil {
-		return history.WeeklyStats{}, errors.New("history store unavailable")
+		return history.AnalyticsWeeklyStats{}, errors.New("history store unavailable")
 	}
+	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	if err != nil {
+		return history.AnalyticsWeeklyStats{}, err
+	}
+	return a.history.QueryAnalyticsWeeklyStats(from, to)
+}
 
-	var weekStart time.Time
-	var weekEnd time.Time
-	if weekStartSec == 0 && weekEndSec == 0 {
-		weekStart, weekEnd = currentWeekRange(time.Now())
-	} else {
-		if weekEndSec <= weekStartSec {
-			return history.WeeklyStats{}, errors.New("invalid time range")
-		}
-		weekStart = time.Unix(weekStartSec, 0)
-		weekEnd = time.Unix(weekEndSec, 0)
+func (a *App) GetAnalyticsSummary(fromSec int64, toSec int64) (history.AnalyticsSummary, error) {
+	if a == nil || a.history == nil {
+		return history.AnalyticsSummary{}, errors.New("history store unavailable")
 	}
-	return a.history.QueryWeeklyStats(weekStart, weekEnd)
+	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	if err != nil {
+		return history.AnalyticsSummary{}, err
+	}
+	return a.history.QueryAnalyticsSummary(from, to)
+}
+
+func (a *App) GetAnalyticsTrendByDay(fromSec int64, toSec int64) (history.AnalyticsTrend, error) {
+	if a == nil || a.history == nil {
+		return history.AnalyticsTrend{}, errors.New("history store unavailable")
+	}
+	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	if err != nil {
+		return history.AnalyticsTrend{}, err
+	}
+	return a.history.QueryAnalyticsTrendByDay(from, to)
+}
+
+func (a *App) GetAnalyticsBreakTypeDistribution(fromSec int64, toSec int64) (history.AnalyticsBreakTypeDistribution, error) {
+	if a == nil || a.history == nil {
+		return history.AnalyticsBreakTypeDistribution{}, errors.New("history store unavailable")
+	}
+	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	if err != nil {
+		return history.AnalyticsBreakTypeDistribution{}, err
+	}
+	return a.history.QueryAnalyticsBreakTypeDistribution(from, to)
+}
+
+func (a *App) GetAnalyticsHourlyHeatmap(fromSec int64, toSec int64, metric string) (history.AnalyticsHourlyHeatmap, error) {
+	if a == nil || a.history == nil {
+		return history.AnalyticsHourlyHeatmap{}, errors.New("history store unavailable")
+	}
+	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	if err != nil {
+		return history.AnalyticsHourlyHeatmap{}, err
+	}
+	return a.history.QueryAnalyticsHourlyHeatmap(from, to, history.AnalyticsHeatmapMetric(strings.TrimSpace(metric)))
+}
+
+func resolveAnalyticsRange(fromSec int64, toSec int64) (time.Time, time.Time, error) {
+	if fromSec == 0 && toSec == 0 {
+		start, end := currentWeekRange(time.Now())
+		return start, end, nil
+	}
+	if toSec <= fromSec {
+		return time.Time{}, time.Time{}, errors.New("invalid time range")
+	}
+	return time.Unix(fromSec, 0), time.Unix(toSec, 0), nil
 }
 
 func (a *App) Shutdown(_ context.Context) {

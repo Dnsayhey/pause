@@ -17,9 +17,9 @@ func TestOpenStoreMigratesAndSeedsDefaults(t *testing.T) {
 	}
 	defer store.Close()
 
-	stats, err := store.QueryWeeklyStats(time.Unix(0, 0), time.Unix(4_102_444_800, 0))
+	stats, err := store.QueryAnalyticsWeeklyStats(time.Unix(0, 0), time.Unix(4_102_444_800, 0))
 	if err != nil {
-		t.Fatalf("QueryWeeklyStats() error = %v", err)
+		t.Fatalf("QueryAnalyticsWeeklyStats() error = %v", err)
 	}
 	if len(stats.Reminders) < 2 {
 		t.Fatalf("expected seeded reminders, got %d", len(stats.Reminders))
@@ -56,9 +56,9 @@ func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 		t.Fatalf("SkipBreak(s2) error = %v", err)
 	}
 
-	stats, err := store.QueryWeeklyStats(base.Add(-time.Hour), base.Add(24*time.Hour))
+	stats, err := store.QueryAnalyticsWeeklyStats(base.Add(-time.Hour), base.Add(24*time.Hour))
 	if err != nil {
-		t.Fatalf("QueryWeeklyStats() error = %v", err)
+		t.Fatalf("QueryAnalyticsWeeklyStats() error = %v", err)
 	}
 
 	if stats.Summary.TotalSessions != 2 {

@@ -1,4 +1,16 @@
-import type { ReminderConfig, ReminderPatch, RuntimeState, Settings, SettingsPatch } from './types';
+import type {
+  AnalyticsBreakTypeDistribution,
+  AnalyticsHeatmapMetric,
+  AnalyticsHourlyHeatmap,
+  AnalyticsSummary,
+  AnalyticsTrend,
+  AnalyticsWeeklyStats,
+  ReminderConfig,
+  ReminderPatch,
+  RuntimeState,
+  Settings,
+  SettingsPatch
+} from './types';
 
 type Backend = {
   GetSettings: () => Promise<Settings>;
@@ -8,6 +20,11 @@ type Backend = {
   GetLaunchAtLogin: () => Promise<boolean>;
   SetLaunchAtLogin: (enabled: boolean) => Promise<boolean>;
   GetRuntimeState: () => Promise<RuntimeState>;
+  GetAnalyticsWeeklyStats: (fromSec: number, toSec: number) => Promise<AnalyticsWeeklyStats>;
+  GetAnalyticsSummary: (fromSec: number, toSec: number) => Promise<AnalyticsSummary>;
+  GetAnalyticsTrendByDay: (fromSec: number, toSec: number) => Promise<AnalyticsTrend>;
+  GetAnalyticsBreakTypeDistribution: (fromSec: number, toSec: number) => Promise<AnalyticsBreakTypeDistribution>;
+  GetAnalyticsHourlyHeatmap: (fromSec: number, toSec: number, metric: string) => Promise<AnalyticsHourlyHeatmap>;
   Pause: () => Promise<RuntimeState>;
   Resume: () => Promise<RuntimeState>;
   SkipCurrentBreak: () => Promise<RuntimeState>;
@@ -59,6 +76,30 @@ export async function getRuntimeState(): Promise<RuntimeState> {
   return requireBackend().GetRuntimeState();
 }
 
+export async function getAnalyticsWeeklyStats(fromSec: number, toSec: number): Promise<AnalyticsWeeklyStats> {
+  return requireBackend().GetAnalyticsWeeklyStats(fromSec, toSec);
+}
+
+export async function getAnalyticsSummary(fromSec: number, toSec: number): Promise<AnalyticsSummary> {
+  return requireBackend().GetAnalyticsSummary(fromSec, toSec);
+}
+
+export async function getAnalyticsTrendByDay(fromSec: number, toSec: number): Promise<AnalyticsTrend> {
+  return requireBackend().GetAnalyticsTrendByDay(fromSec, toSec);
+}
+
+export async function getAnalyticsBreakTypeDistribution(fromSec: number, toSec: number): Promise<AnalyticsBreakTypeDistribution> {
+  return requireBackend().GetAnalyticsBreakTypeDistribution(fromSec, toSec);
+}
+
+export async function getAnalyticsHourlyHeatmap(
+  fromSec: number,
+  toSec: number,
+  metric: AnalyticsHeatmapMetric = 'skip_rate'
+): Promise<AnalyticsHourlyHeatmap> {
+  return requireBackend().GetAnalyticsHourlyHeatmap(fromSec, toSec, metric);
+}
+
 export async function skipCurrentBreak(): Promise<RuntimeState> {
   return requireBackend().SkipCurrentBreak();
 }
@@ -90,3 +131,4 @@ export function onRuntimeTick(callback: (state: RuntimeState) => void): () => vo
     callback(normalized as RuntimeState);
   });
 }
+
