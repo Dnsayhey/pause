@@ -30,7 +30,7 @@ type ReminderCardProps = {
 const rowLabelClassName =
   'flex flex-col items-start justify-between gap-3 text-sm leading-[1.35] sm:flex-row sm:items-center';
 const numberInputClassName =
-  'number-input w-[3.6ch] min-w-[3.6ch] cursor-text appearance-none border-0 border-b border-b-transparent bg-transparent px-0 py-[2px] text-right text-sm leading-[1.2] font-normal text-[#122236] caret-[rgba(15,130,107,0.9)] shadow-none outline-none transition-colors duration-150 hover:border-b-[rgba(18,34,54,0.28)] focus:border-b-[rgba(15,130,107,0.88)]';
+  'number-input w-[3.6ch] min-w-[3.6ch] cursor-text appearance-none border-0 border-b border-b-transparent bg-transparent px-0 py-[2px] text-right text-sm leading-[1.2] font-normal text-[var(--text-primary)] caret-[rgba(15,130,107,0.9)] shadow-none outline-none transition-colors duration-150 hover:border-b-[var(--field-border-muted)] focus:border-b-[rgba(15,130,107,0.88)]';
 
 export function ReminderCard({
   title,
