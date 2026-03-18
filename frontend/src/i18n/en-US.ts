@@ -45,6 +45,10 @@ export const enUS = {
   languageAuto: 'Follow system',
   languageZhCN: '中文',
   languageEnUS: 'English',
+  theme: 'Theme',
+  themeAuto: 'Follow system',
+  themeLight: 'Light',
+  themeDark: 'Dark',
   appSection: 'App',
   quit: 'Quit',
   breakTime: 'Break Time',
@@ -79,5 +83,10 @@ export const enUS = {
   analyticsColSkipRate: 'Skip rate',
   analyticsEmpty: 'No data in selected range',
   analyticsRangeLabel: 'Range',
-  analyticsRowsCount: 'Reminder rows'
+  analyticsRowsCount: 'Reminder rows',
+  analyticsComparedToPrev: 'vs previous period',
+  analyticsNoPrevData: 'No previous period data',
+  navReminders: 'Reminders',
+  navAnalytics: 'Analytics',
+  navSettings: 'Settings'
 } as const;

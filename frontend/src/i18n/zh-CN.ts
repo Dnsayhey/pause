@@ -45,6 +45,10 @@ export const zhCN = {
   languageAuto: '跟随系统',
   languageZhCN: '中文',
   languageEnUS: 'English',
+  theme: '主题',
+  themeAuto: '跟随系统',
+  themeLight: '浅色',
+  themeDark: '深色',
   appSection: '应用',
   quit: '退出',
   breakTime: '休息中',
@@ -79,5 +83,10 @@ export const zhCN = {
   analyticsColSkipRate: '跳过率',
   analyticsEmpty: '当前时间范围暂无数据',
   analyticsRangeLabel: '时间范围',
-  analyticsRowsCount: '提醒行数'
+  analyticsRowsCount: '提醒行数',
+  analyticsComparedToPrev: '较上一周期',
+  analyticsNoPrevData: '暂无上一周期数据',
+  navReminders: '提醒',
+  navAnalytics: '分析',
+  navSettings: '设置'
 } as const;

@@ -43,7 +43,37 @@ export function SystemSettingsCard({
           }}
         />
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
-          <span className="text-[#122236]">{t(locale, 'stopOnIdleEnabled')}</span>
+          <span className="text-[var(--text-primary)]">{t(locale, 'language')}</span>
+          <PillSelect
+            value={settings.ui.language}
+            onChange={(e) => {
+              const next = e.target.value as Settings['ui']['language'];
+              void onPatch({ ui: { language: next } });
+            }}
+            options={[
+              { value: 'auto', label: t(locale, 'languageAuto') },
+              { value: 'zh-CN', label: t(locale, 'languageZhCN') },
+              { value: 'en-US', label: t(locale, 'languageEnUS') }
+            ]}
+          />
+        </div>
+        <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
+          <span className="text-[var(--text-primary)]">{t(locale, 'theme')}</span>
+          <PillSelect
+            value={settings.ui.theme}
+            onChange={(e) => {
+              const next = e.target.value as Settings['ui']['theme'];
+              void onPatch({ ui: { theme: next } });
+            }}
+            options={[
+              { value: 'auto', label: t(locale, 'themeAuto') },
+              { value: 'light', label: t(locale, 'themeLight') },
+              { value: 'dark', label: t(locale, 'themeDark') }
+            ]}
+          />
+        </div>
+        <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
+          <span className="text-[var(--text-primary)]">{t(locale, 'stopOnIdleEnabled')}</span>
           <PillSelect
             value={idleModeSelectValue}
             onChange={(e) => {
@@ -71,7 +101,7 @@ export function SystemSettingsCard({
           />
         </div>
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
-          <span className="text-[#122236]">{t(locale, 'endSoundEnabled')}</span>
+          <span className="text-[var(--text-primary)]">{t(locale, 'endSoundEnabled')}</span>
           <PillSelect
             value={soundModeSelectValue}
             onChange={(e) => {

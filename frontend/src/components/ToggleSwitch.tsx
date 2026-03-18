@@ -17,7 +17,7 @@ export function ToggleSwitch({ ariaLabel, checked, disabled = false, onChange }:
     <label
       className={[
         'relative inline-block h-5 w-[34px] rounded-full p-[2px] transition-colors duration-200',
-        checked ? 'bg-[linear-gradient(130deg,#0f826b,#0f9a8a)]' : 'bg-[rgba(18,34,54,0.24)]',
+        checked ? 'bg-[linear-gradient(130deg,#0f826b,#0f9a8a)]' : 'bg-[var(--toggle-off-bg)]',
         disabled ? 'opacity-60' : ''
       ].join(' ')}
     >
