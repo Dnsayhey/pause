@@ -15,6 +15,12 @@ type fakeIdleProvider struct {
 
 func (f *fakeIdleProvider) CurrentIdleSeconds() int { return f.idleSec }
 
+type fakeLockStateProvider struct {
+	locked bool
+}
+
+func (f *fakeLockStateProvider) IsScreenLocked() bool { return f.locked }
+
 type fakeStartupManager struct {
 	lastValue bool
 	calls     int
@@ -84,7 +90,7 @@ func newTestEngine(t *testing.T, idle *fakeIdleProvider, startup *fakeStartupMan
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	return NewEngine(store, idle, nil, startup, nil)
+	return NewEngine(store, idle, nil, nil, startup, nil)
 }
 
 func reminderPatch(id string, enabled *bool, intervalSec *int, breakSec *int) config.ReminderPatch {
@@ -129,7 +135,8 @@ func TestIdlePauseModeBoundary(t *testing.T) {
 	base := time.Unix(1_700_000_000, 0)
 	engine.Tick(base)
 
-	idle.idleSec = 299
+	threshold := engine.GetSettings().Timer.IdlePauseThresholdSec
+	idle.idleSec = threshold - 1
 	for i := 1; i <= 9; i++ {
 		engine.Tick(base.Add(time.Duration(i) * time.Second))
 	}
@@ -137,17 +144,60 @@ func TestIdlePauseModeBoundary(t *testing.T) {
 		t.Fatalf("did not expect session before threshold interval")
 	}
 
-	idle.idleSec = 300
+	idle.idleSec = threshold
 	engine.Tick(base.Add(10 * time.Second))
 	if state := engine.GetRuntimeState(base.Add(10 * time.Second)); state.CurrentSession != nil {
 		t.Fatalf("expected idle threshold to pause timer progression")
 	}
 
-	idle.idleSec = 299
+	idle.idleSec = threshold - 1
 	engine.Tick(base.Add(11 * time.Second))
 	state := engine.GetRuntimeState(base.Add(11 * time.Second))
 	if state.CurrentSession == nil {
 		t.Fatalf("expected session after active seconds reach interval")
+	}
+}
+
+func TestIdlePauseModePausesImmediatelyWhenScreenLocked(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	lockState := &fakeLockStateProvider{}
+
+	path := filepath.Join(t.TempDir(), "settings.json")
+	store, err := config.NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	engine := NewEngine(store, idle, lockState, nil, &fakeStartupManager{}, nil)
+
+	standEnabled := false
+	eyeInterval := 2
+	eyeBreak := 20
+	setReminderPatches(t, engine,
+		reminderPatch(config.ReminderIDStand, &standEnabled, nil, nil),
+		reminderPatch(config.ReminderIDEye, nil, &eyeInterval, &eyeBreak),
+	)
+
+	base := time.Unix(1_700_000_000, 0)
+	engine.Tick(base)
+
+	lockState.locked = false
+	engine.Tick(base.Add(1 * time.Second))
+	if state := engine.GetRuntimeState(base.Add(1 * time.Second)); state.CurrentSession != nil {
+		t.Fatalf("did not expect session after first active second")
+	}
+
+	lockState.locked = true
+	engine.Tick(base.Add(2 * time.Second))
+	if state := engine.GetRuntimeState(base.Add(2 * time.Second)); state.CurrentSession != nil {
+		t.Fatalf("expected lock state to pause timer progression immediately")
+	}
+
+	lockState.locked = false
+	engine.Tick(base.Add(3 * time.Second))
+	state := engine.GetRuntimeState(base.Add(3 * time.Second))
+	if state.CurrentSession == nil {
+		t.Fatalf("expected session once unlocked active seconds resume")
 	}
 }
 
@@ -486,7 +536,7 @@ func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	engine := NewEngine(store, idle, nil, startup, history)
+	engine := NewEngine(store, idle, nil, nil, startup, history)
 
 	standEnabled := false
 	eyeInterval := 1200
@@ -533,7 +583,7 @@ func TestHistoryRecorder_SkipBreak(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	engine := NewEngine(store, idle, nil, startup, history)
+	engine := NewEngine(store, idle, nil, nil, startup, history)
 
 	standEnabled := false
 	eyeInterval := 1200
@@ -634,7 +684,7 @@ func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	engine1 := NewEngine(store1, idle, nil, startup, nil)
+	engine1 := NewEngine(store1, idle, nil, nil, startup, nil)
 	if err := engine1.SyncPlatformSettings(); err != nil {
 		t.Fatalf("first SyncPlatformSettings() error = %v", err)
 	}
@@ -647,7 +697,7 @@ func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore(reopen) error = %v", err)
 	}
-	engine2 := NewEngine(store2, idle, nil, startup, nil)
+	engine2 := NewEngine(store2, idle, nil, nil, startup, nil)
 	if err := engine2.SyncPlatformSettings(); err != nil {
 		t.Fatalf("second SyncPlatformSettings() error = %v", err)
 	}

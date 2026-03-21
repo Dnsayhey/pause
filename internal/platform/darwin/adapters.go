@@ -46,10 +46,11 @@ func NewAdapters(appID string) api.Adapters {
 	}
 	helperBundleID := appID + ".loginhelper"
 	return api.Adapters{
-		IdleProvider:   &darwinIdleProvider{},
-		Notifier:       darwinNotifier{},
-		SoundPlayer:    darwinSoundPlayer{},
-		StartupManager: darwinStartupManager{appID: appID, helperBundleID: helperBundleID},
+		IdleProvider:      &darwinIdleProvider{},
+		LockStateProvider: darwinLockStateProvider{},
+		Notifier:          darwinNotifier{},
+		SoundPlayer:       darwinSoundPlayer{},
+		StartupManager:    darwinStartupManager{appID: appID, helperBundleID: helperBundleID},
 	}
 }
 

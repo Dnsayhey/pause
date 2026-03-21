@@ -16,3 +16,6 @@ frontend/wailsjs/
 
 # Packaging/build outputs
 build/
+
+
+skills-lock.json

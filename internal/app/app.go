@@ -55,6 +55,7 @@ func NewApp(configPath string) (*App, error) {
 	engine := service.NewEngine(
 		store,
 		adapters.IdleProvider,
+		adapters.LockStateProvider,
 		adapters.SoundPlayer,
 		adapters.StartupManager,
 		historyStore,

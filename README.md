@@ -68,7 +68,7 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
   "globalEnabled": true,
   "enforcement": { "overlaySkipAllowed": true },
   "sound": { "enabled": true, "volume": 70 },
-  "timer": { "mode": "idle_pause", "idlePauseThresholdSec": 300 },
+  "timer": { "mode": "idle_pause", "idlePauseThresholdSec": 60 },
   "ui": { "showTrayCountdown": true, "language": "auto", "theme": "auto" }
 }
 ```

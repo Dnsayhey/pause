@@ -3,14 +3,19 @@ package api
 import "pause/internal/core/config"
 
 type Adapters struct {
-	IdleProvider   IdleProvider
-	Notifier       Notifier
-	SoundPlayer    SoundPlayer
-	StartupManager StartupManager
+	IdleProvider      IdleProvider
+	LockStateProvider LockStateProvider
+	Notifier          Notifier
+	SoundPlayer       SoundPlayer
+	StartupManager    StartupManager
 }
 
 type IdleProvider interface {
 	CurrentIdleSeconds() int
+}
+
+type LockStateProvider interface {
+	IsScreenLocked() bool
 }
 
 type Notifier interface {
@@ -29,6 +34,10 @@ type StartupManager interface {
 type NoopIdleProvider struct{}
 
 func (NoopIdleProvider) CurrentIdleSeconds() int { return 0 }
+
+type NoopLockStateProvider struct{}
+
+func (NoopLockStateProvider) IsScreenLocked() bool { return false }
 
 type NoopNotifier struct{}
 

@@ -43,6 +43,7 @@ type Engine struct {
 	history   BreakHistoryRecorder
 
 	idleProvider   platform.IdleProvider
+	lockProvider   platform.LockStateProvider
 	soundPlayer    platform.SoundPlayer
 	startupManager platform.StartupManager
 
@@ -53,6 +54,7 @@ type Engine struct {
 
 	lastTickActive bool
 	currentIdleSec int
+	currentLocked  bool
 
 	activeHistorySessionID string
 }
@@ -60,12 +62,16 @@ type Engine struct {
 func NewEngine(
 	store *config.Store,
 	idleProvider platform.IdleProvider,
+	lockProvider platform.LockStateProvider,
 	soundPlayer platform.SoundPlayer,
 	startupManager platform.StartupManager,
 	history BreakHistoryRecorder,
 ) *Engine {
 	if idleProvider == nil {
 		idleProvider = platform.NoopIdleProvider{}
+	}
+	if lockProvider == nil {
+		lockProvider = platform.NoopLockStateProvider{}
 	}
 	if soundPlayer == nil {
 		soundPlayer = platform.NoopSoundPlayer{}
@@ -81,6 +87,7 @@ func NewEngine(
 		session:        session.NewManager(),
 		history:        history,
 		idleProvider:   idleProvider,
+		lockProvider:   lockProvider,
 		soundPlayer:    soundPlayer,
 		startupManager: startupManager,
 		pausedReminder: map[string]bool{},
@@ -132,6 +139,7 @@ func (e *Engine) Start(ctx context.Context) {
 
 func (e *Engine) Tick(now time.Time) {
 	idleSec := e.idleProvider.CurrentIdleSeconds()
+	locked := e.lockProvider.IsScreenLocked()
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -143,7 +151,24 @@ func (e *Engine) Tick(now time.Time) {
 
 	settings := e.store.Get()
 	effectiveReminders := e.effectiveReminderConfigsLocked(e.reminders)
+	wasLocked := e.currentLocked
 	e.currentIdleSec = idleSec
+	e.currentLocked = locked
+	if !wasLocked && locked {
+		logx.Infof(
+			"engine.screen_locked timer_mode=%s idle_sec=%d threshold_sec=%d",
+			settings.Timer.Mode,
+			idleSec,
+			settings.Timer.IdlePauseThresholdSec,
+		)
+	} else if wasLocked && !locked {
+		logx.Infof(
+			"engine.screen_unlocked timer_mode=%s idle_sec=%d threshold_sec=%d",
+			settings.Timer.Mode,
+			idleSec,
+			settings.Timer.IdlePauseThresholdSec,
+		)
+	}
 	e.lastTickActive = e.isTickActive(settings)
 	rawDeltaSec := int(now.Sub(e.lastTick).Seconds())
 	appliedDeltaSec := rawDeltaSec
@@ -489,6 +514,9 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings config.Settings) con
 func (e *Engine) isTickActive(settings config.Settings) bool {
 	if settings.Timer.Mode == config.TimerModeRealTime {
 		return true
+	}
+	if e.currentLocked {
+		return false
 	}
 	return e.currentIdleSec < settings.Timer.IdlePauseThresholdSec
 }

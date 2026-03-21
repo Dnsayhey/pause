@@ -139,7 +139,7 @@ func DefaultSettings() Settings {
 		Sound:         SoundSettings{Enabled: true, Volume: 70},
 		Timer: TimerSettings{
 			Mode:                  TimerModeIdlePause,
-			IdlePauseThresholdSec: 300,
+			IdlePauseThresholdSec: 60,
 		},
 		UI: UISettings{
 			ShowTrayCountdown: true,

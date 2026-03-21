@@ -60,7 +60,6 @@ const (
 )
 
 type windowsIdleProvider struct{}
-
 type windowsNotifier struct{}
 
 type windowsSoundPlayer struct{}
@@ -98,10 +97,11 @@ func NewAdapters(appID string) api.Adapters {
 		appID = meta.EffectiveAppBundleID()
 	}
 	return api.Adapters{
-		IdleProvider:   windowsIdleProvider{},
-		Notifier:       windowsNotifier{},
-		SoundPlayer:    windowsSoundPlayer{},
-		StartupManager: windowsStartupManager{valueName: startupValueName(appID)},
+		IdleProvider:      windowsIdleProvider{},
+		LockStateProvider: newWindowsLockStateProvider(),
+		Notifier:          windowsNotifier{},
+		SoundPlayer:       windowsSoundPlayer{},
+		StartupManager:    windowsStartupManager{valueName: startupValueName(appID)},
 	}
 }
 
