@@ -4,7 +4,7 @@ type InlineErrorProps = {
 
 export function InlineError({ message }: InlineErrorProps) {
   return (
-    <div className="mt-3 rounded-[10px] border border-[#f4bec4] bg-[#ffe8ea] px-[10px] py-2 text-[#8f1d2c]">
+    <div className="mt-3 rounded-[10px] border border-[var(--error-border)] bg-[var(--error-bg)] px-[10px] py-2 text-[var(--error-text)]">
       {message}
     </div>
   );

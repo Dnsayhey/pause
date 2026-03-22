@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"pause/internal/logx"
@@ -15,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 func InstallProcessSignalQuit(desktopApp *App) {
@@ -46,6 +48,8 @@ func RunWails(configPath string, assets fs.FS) error {
 		Height:      520,
 		MinWidth:    820,
 		MinHeight:   520,
+		// Keep native title bars on macOS/Linux, but use frameless window on Windows.
+		Frameless:   runtime.GOOS == "windows",
 		StartHidden: true,
 		// Keep this false and control close behavior in OnBeforeClose.
 		// Wails' native HideWindowOnClose hides the whole app on macOS,
@@ -53,6 +57,10 @@ func RunWails(configPath string, assets fs.FS) error {
 		HideWindowOnClose: false,
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHidden(),
+		},
+		Windows: &windows.Options{
+			// In frameless mode, keep system shadows/rounded corners when available.
+			DisableFramelessWindowDecorations: false,
 		},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: meta.SingleInstanceID(),

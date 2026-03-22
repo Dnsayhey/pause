@@ -29,6 +29,7 @@ type Backend = {
   Resume: () => Promise<RuntimeState>;
   SkipCurrentBreak: () => Promise<RuntimeState>;
   Quit?: () => Promise<void> | void;
+  CloseWindow?: () => Promise<void> | void;
 };
 
 function getBackend(): Backend | null {
@@ -112,6 +113,14 @@ export async function quitApp(): Promise<void> {
   await backend.Quit();
 }
 
+export async function closeWindow(): Promise<void> {
+  const backend = requireBackend();
+  if (!backend.CloseWindow) {
+    throw new Error('Pause backend bridge unavailable (window.go.app.App.CloseWindow is missing).');
+  }
+  await backend.CloseWindow();
+}
+
 type RuntimeBridge = {
   EventsOn: (eventName: string, callback: (payload: unknown) => void) => () => void;
 };
@@ -131,4 +140,3 @@ export function onRuntimeTick(callback: (state: RuntimeState) => void): () => vo
     callback(normalized as RuntimeState);
   });
 }
-

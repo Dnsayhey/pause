@@ -1,5 +1,5 @@
 import { ToggleSwitchRow } from './ToggleSwitch';
-import { GlassCard, PillSelect } from './ui';
+import { PillSelect } from './ui';
 import { t, type Locale } from '../i18n';
 import type { Settings, SettingsPatch } from '../types';
 
@@ -25,7 +25,7 @@ export function SystemSettingsCard({
   onPatch
 }: SystemSettingsCardProps) {
   return (
-    <GlassCard>
+    <section>
       <h3 className="mb-3 mt-0 text-[18px]">{t(locale, 'sectionSettings')}</h3>
       <div className="grid gap-2.5">
         <ToggleSwitchRow
@@ -45,6 +45,7 @@ export function SystemSettingsCard({
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
           <span className="text-[var(--text-primary)]">{t(locale, 'language')}</span>
           <PillSelect
+            variant="minimal"
             value={settings.ui.language}
             onChange={(e) => {
               const next = e.target.value as Settings['ui']['language'];
@@ -60,6 +61,7 @@ export function SystemSettingsCard({
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
           <span className="text-[var(--text-primary)]">{t(locale, 'theme')}</span>
           <PillSelect
+            variant="minimal"
             value={settings.ui.theme}
             onChange={(e) => {
               const next = e.target.value as Settings['ui']['theme'];
@@ -75,6 +77,7 @@ export function SystemSettingsCard({
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
           <span className="text-[var(--text-primary)]">{t(locale, 'stopOnIdleEnabled')}</span>
           <PillSelect
+            variant="minimal"
             value={idleModeSelectValue}
             onChange={(e) => {
               const next = e.target.value;
@@ -103,6 +106,7 @@ export function SystemSettingsCard({
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
           <span className="text-[var(--text-primary)]">{t(locale, 'endSoundEnabled')}</span>
           <PillSelect
+            variant="minimal"
             value={soundModeSelectValue}
             onChange={(e) => {
               const next = e.target.value;
@@ -137,6 +141,6 @@ export function SystemSettingsCard({
           />
         )}
       </div>
-    </GlassCard>
+    </section>
   );
 }

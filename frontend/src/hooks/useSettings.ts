@@ -31,6 +31,12 @@ function parseInteger(text: string): number | null {
   return value;
 }
 
+function clampReminderDraftValue(value: number, min: number, max?: number): number {
+  if (value < min) return min;
+  if (max !== undefined && value > max) return max;
+  return value;
+}
+
 function nearestOptionValue(value: number, options: readonly number[]): number {
   let nearest = options[0];
   let minDiff = Math.abs(value - nearest);
@@ -198,32 +204,95 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     }));
   }, []);
 
-  const commitReminderIntervalDraft = useCallback(
-    async (id: string, raw: string) => {
+  const normalizeReminderIntervalDraft = useCallback(
+    (id: string, raw: string) => {
       const spec = reminderFieldSpecByID(id);
       const parsed = parseInteger(raw);
       const current = reminderByID(reminders, id);
       const fallback = toDraftIntervalValue(current?.intervalSec ?? spec.intervalMin * spec.intervalUnitSec, spec);
-      const nextValue = isReminderValueValid(parsed, spec.intervalMin, spec.intervalMax) ? parsed : fallback;
-
+      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, spec.intervalMin, spec.intervalMax);
       setReminderIntervalDraft(id, String(nextValue));
-      await applyReminderPatch(id, { intervalSec: toStoredIntervalSec(nextValue, spec) });
+      return nextValue;
     },
-    [applyReminderPatch, reminders, setReminderIntervalDraft]
+    [reminders, setReminderIntervalDraft]
   );
 
-  const commitReminderBreakDraft = useCallback(
-    async (id: string, raw: string) => {
+  const normalizeReminderBreakDraft = useCallback(
+    (id: string, raw: string) => {
       const spec = reminderFieldSpecByID(id);
       const parsed = parseInteger(raw);
       const current = reminderByID(reminders, id);
       const fallback = toDraftBreakValue(current?.breakSec ?? spec.breakMin * spec.breakUnitSec, spec);
-      const nextValue = isReminderValueValid(parsed, spec.breakMin, spec.breakMax) ? parsed : fallback;
-
+      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, spec.breakMin, spec.breakMax);
       setReminderBreakDraft(id, String(nextValue));
-      await applyReminderPatch(id, { breakSec: toStoredBreakSec(nextValue, spec) });
+      return nextValue;
     },
-    [applyReminderPatch, reminders, setReminderBreakDraft]
+    [reminders, setReminderBreakDraft]
+  );
+
+  const commitReminderDrafts = useCallback(
+    async (id: string, intervalRaw: string, breakRaw: string) => {
+      const spec = reminderFieldSpecByID(id);
+      const current = reminderByID(reminders, id);
+
+      const parsedInterval = parseInteger(intervalRaw);
+      const fallbackInterval = toDraftIntervalValue(current?.intervalSec ?? spec.intervalMin * spec.intervalUnitSec, spec);
+      const nextInterval =
+        parsedInterval === null
+          ? fallbackInterval
+          : isReminderValueValid(parsedInterval, spec.intervalMin, spec.intervalMax)
+            ? parsedInterval
+            : clampReminderDraftValue(parsedInterval, spec.intervalMin, spec.intervalMax);
+
+      const parsedBreak = parseInteger(breakRaw);
+      const fallbackBreak = toDraftBreakValue(current?.breakSec ?? spec.breakMin * spec.breakUnitSec, spec);
+      const nextBreak =
+        parsedBreak === null
+          ? fallbackBreak
+          : isReminderValueValid(parsedBreak, spec.breakMin, spec.breakMax)
+            ? parsedBreak
+            : clampReminderDraftValue(parsedBreak, spec.breakMin, spec.breakMax);
+
+      setReminderDrafts((prev) => ({
+        ...prev,
+        [id]: {
+          interval: String(nextInterval),
+          break: String(nextBreak)
+        }
+      }));
+
+      const nextIntervalSec = toStoredIntervalSec(nextInterval, spec);
+      const nextBreakSec = toStoredBreakSec(nextBreak, spec);
+      const hasNoChange =
+        current !== undefined && current.intervalSec === nextIntervalSec && current.breakSec === nextBreakSec;
+
+      if (hasNoChange) {
+        return;
+      }
+
+      await applyReminderPatch(id, {
+        intervalSec: nextIntervalSec,
+        breakSec: nextBreakSec
+      });
+    },
+    [applyReminderPatch, reminders]
+  );
+
+  const resetReminderDraftToStored = useCallback(
+    (id: string) => {
+      const spec = reminderFieldSpecByID(id);
+      const current = reminderByID(reminders, id);
+      const interval = toDraftIntervalValue(current?.intervalSec ?? spec.intervalMin * spec.intervalUnitSec, spec);
+      const breakValue = toDraftBreakValue(current?.breakSec ?? spec.breakMin * spec.breakUnitSec, spec);
+      setReminderDrafts((prev) => ({
+        ...prev,
+        [id]: {
+          interval: String(interval),
+          break: String(breakValue)
+        }
+      }));
+    },
+    [reminders]
   );
 
   const idleModeSelectValue = useMemo(() => {
@@ -247,8 +316,10 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     applyReminderPatch,
     setReminderIntervalDraft,
     setReminderBreakDraft,
-    commitReminderIntervalDraft,
-    commitReminderBreakDraft,
+    normalizeReminderIntervalDraft,
+    normalizeReminderBreakDraft,
+    commitReminderDrafts,
+    resetReminderDraftToStored,
     idleModeSelectValue,
     soundModeSelectValue
   };

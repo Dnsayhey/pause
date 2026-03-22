@@ -17,7 +17,7 @@ export function ToggleSwitch({ ariaLabel, checked, disabled = false, onChange }:
     <label
       className={[
         'relative inline-block h-5 w-[34px] rounded-full p-[2px] transition-colors duration-200',
-        checked ? 'bg-[linear-gradient(130deg,#0f826b,#0f9a8a)]' : 'bg-[var(--toggle-off-bg)]',
+        checked ? 'bg-[linear-gradient(130deg,var(--toggle-on),var(--toggle-on-strong))]' : 'bg-[var(--toggle-off-bg)]',
         disabled ? 'opacity-60' : ''
       ].join(' ')}
     >
@@ -31,7 +31,7 @@ export function ToggleSwitch({ ariaLabel, checked, disabled = false, onChange }:
       />
       <span
         className={[
-          'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-[0_1px_3px_rgba(18,34,54,0.2)] transition-transform duration-200',
+          'pointer-events-none block h-4 w-4 rounded-full bg-[var(--surface-bg)] shadow-[0_1px_3px_rgba(0,0,0,0.24)] transition-transform duration-200',
           checked ? 'translate-x-[14px]' : 'translate-x-0'
         ].join(' ')}
       />

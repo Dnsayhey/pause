@@ -1,8 +1,9 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
+import { closeWindow } from './api';
 import { resolveLocale, t } from './i18n';
 import { HeroHeader } from './components/HeroHeader';
-import { InlineError } from './components/ui';
+import { CustomScrollArea, InlineError } from './components/ui';
 import { useRuntimePolling } from './hooks/useRuntimePolling';
 import { useSettings } from './hooks/useSettings';
 import { RemindersPage } from './pages/RemindersPage';
@@ -23,7 +24,15 @@ function detectPlatformClass(): string {
 
 export function App() {
   const platformClass = detectPlatformClass();
+  const isWindows = platformClass === 'win';
+  const dragBarHeightClass = isWindows ? 'h-8' : 'h-7';
+  const contentHeightClass = isWindows ? 'h-[calc(100%-2rem)]' : 'h-[calc(100%-1.75rem)]';
+  const windowsCloseButtonBaseClass =
+    'absolute right-0 top-0 inline-flex h-full w-[46px] items-center justify-center rounded-none border-0 transition-colors duration-120 ease-out focus-visible:outline-none [--wails-draggable:no-drag]';
+  const fallbackLocale = resolveLocale(undefined);
   const [error, setError] = useState('');
+  const [isWindowsCloseHovered, setIsWindowsCloseHovered] = useState(false);
+  const [isWindowsClosePressed, setIsWindowsClosePressed] = useState(false);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const hasAssignedInitialFocusRef = useRef(false);
 
@@ -41,8 +50,10 @@ export function App() {
     applyReminderPatch,
     setReminderIntervalDraft,
     setReminderBreakDraft,
-    commitReminderIntervalDraft,
-    commitReminderBreakDraft,
+    normalizeReminderIntervalDraft,
+    normalizeReminderBreakDraft,
+    commitReminderDrafts,
+    resetReminderDraftToStored,
     idleModeSelectValue,
     soundModeSelectValue
   } = useSettings({
@@ -76,6 +87,27 @@ export function App() {
     };
   }, [runtime?.effectiveLanguage, runtime?.effectiveTheme]);
 
+  const resetWindowsCloseVisualState = useCallback(() => {
+    setIsWindowsCloseHovered(false);
+    setIsWindowsClosePressed(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isWindows) return;
+    const handleVisibilityChange = () => {
+      resetWindowsCloseVisualState();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', resetWindowsCloseVisualState);
+    window.addEventListener('focus', resetWindowsCloseVisualState);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', resetWindowsCloseVisualState);
+      window.removeEventListener('focus', resetWindowsCloseVisualState);
+    };
+  }, [isWindows, resetWindowsCloseVisualState]);
+
   const focusTitleIfNeeded = useCallback(() => {
     if (hasAssignedInitialFocusRef.current) return;
     if (document.visibilityState !== 'visible') return;
@@ -99,16 +131,56 @@ export function App() {
     };
   }, [focusTitleIfNeeded]);
 
+  const windowsCloseButtonStateClass = isWindowsClosePressed
+    ? 'bg-[#c50f1f] text-white'
+    : isWindowsCloseHovered
+      ? 'bg-[#e81123] text-white'
+      : 'bg-transparent text-[var(--text-secondary)]';
+  const windowsCloseButtonClass = `${windowsCloseButtonBaseClass} ${windowsCloseButtonStateClass}`;
+
   if (!settings || !runtime) {
     return (
       <div className="h-full select-none overflow-hidden">
-        <div className="h-7 select-none [--wails-draggable:drag]" />
-        <div className="h-[calc(100%-1.75rem)] overflow-y-auto">
+        <div className={`${dragBarHeightClass} relative select-none [--wails-draggable:drag]`}>
+          {isWindows && (
+            <button
+              type="button"
+              className={windowsCloseButtonClass}
+              aria-label={t(fallbackLocale, 'close')}
+              title={t(fallbackLocale, 'close')}
+              onPointerEnter={() => {
+                setIsWindowsCloseHovered(true);
+              }}
+              onPointerLeave={() => {
+                resetWindowsCloseVisualState();
+              }}
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                setIsWindowsClosePressed(true);
+              }}
+              onPointerUp={() => {
+                setIsWindowsClosePressed(false);
+              }}
+              onPointerCancel={() => {
+                resetWindowsCloseVisualState();
+              }}
+              onClick={() => {
+                resetWindowsCloseVisualState();
+                void closeWindow();
+              }}
+            >
+              <svg aria-hidden="true" viewBox="0 0 10 10" className="h-[10px] w-[10px]">
+                <path d="M1 1L9 9M9 1L1 9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <CustomScrollArea className={contentHeightClass}>
           <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
-            {t(resolveLocale(undefined), 'loading')}
+            {t(fallbackLocale, 'loading')}
             {error && <InlineError message={error} />}
           </div>
-        </div>
+        </CustomScrollArea>
       </div>
     );
   }
@@ -117,19 +189,54 @@ export function App() {
 
   return (
     <div className="h-full select-none overflow-hidden">
-      <div className="h-7 select-none [--wails-draggable:drag]" />
-      <div className="app-scroll-area h-[calc(100%-1.75rem)] overflow-y-auto">
+      <div className={`${dragBarHeightClass} relative select-none [--wails-draggable:drag]`}>
+        {isWindows && (
+          <button
+            type="button"
+            className={windowsCloseButtonClass}
+            aria-label={t(locale, 'close')}
+            title={t(locale, 'close')}
+            onPointerEnter={() => {
+              setIsWindowsCloseHovered(true);
+            }}
+            onPointerLeave={() => {
+              resetWindowsCloseVisualState();
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              setIsWindowsClosePressed(true);
+            }}
+            onPointerUp={() => {
+              setIsWindowsClosePressed(false);
+            }}
+            onPointerCancel={() => {
+              resetWindowsCloseVisualState();
+            }}
+            onClick={() => {
+              resetWindowsCloseVisualState();
+              void closeWindow();
+            }}
+          >
+            <svg aria-hidden="true" viewBox="0 0 10 10" className="h-[10px] w-[10px]">
+              <path d="M1 1L9 9M9 1L1 9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="square" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <CustomScrollArea className={contentHeightClass}>
         <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
           <HeroHeader
             locale={locale}
             titleRef={titleRef}
             actions={
-              <div className="inline-flex rounded-full border border-[var(--glass-control-border)] bg-[var(--glass-control-bg)] p-1 [backdrop-filter:blur(var(--surface-blur))_saturate(var(--surface-sat))]">
+              <div className="inline-flex rounded-full border border-[var(--seg-border)] bg-[var(--seg-bg)] p-1 shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
                 <NavLink
                   to="/reminders"
                   className={({ isActive }) =>
-                    `rounded-full px-3 py-1 text-xs no-underline transition-colors ${
-                      isActive ? 'bg-[#0f826b] text-white' : 'text-[var(--control-text)] hover:bg-[var(--control-hover-bg)]'
+                    `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
+                      isActive
+                        ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                        : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
                     }`
                   }
                 >
@@ -138,8 +245,10 @@ export function App() {
                 <NavLink
                   to="/analytics"
                   className={({ isActive }) =>
-                    `rounded-full px-3 py-1 text-xs no-underline transition-colors ${
-                      isActive ? 'bg-[#0f826b] text-white' : 'text-[var(--control-text)] hover:bg-[var(--control-hover-bg)]'
+                    `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
+                      isActive
+                        ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                        : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
                     }`
                   }
                 >
@@ -148,8 +257,10 @@ export function App() {
                 <NavLink
                   to="/settings"
                   className={({ isActive }) =>
-                    `rounded-full px-3 py-1 text-xs no-underline transition-colors ${
-                      isActive ? 'bg-[#0f826b] text-white' : 'text-[var(--control-text)] hover:bg-[var(--control-hover-bg)]'
+                    `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
+                      isActive
+                        ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                        : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
                     }`
                   }
                 >
@@ -173,9 +284,15 @@ export function App() {
                     void applyReminderPatch(id, { enabled });
                   }}
                   onReminderIntervalDraftChange={setReminderIntervalDraft}
-                  onReminderIntervalCommit={commitReminderIntervalDraft}
+                  onReminderIntervalDraftNormalize={normalizeReminderIntervalDraft}
                   onReminderBreakDraftChange={setReminderBreakDraft}
-                  onReminderBreakCommit={commitReminderBreakDraft}
+                  onReminderBreakDraftNormalize={normalizeReminderBreakDraft}
+                  onReminderDraftCommit={(id, intervalValue, breakValue) => {
+                    return commitReminderDrafts(id, intervalValue, breakValue);
+                  }}
+                  onReminderEditCancel={(id) => {
+                    resetReminderDraftToStored(id);
+                  }}
                 />
               }
             />
@@ -205,7 +322,7 @@ export function App() {
             <Route path="*" element={<Navigate to="/reminders" replace />} />
           </Routes>
         </div>
-      </div>
+      </CustomScrollArea>
     </div>
   );
 }
