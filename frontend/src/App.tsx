@@ -279,6 +279,7 @@ export function App() {
                 <RemindersPage
                   locale={locale}
                   reminders={reminders}
+                  runtimeReminders={runtime.reminders}
                   reminderDrafts={reminderDrafts}
                   onReminderEnabledChange={(id, enabled) => {
                     void applyReminderPatch(id, { enabled });

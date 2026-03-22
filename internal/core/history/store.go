@@ -16,16 +16,16 @@ import (
 )
 
 const (
-	deliveryTypeOverlay      = "overlay"
-	deliveryTypeNotification = "notification"
-	sourceScheduled          = "scheduled"
-	sourceManual             = "manual"
-	statusRunning            = "running"
-	statusCompleted          = "completed"
-	statusSkipped            = "skipped"
-	statusCanceled           = "canceled"
-	defaultIntervalSec       = 20 * 60
-	defaultBreakSec          = 20
+	reminderTypeRest   = "rest"
+	reminderTypeNotify = "notify"
+	sourceScheduled    = "scheduled"
+	sourceManual       = "manual"
+	statusRunning      = "running"
+	statusCompleted    = "completed"
+	statusSkipped      = "skipped"
+	statusCanceled     = "canceled"
+	defaultIntervalSec = 20 * 60
+	defaultBreakSec    = 20
 )
 
 var (
@@ -46,7 +46,7 @@ type ReminderDefinition struct {
 	Enabled      bool
 	IntervalSec  int
 	BreakSec     int
-	DeliveryType string
+	ReminderType string
 }
 
 type ReminderMutation struct {
@@ -55,7 +55,7 @@ type ReminderMutation struct {
 	Enabled      *bool
 	IntervalSec  *int
 	BreakSec     *int
-	DeliveryType *string
+	ReminderType *string
 }
 
 func OpenStore(path string) (*Store, error) {
@@ -123,12 +123,12 @@ func normalizeReminderID(id string) string {
 	return strings.ToLower(strings.TrimSpace(id))
 }
 
-func normalizeDeliveryType(deliveryType string) string {
-	switch strings.ToLower(strings.TrimSpace(deliveryType)) {
-	case deliveryTypeNotification:
-		return deliveryTypeNotification
+func normalizeReminderType(reminderType string) string {
+	switch strings.ToLower(strings.TrimSpace(reminderType)) {
+	case reminderTypeNotify:
+		return reminderTypeNotify
 	default:
-		return deliveryTypeOverlay
+		return reminderTypeRest
 	}
 }
 
@@ -183,17 +183,17 @@ func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
 		}
 		intervalSec := normalizePositive(reminder.IntervalSec, 60)
 		breakSec := normalizePositive(reminder.BreakSec, 5)
-		deliveryType := normalizeDeliveryType(reminder.DeliveryType)
+		reminderType := normalizeReminderType(reminder.ReminderType)
 		_, err := tx.ExecContext(
 			context.Background(),
-			`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, delivery_type)
+			`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, reminder_type)
 			 VALUES(?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(id) DO UPDATE SET
 			   name=excluded.name,
 			   enabled=excluded.enabled,
 			   interval_sec=excluded.interval_sec,
 			   break_sec=excluded.break_sec,
-			   delivery_type=excluded.delivery_type,
+			   reminder_type=excluded.reminder_type,
 			   deleted_at=NULL,
 			   updated_at=unixepoch()`,
 			id,
@@ -201,7 +201,7 @@ func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
 			boolToInt(reminder.Enabled),
 			intervalSec,
 			breakSec,
-			deliveryType,
+			reminderType,
 		)
 		if err != nil {
 			return err
@@ -218,7 +218,7 @@ func (s *Store) ListReminders() ([]ReminderDefinition, error) {
 
 	rows, err := s.db.QueryContext(
 		context.Background(),
-		`SELECT id, name, enabled, interval_sec, break_sec, delivery_type
+		`SELECT id, name, enabled, interval_sec, break_sec, reminder_type
 		 FROM reminders
 		 WHERE deleted_at IS NULL
 		 ORDER BY id ASC`,
@@ -232,7 +232,7 @@ func (s *Store) ListReminders() ([]ReminderDefinition, error) {
 	for rows.Next() {
 		var r ReminderDefinition
 		var enabledInt int
-		if err := rows.Scan(&r.ID, &r.Name, &enabledInt, &r.IntervalSec, &r.BreakSec, &r.DeliveryType); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &enabledInt, &r.IntervalSec, &r.BreakSec, &r.ReminderType); err != nil {
 			return nil, err
 		}
 		r.Enabled = enabledInt == 1
@@ -270,17 +270,17 @@ func (s *Store) UpdateReminders(mutations []ReminderMutation) error {
 			Enabled:      true,
 			IntervalSec:  defaultIntervalSec,
 			BreakSec:     defaultBreakSec,
-			DeliveryType: deliveryTypeOverlay,
+			ReminderType: reminderTypeRest,
 		}
 
 		row := tx.QueryRowContext(
 			context.Background(),
-			`SELECT name, enabled, interval_sec, break_sec, delivery_type
+			`SELECT name, enabled, interval_sec, break_sec, reminder_type
 			 FROM reminders WHERE id = ?`,
 			id,
 		)
 		var enabledInt int
-		switch err := row.Scan(&current.Name, &enabledInt, &current.IntervalSec, &current.BreakSec, &current.DeliveryType); {
+		switch err := row.Scan(&current.Name, &enabledInt, &current.IntervalSec, &current.BreakSec, &current.ReminderType); {
 		case err == nil:
 			current.Enabled = enabledInt == 1
 		case errors.Is(err, sql.ErrNoRows):
@@ -303,20 +303,20 @@ func (s *Store) UpdateReminders(mutations []ReminderMutation) error {
 		if mutation.BreakSec != nil {
 			current.BreakSec = normalizePositive(*mutation.BreakSec, current.BreakSec)
 		}
-		if mutation.DeliveryType != nil {
-			current.DeliveryType = normalizeDeliveryType(*mutation.DeliveryType)
+		if mutation.ReminderType != nil {
+			current.ReminderType = normalizeReminderType(*mutation.ReminderType)
 		}
 
 		_, err := tx.ExecContext(
 			context.Background(),
-			`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, delivery_type)
+			`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, reminder_type)
 			 VALUES(?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(id) DO UPDATE SET
 			   name=excluded.name,
 			   enabled=excluded.enabled,
 			   interval_sec=excluded.interval_sec,
 			   break_sec=excluded.break_sec,
-			   delivery_type=excluded.delivery_type,
+			   reminder_type=excluded.reminder_type,
 			   deleted_at=NULL,
 			   updated_at=unixepoch()`,
 			current.ID,
@@ -324,7 +324,7 @@ func (s *Store) UpdateReminders(mutations []ReminderMutation) error {
 			boolToInt(current.Enabled),
 			current.IntervalSec,
 			current.BreakSec,
-			current.DeliveryType,
+			current.ReminderType,
 		)
 		if err != nil {
 			return err
@@ -350,7 +350,7 @@ func (s *Store) CreateReminder(mutation ReminderMutation) error {
 		Enabled:      true,
 		IntervalSec:  defaultIntervalSec,
 		BreakSec:     defaultBreakSec,
-		DeliveryType: deliveryTypeOverlay,
+		ReminderType: reminderTypeRest,
 	}
 	if mutation.Name != nil {
 		name := strings.TrimSpace(*mutation.Name)
@@ -367,8 +367,8 @@ func (s *Store) CreateReminder(mutation ReminderMutation) error {
 	if mutation.BreakSec != nil {
 		next.BreakSec = normalizePositive(*mutation.BreakSec, next.BreakSec)
 	}
-	if mutation.DeliveryType != nil {
-		next.DeliveryType = normalizeDeliveryType(*mutation.DeliveryType)
+	if mutation.ReminderType != nil {
+		next.ReminderType = normalizeReminderType(*mutation.ReminderType)
 	}
 
 	var deletedAt sql.NullInt64
@@ -390,14 +390,14 @@ func (s *Store) CreateReminder(mutation ReminderMutation) error {
 
 	_, err = s.db.ExecContext(
 		context.Background(),
-		`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, delivery_type)
+		`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, reminder_type)
 		 VALUES(?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   name=excluded.name,
 		   enabled=excluded.enabled,
 		   interval_sec=excluded.interval_sec,
 		   break_sec=excluded.break_sec,
-		   delivery_type=excluded.delivery_type,
+		   reminder_type=excluded.reminder_type,
 		   deleted_at=NULL,
 		   updated_at=unixepoch()
 		 WHERE reminders.deleted_at IS NOT NULL`,
@@ -406,7 +406,7 @@ func (s *Store) CreateReminder(mutation ReminderMutation) error {
 		boolToInt(next.Enabled),
 		next.IntervalSec,
 		next.BreakSec,
-		next.DeliveryType,
+		next.ReminderType,
 	)
 	return err
 }
@@ -499,28 +499,28 @@ func (s *Store) StartBreak(sessionID string, startedAt time.Time, source string,
 		name := reminderID
 		intervalSec := plannedSec
 		breakSec := plannedSec
-		deliveryType := deliveryTypeOverlay
+		reminderType := reminderTypeRest
 
 		row := tx.QueryRowContext(
 			context.Background(),
-			`SELECT name, interval_sec, break_sec, delivery_type
+			`SELECT name, interval_sec, break_sec, reminder_type
 				 FROM reminders
 				 WHERE id = ?
 				   AND deleted_at IS NULL`,
 			reminderID,
 		)
-		switch err := row.Scan(&name, &intervalSec, &breakSec, &deliveryType); {
+		switch err := row.Scan(&name, &intervalSec, &breakSec, &reminderType); {
 		case err == nil:
 		case errors.Is(err, sql.ErrNoRows):
 			_, err = tx.ExecContext(
 				context.Background(),
-				`INSERT OR IGNORE INTO reminders(id, name, enabled, interval_sec, break_sec, delivery_type)
+				`INSERT OR IGNORE INTO reminders(id, name, enabled, interval_sec, break_sec, reminder_type)
 				 VALUES(?, ?, 1, ?, ?, ?)`,
 				reminderID,
 				reminderID,
 				plannedSec,
 				plannedSec,
-				deliveryTypeOverlay,
+				reminderTypeRest,
 			)
 			if err != nil {
 				return err
@@ -531,7 +531,7 @@ func (s *Store) StartBreak(sessionID string, startedAt time.Time, source string,
 
 		intervalSec = normalizePositive(intervalSec, plannedSec)
 		breakSec = normalizePositive(breakSec, plannedSec)
-		deliveryType = normalizeDeliveryType(deliveryType)
+		reminderType = normalizeReminderType(reminderType)
 		if strings.TrimSpace(name) == "" {
 			name = reminderID
 		}
@@ -539,14 +539,14 @@ func (s *Store) StartBreak(sessionID string, startedAt time.Time, source string,
 		_, err = tx.ExecContext(
 			context.Background(),
 			`INSERT INTO break_session_reminders(
-			   session_id, reminder_id, reminder_name_snapshot, interval_sec_snapshot, break_sec_snapshot, delivery_type_snapshot
+			   session_id, reminder_id, reminder_name_snapshot, interval_sec_snapshot, break_sec_snapshot, reminder_type_snapshot
 			 ) VALUES(?, ?, ?, ?, ?, ?)`,
 			id,
 			reminderID,
 			name,
 			intervalSec,
 			breakSec,
-			deliveryType,
+			reminderType,
 		)
 		if err != nil {
 			return err

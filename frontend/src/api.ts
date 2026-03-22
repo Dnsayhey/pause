@@ -6,6 +6,7 @@ import type {
   AnalyticsTrend,
   AnalyticsWeeklyStats,
   ReminderConfig,
+  ReminderCreateInput,
   ReminderPatch,
   RuntimeState,
   Settings,
@@ -16,6 +17,7 @@ type Backend = {
   GetSettings: () => Promise<Settings>;
   UpdateSettings: (patch: SettingsPatch) => Promise<Settings>;
   GetReminders: () => Promise<ReminderConfig[]>;
+  CreateReminder: (input: ReminderCreateInput) => Promise<ReminderConfig[]>;
   UpdateReminders: (patches: ReminderPatch[]) => Promise<ReminderConfig[]>;
   GetLaunchAtLogin: () => Promise<boolean>;
   SetLaunchAtLogin: (enabled: boolean) => Promise<boolean>;
@@ -59,6 +61,10 @@ export async function updateSettings(patch: SettingsPatch): Promise<Settings> {
 
 export async function getReminders(): Promise<ReminderConfig[]> {
   return requireBackend().GetReminders();
+}
+
+export async function createReminder(input: ReminderCreateInput): Promise<ReminderConfig[]> {
+  return requireBackend().CreateReminder(input);
 }
 
 export async function updateReminders(patches: ReminderPatch[]): Promise<ReminderConfig[]> {

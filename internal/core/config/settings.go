@@ -21,7 +21,7 @@ type ReminderConfig struct {
 	Enabled      bool   `json:"enabled"`
 	IntervalSec  int    `json:"intervalSec"`
 	BreakSec     int    `json:"breakSec"`
-	DeliveryType string `json:"deliveryType,omitempty"`
+	ReminderType string `json:"reminderType,omitempty"`
 }
 
 type EnforcementSettings struct {
@@ -58,7 +58,7 @@ type ReminderPatch struct {
 	Enabled      *bool   `json:"enabled,omitempty"`
 	IntervalSec  *int    `json:"intervalSec,omitempty"`
 	BreakSec     *int    `json:"breakSec,omitempty"`
-	DeliveryType *string `json:"deliveryType,omitempty"`
+	ReminderType *string `json:"reminderType,omitempty"`
 }
 
 type ReminderCreateInput struct {
@@ -66,7 +66,7 @@ type ReminderCreateInput struct {
 	IntervalSec  int     `json:"intervalSec"`
 	BreakSec     int     `json:"breakSec"`
 	Enabled      *bool   `json:"enabled,omitempty"`
-	DeliveryType *string `json:"deliveryType,omitempty"`
+	ReminderType *string `json:"reminderType,omitempty"`
 }
 
 type EnforcementSettingsPatch struct {
@@ -222,13 +222,16 @@ func normalizeReminders(reminders []ReminderConfig) []ReminderConfig {
 			Enabled:      reminder.Enabled,
 			IntervalSec:  reminder.IntervalSec,
 			BreakSec:     reminder.BreakSec,
-			DeliveryType: normalizeReminderDeliveryType(reminder.DeliveryType),
+			ReminderType: normalizeReminderType(reminder.ReminderType),
 		}
 		if next.IntervalSec <= 0 {
 			next.IntervalSec = intervalDef
 		}
 		if next.BreakSec <= 0 {
 			next.BreakSec = breakDef
+		}
+		if next.ReminderType == "" {
+			next.ReminderType = "rest"
 		}
 
 		if idx, ok := indexByID[id]; ok {
@@ -272,7 +275,7 @@ func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []Remin
 			Enabled:      true,
 			IntervalSec:  intervalDef,
 			BreakSec:     breakDef,
-			DeliveryType: "overlay",
+			ReminderType: "rest",
 		})
 		idx = len(reminders) - 1
 	}
@@ -292,10 +295,10 @@ func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []Remin
 	if patch.BreakSec != nil {
 		reminders[idx].BreakSec = *patch.BreakSec
 	}
-	if patch.DeliveryType != nil {
-		deliveryType := normalizeReminderDeliveryType(*patch.DeliveryType)
-		if deliveryType != "" {
-			reminders[idx].DeliveryType = deliveryType
+	if patch.ReminderType != nil {
+		reminderType := normalizeReminderType(*patch.ReminderType)
+		if reminderType != "" {
+			reminders[idx].ReminderType = reminderType
 		}
 	}
 	return reminders
@@ -349,12 +352,12 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 	return s.Normalize()
 }
 
-func normalizeReminderDeliveryType(value string) string {
+func normalizeReminderType(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "overlay":
-		return "overlay"
-	case "notification":
-		return "notification"
+	case "rest":
+		return "rest"
+	case "notify":
+		return "notify"
 	default:
 		return ""
 	}

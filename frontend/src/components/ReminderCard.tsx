@@ -11,13 +11,14 @@ function suppressEnter(event: KeyboardEvent<HTMLInputElement>) {
 
 type ReminderCardProps = {
   locale: Locale;
+  variant?: 'rest' | 'notify';
   title: string;
   enabledLabel: string;
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
-  titleAnchorClassName?: string;
   editLabel: string;
   doneLabel: string;
+  metaText?: string;
   intervalLabel: string;
   intervalValue: string;
   intervalUnitSec: number;
@@ -58,8 +59,21 @@ function unitLabel(locale: Locale, unitSec: number, value: string): string {
   return n === 1 ? 'second' : 'seconds';
 }
 
-function summaryText(locale: Locale, intervalValue: string, intervalUnitSec: number, breakValue: string, breakUnitSec: number): string {
+function summaryText(
+  locale: Locale,
+  variant: 'rest' | 'notify',
+  intervalValue: string,
+  intervalUnitSec: number,
+  breakValue: string,
+  breakUnitSec: number
+): string {
   const intervalUnit = unitLabel(locale, intervalUnitSec, intervalValue);
+  if (variant === 'notify') {
+    if (locale === 'zh-CN') {
+      return `每隔 ${intervalValue || '--'} ${intervalUnit} 提醒一次`;
+    }
+    return `Notify me every ${intervalValue || '--'} ${intervalUnit}`;
+  }
   const breakUnit = unitLabel(locale, breakUnitSec, breakValue);
   if (locale === 'zh-CN') {
     return `每隔 ${intervalValue || '--'} ${intervalUnit} 休息 ${breakValue || '--'} ${breakUnit}`;
@@ -69,13 +83,14 @@ function summaryText(locale: Locale, intervalValue: string, intervalUnitSec: num
 
 export function ReminderCard({
   locale,
+  variant = 'rest',
   title,
   enabledLabel,
   enabled,
   onEnabledChange,
-  titleAnchorClassName = 'bg-[var(--toggle-on)]',
   editLabel,
   doneLabel,
+  metaText,
   intervalLabel,
   intervalValue,
   intervalUnitSec,
@@ -125,7 +140,9 @@ export function ReminderCard({
   const handleDone = async () => {
     if (isSaving) return;
     onIntervalNormalize(intervalValue);
-    onBreakNormalize(breakValue);
+    if (variant === 'rest') {
+      onBreakNormalize(breakValue);
+    }
     setIsSaving(true);
     try {
       await onDoneEdit();
@@ -143,7 +160,12 @@ export function ReminderCard({
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span aria-hidden="true" className={`h-4 w-[3px] rounded-full ${titleAnchorClassName}`} />
+            <span
+              aria-hidden="true"
+              className={`h-4 w-[3px] rounded-full transition-colors ${
+                enabled ? 'bg-[var(--text-primary)] opacity-90' : 'bg-[var(--text-tertiary)] opacity-50'
+              }`}
+            />
             <h3 className="m-0 text-[18px]">{title}</h3>
           </div>
           <ToggleSwitch ariaLabel={enabledLabel} checked={enabled} onChange={onEnabledChange} />
@@ -151,11 +173,54 @@ export function ReminderCard({
         <div className="flex items-start justify-between gap-2">
           {!isEditing ? (
             <p className="m-0 text-[15px] leading-[1.45] text-[var(--text-primary)]">
-              {summaryText(locale, intervalValue, intervalUnitSec, breakValue, breakUnitSec)}
+              {summaryText(locale, variant, intervalValue, intervalUnitSec, breakValue, breakUnitSec)}
             </p>
           ) : (
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[15px] leading-[1.45] text-[var(--text-primary)]">
-              {locale === 'zh-CN' ? (
+              {variant === 'notify' ? (
+                locale === 'zh-CN' ? (
+                  <>
+                    <span>每隔</span>
+                    <input
+                      aria-label={intervalLabel}
+                      className={inlineNumberInputClassName}
+                      type="number"
+                      min={intervalMin}
+                      max={intervalMax}
+                      step={1}
+                      value={intervalValue}
+                      onChange={(e) => onIntervalChange(e.target.value)}
+                      onKeyDown={suppressEnter}
+                      onBlur={(e) => {
+                        if (suppressBlurNormalizeRef.current) return;
+                        onIntervalNormalize(e.currentTarget.value);
+                      }}
+                    />
+                    <span>{unitLabel(locale, intervalUnitSec, intervalValue)}</span>
+                    <span>提醒一次</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Notify me every</span>
+                    <input
+                      aria-label={intervalLabel}
+                      className={inlineNumberInputClassName}
+                      type="number"
+                      min={intervalMin}
+                      max={intervalMax}
+                      step={1}
+                      value={intervalValue}
+                      onChange={(e) => onIntervalChange(e.target.value)}
+                      onKeyDown={suppressEnter}
+                      onBlur={(e) => {
+                        if (suppressBlurNormalizeRef.current) return;
+                        onIntervalNormalize(e.currentTarget.value);
+                      }}
+                    />
+                    <span>{unitLabel(locale, intervalUnitSec, intervalValue)}</span>
+                  </>
+                )
+              ) : locale === 'zh-CN' ? (
                 <>
                   <span>每隔</span>
                   <input
@@ -273,6 +338,7 @@ export function ReminderCard({
             )}
           </button>
         </div>
+        {metaText ? <p className="mt-2 m-0 text-xs leading-[1.35] text-[var(--text-tertiary)]">{metaText}</p> : null}
       </GlassCard>
     </div>
   );

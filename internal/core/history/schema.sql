@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS reminders (
   enabled        INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
   interval_sec   INTEGER NOT NULL CHECK (interval_sec > 0),
   break_sec      INTEGER NOT NULL CHECK (break_sec > 0),
-  delivery_type  TEXT NOT NULL DEFAULT 'overlay'
-                 CHECK (delivery_type IN ('overlay', 'notification')),
+  reminder_type  TEXT NOT NULL DEFAULT 'rest'
+                 CHECK (reminder_type IN ('rest', 'notify')),
   deleted_at     INTEGER,
   created_at     INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at     INTEGER NOT NULL DEFAULT (unixepoch())
@@ -50,8 +50,8 @@ CREATE TABLE IF NOT EXISTS break_session_reminders (
   reminder_name_snapshot  TEXT NOT NULL,
   interval_sec_snapshot   INTEGER NOT NULL CHECK (interval_sec_snapshot > 0),
   break_sec_snapshot      INTEGER NOT NULL CHECK (break_sec_snapshot > 0),
-  delivery_type_snapshot  TEXT NOT NULL
-                          CHECK (delivery_type_snapshot IN ('overlay', 'notification')),
+  reminder_type_snapshot  TEXT NOT NULL
+                          CHECK (reminder_type_snapshot IN ('rest', 'notify')),
   PRIMARY KEY (session_id, reminder_id),
   FOREIGN KEY (session_id) REFERENCES break_sessions(id) ON DELETE CASCADE,
   FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE RESTRICT
@@ -69,10 +69,10 @@ INSERT OR IGNORE INTO reminders (
   enabled,
   interval_sec,
   break_sec,
-  delivery_type
+  reminder_type
 ) VALUES
-  ('eye', '护眼', 1, 1200, 20, 'overlay'),
-  ('stand', '站立', 1, 3600, 300, 'overlay');
+  ('eye', '护眼', 1, 1200, 20, 'rest'),
+  ('stand', '站立', 1, 3600, 300, 'rest');
 
 CREATE TRIGGER IF NOT EXISTS trg_reminders_updated_at
 AFTER UPDATE ON reminders
