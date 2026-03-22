@@ -1,7 +1,7 @@
 export type ReminderConfig = {
   id: string;
   name: string;
-  deliveryType: 'overlay' | 'notification';
+  reminderType: 'rest' | 'notify';
   enabled: boolean;
   intervalSec: number;
   breakSec: number;
@@ -10,10 +10,18 @@ export type ReminderConfig = {
 export type ReminderPatch = {
   id: string;
   name?: string;
-  deliveryType?: 'overlay' | 'notification';
+  reminderType?: 'rest' | 'notify';
   enabled?: boolean;
   intervalSec?: number;
   breakSec?: number;
+};
+
+export type ReminderCreateInput = {
+  name: string;
+  intervalSec: number;
+  breakSec: number;
+  reminderType?: 'rest' | 'notify';
+  enabled?: boolean;
 };
 
 export type ReminderRuntime = {
@@ -78,7 +86,7 @@ export type AnalyticsReminderStat = {
   reminderId: string;
   reminderName: string;
   enabled: boolean;
-  deliveryType: string;
+  reminderType: string;
   triggeredCount: number;
   completedCount: number;
   skippedCount: number;
@@ -144,7 +152,7 @@ export type AnalyticsBreakTypeDistributionItem = {
   completionRate: number;
   skipRate: number;
   triggeredShare: number;
-  deliveryType?: string;
+  reminderType?: string;
   reminderEnabled: boolean;
 };
 
@@ -173,4 +181,3 @@ export type AnalyticsHourlyHeatmap = {
   metric: AnalyticsHeatmapMetric;
   cells: AnalyticsHeatmapCell[];
 };
-

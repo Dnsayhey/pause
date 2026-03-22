@@ -45,6 +45,7 @@ type Engine struct {
 	idleProvider   platform.IdleProvider
 	lockProvider   platform.LockStateProvider
 	soundPlayer    platform.SoundPlayer
+	notifier       platform.Notifier
 	startupManager platform.StartupManager
 
 	lastTick      time.Time
@@ -89,9 +90,20 @@ func NewEngine(
 		idleProvider:   idleProvider,
 		lockProvider:   lockProvider,
 		soundPlayer:    soundPlayer,
+		notifier:       platform.NoopNotifier{},
 		startupManager: startupManager,
 		pausedReminder: map[string]bool{},
 	}
+}
+
+func (e *Engine) SetNotifier(notifier platform.Notifier) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if notifier == nil {
+		e.notifier = platform.NoopNotifier{}
+		return
+	}
+	e.notifier = notifier
 }
 
 func (e *Engine) SyncPlatformSettings() error {
@@ -238,15 +250,24 @@ func (e *Engine) Tick(now time.Time) {
 		return
 	}
 
-	e.session.StartBreak(now, evt, settings.Enforcement.OverlaySkipAllowed)
-	e.recordBreakStartedLocked(now, "scheduled", evt)
+	restEvent, notifyReminderIDs := splitReminderEventByType(evt, effectiveReminders)
+	if len(notifyReminderIDs) > 0 {
+		e.notifyRemindersLocked(notifyReminderIDs, settings.UI.Language)
+	}
+	if restEvent == nil {
+		e.logTickLocked(now, settings, effectiveReminders, "notification_event", rawDeltaSec, appliedDeltaSec, evt)
+		return
+	}
+
+	e.session.StartBreak(now, restEvent, settings.Enforcement.OverlaySkipAllowed)
+	e.recordBreakStartedLocked(now, "scheduled", restEvent)
 	logx.Infof(
 		"break.started source=scheduled reasons=%s break_sec=%d skip_allowed=%t",
-		joinReminderTypes(evt.Reasons),
-		evt.BreakSec,
+		joinReminderTypes(restEvent.Reasons),
+		restEvent.BreakSec,
 		settings.Enforcement.OverlaySkipAllowed,
 	)
-	e.logTickLocked(now, settings, effectiveReminders, "event", rawDeltaSec, appliedDeltaSec, evt)
+	e.logTickLocked(now, settings, effectiveReminders, "event", rawDeltaSec, appliedDeltaSec, restEvent)
 }
 
 func (e *Engine) GetSettings() config.Settings {
@@ -495,7 +516,7 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings config.Settings) con
 			BreakSec:    reminder.BreakSec,
 		})
 	}
-	reasons := nextReasons(reminders)
+	reasons := nextReasons(reminders, e.reminders)
 	return config.RuntimeState{
 		Now:                now,
 		CurrentSession:     e.session.CurrentView(now),
@@ -701,7 +722,7 @@ func buildImmediateBreakEvent(reminders []config.ReminderConfig, nextByID map[st
 		return nil
 	}
 	reminder, ok := config.ReminderByID(reminders, reasonKey)
-	if !ok || !reminder.Enabled || reminder.BreakSec <= 0 {
+	if !ok || !reminder.Enabled || reminder.BreakSec <= 0 || !isRestReminderType(reminder.ReminderType) {
 		return nil
 	}
 	return &scheduler.Event{
@@ -779,9 +800,20 @@ func marshalReminderPatchesForLog(patches []config.ReminderPatch) string {
 	return string(raw)
 }
 
-func nextReasons(reminders []config.ReminderRuntime) []string {
+func nextReasons(reminders []config.ReminderRuntime, defs []config.ReminderConfig) []string {
+	restReminderIDs := map[string]struct{}{}
+	for _, def := range defs {
+		if !isRestReminderType(def.ReminderType) {
+			continue
+		}
+		restReminderIDs[def.ID] = struct{}{}
+	}
+
 	minNext := -1
 	for _, reminder := range reminders {
+		if _, isRest := restReminderIDs[reminder.ID]; !isRest {
+			continue
+		}
 		if !reminder.Enabled || reminder.Paused || reminder.NextInSec < 0 {
 			continue
 		}
@@ -795,6 +827,9 @@ func nextReasons(reminders []config.ReminderRuntime) []string {
 
 	reasons := make([]string, 0, len(reminders))
 	for _, reminder := range reminders {
+		if _, isRest := restReminderIDs[reminder.ID]; !isRest {
+			continue
+		}
 		if !reminder.Enabled || reminder.Paused || reminder.NextInSec < 0 {
 			continue
 		}
@@ -804,6 +839,110 @@ func nextReasons(reminders []config.ReminderRuntime) []string {
 	}
 	sort.Strings(reasons)
 	return reasons
+}
+
+func isRestReminderType(reminderType string) bool {
+	return strings.ToLower(strings.TrimSpace(reminderType)) != "notify"
+}
+
+func splitReminderEventByType(evt *scheduler.Event, reminders []config.ReminderConfig) (*scheduler.Event, []string) {
+	if evt == nil || len(evt.Reasons) == 0 {
+		return nil, nil
+	}
+
+	byID := make(map[string]config.ReminderConfig, len(reminders))
+	for _, reminder := range reminders {
+		byID[reminder.ID] = reminder
+	}
+
+	restReasons := make([]scheduler.ReminderType, 0, len(evt.Reasons))
+	notifyReminderIDs := make([]string, 0, len(evt.Reasons))
+	restBreakSec := 0
+
+	for _, reason := range evt.Reasons {
+		id := normalizeReminderID(string(reason))
+		reminder, ok := byID[id]
+		if !ok {
+			restReasons = append(restReasons, reason)
+			if evt.BreakSec > restBreakSec {
+				restBreakSec = evt.BreakSec
+			}
+			continue
+		}
+		if isRestReminderType(reminder.ReminderType) {
+			restReasons = append(restReasons, reason)
+			if reminder.BreakSec > restBreakSec {
+				restBreakSec = reminder.BreakSec
+			}
+			continue
+		}
+		notifyReminderIDs = append(notifyReminderIDs, id)
+	}
+
+	sort.Strings(notifyReminderIDs)
+	if len(notifyReminderIDs) > 1 {
+		uniq := notifyReminderIDs[:0]
+		last := ""
+		for _, id := range notifyReminderIDs {
+			if id == last {
+				continue
+			}
+			uniq = append(uniq, id)
+			last = id
+		}
+		notifyReminderIDs = uniq
+	}
+
+	if len(restReasons) == 0 {
+		return nil, notifyReminderIDs
+	}
+	if restBreakSec <= 0 {
+		restBreakSec = evt.BreakSec
+		if restBreakSec <= 0 {
+			restBreakSec = 1
+		}
+	}
+
+	return &scheduler.Event{
+		Reasons:  restReasons,
+		BreakSec: restBreakSec,
+	}, notifyReminderIDs
+}
+
+func (e *Engine) notifyRemindersLocked(reminderIDs []string, language string) {
+	if len(reminderIDs) == 0 || e.notifier == nil {
+		return
+	}
+	names := make([]string, 0, len(reminderIDs))
+	byID := make(map[string]config.ReminderConfig, len(e.reminders))
+	for _, reminder := range e.reminders {
+		byID[reminder.ID] = reminder
+	}
+	for _, id := range reminderIDs {
+		reminder, ok := byID[id]
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(reminder.Name)
+		if name == "" {
+			name = reminder.ID
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return
+	}
+
+	title := "Reminder"
+	body := strings.Join(names, " · ")
+	if language == config.UILanguageZhCN {
+		title = "提醒"
+	}
+	if err := e.notifier.ShowReminder(title, body); err != nil {
+		logx.Warnf("reminder.notification_err reminders=%s err=%v", strings.Join(reminderIDs, "+"), err)
+		return
+	}
+	logx.Infof("reminder.notification_sent reminders=%s", strings.Join(reminderIDs, "+"))
 }
 
 func cloneReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {

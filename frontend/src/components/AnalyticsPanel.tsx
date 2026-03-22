@@ -270,8 +270,8 @@ export function AnalyticsPanel({ locale }: AnalyticsPanelProps) {
     if (!bundle || bundle.distribution.items.length === 0) return null;
     const items = bundle.distribution.items.slice(0, 8);
     const categories = items.map((item) => {
-      if (!item.deliveryType) return item.reminderName;
-      return `${item.reminderName} (${item.deliveryType})`;
+      if (!item.reminderType) return item.reminderName;
+      return `${item.reminderName} (${item.reminderType})`;
     });
     return {
       animationDuration: 500,

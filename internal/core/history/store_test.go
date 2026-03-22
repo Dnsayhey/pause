@@ -35,8 +35,8 @@ func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 	defer store.Close()
 
 	if err := store.SyncReminders([]ReminderDefinition{
-		{ID: "eye", Name: "护眼", Enabled: true, IntervalSec: 1200, BreakSec: 20, DeliveryType: "overlay"},
-		{ID: "stand", Name: "站立", Enabled: true, IntervalSec: 3600, BreakSec: 300, DeliveryType: "overlay"},
+		{ID: "eye", Name: "护眼", Enabled: true, IntervalSec: 1200, BreakSec: 20, ReminderType: "rest"},
+		{ID: "stand", Name: "站立", Enabled: true, IntervalSec: 3600, BreakSec: 300, ReminderType: "rest"},
 	}); err != nil {
 		t.Fatalf("SyncReminders() error = %v", err)
 	}
@@ -194,8 +194,8 @@ func TestCreateReminderInsertsNewRowWithDefaults(t *testing.T) {
 	if found.BreakSec != 20 {
 		t.Fatalf("expected default break 20, got %d", found.BreakSec)
 	}
-	if found.DeliveryType != "overlay" {
-		t.Fatalf("expected default delivery type overlay, got %q", found.DeliveryType)
+	if found.ReminderType != "rest" {
+		t.Fatalf("expected default reminder type rest, got %q", found.ReminderType)
 	}
 }
 
@@ -229,14 +229,14 @@ func TestCreateReminderRestoresSoftDeletedReminder(t *testing.T) {
 	enabled := false
 	intervalSec := 1800
 	breakSec := 30
-	delivery := "notification"
+	delivery := "notify"
 	if err := store.CreateReminder(ReminderMutation{
 		ID:           "eye",
 		Name:         &name,
 		Enabled:      &enabled,
 		IntervalSec:  &intervalSec,
 		BreakSec:     &breakSec,
-		DeliveryType: &delivery,
+		ReminderType: &delivery,
 	}); err != nil {
 		t.Fatalf("CreateReminder(restore eye) error = %v", err)
 	}
@@ -267,8 +267,8 @@ func TestCreateReminderRestoresSoftDeletedReminder(t *testing.T) {
 	if found.BreakSec != breakSec {
 		t.Fatalf("expected restored reminder break=%d, got %d", breakSec, found.BreakSec)
 	}
-	if found.DeliveryType != delivery {
-		t.Fatalf("expected restored reminder delivery=%q, got %q", delivery, found.DeliveryType)
+	if found.ReminderType != delivery {
+		t.Fatalf("expected restored reminder type=%q, got %q", delivery, found.ReminderType)
 	}
 }
 

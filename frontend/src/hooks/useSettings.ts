@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getLaunchAtLogin, getReminders, getSettings, setLaunchAtLogin, updateReminders, updateSettings } from '../api';
+import { createReminder as createReminderAPI, getLaunchAtLogin, getReminders, getSettings, setLaunchAtLogin, updateReminders, updateSettings } from '../api';
 import {
   isReminderValueValid,
   reminderFieldSpecByID,
@@ -184,6 +184,28 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     [refreshRuntime, setError]
   );
 
+  const createReminder = useCallback(
+    async (name: string, intervalSec: number, breakSec: number, reminderType: 'rest' | 'notify'): Promise<boolean> => {
+      setError('');
+      try {
+        const next = await createReminderAPI({
+          name,
+          intervalSec,
+          breakSec,
+          enabled: true,
+          reminderType
+        });
+        setReminders(next);
+        await refreshRuntime();
+        return true;
+      } catch (err) {
+        setError(String(err));
+        return false;
+      }
+    },
+    [refreshRuntime, setError]
+  );
+
   const setReminderIntervalDraft = useCallback((id: string, value: string) => {
     setReminderDrafts((prev) => ({
       ...prev,
@@ -314,6 +336,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     applyLaunchAtLogin,
     applyPatch,
     applyReminderPatch,
+    createReminder,
     setReminderIntervalDraft,
     setReminderBreakDraft,
     normalizeReminderIntervalDraft,

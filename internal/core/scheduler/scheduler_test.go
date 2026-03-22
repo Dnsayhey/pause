@@ -8,8 +8,8 @@ import (
 
 func defaultReminderFixtures() []config.ReminderConfig {
 	return []config.ReminderConfig{
-		{ID: config.ReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, DeliveryType: "overlay"},
-		{ID: config.ReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, DeliveryType: "overlay"},
+		{ID: config.ReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
+		{ID: config.ReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
 	}
 }
 

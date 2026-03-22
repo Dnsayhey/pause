@@ -15,8 +15,8 @@ export type ReminderFieldSpec = {
 const DEFAULT_SPEC: ReminderFieldSpec = {
   intervalLabelKey: 'intervalSec',
   breakLabelKey: 'breakSec',
-  intervalUnitSec: 1,
-  breakUnitSec: 1,
+  intervalUnitSec: 60,
+  breakUnitSec: 60,
   intervalMin: 1,
   breakMin: 1
 };

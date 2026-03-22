@@ -60,6 +60,7 @@ func NewApp(configPath string) (*App, error) {
 		adapters.StartupManager,
 		historyStore,
 	)
+	engine.SetNotifier(adapters.Notifier)
 	if err := syncEngineRemindersFromHistory(engine, historyStore); err != nil {
 		_ = historyStore.Close()
 		return nil, err
@@ -330,7 +331,7 @@ func historyDefsToConfig(defs []history.ReminderDefinition) []config.ReminderCon
 			Enabled:      def.Enabled,
 			IntervalSec:  def.IntervalSec,
 			BreakSec:     def.BreakSec,
-			DeliveryType: strings.TrimSpace(def.DeliveryType),
+			ReminderType: strings.TrimSpace(def.ReminderType),
 		})
 	}
 	return config.NormalizeReminderConfigsKeepEmpty(result)
@@ -384,7 +385,7 @@ func applyReminderPatchToHistory(store *history.Store, patches []config.Reminder
 			Enabled:      patch.Enabled,
 			IntervalSec:  patch.IntervalSec,
 			BreakSec:     patch.BreakSec,
-			DeliveryType: patch.DeliveryType,
+			ReminderType: patch.ReminderType,
 		})
 	}
 	return store.UpdateReminders(mutations)
@@ -462,7 +463,7 @@ func createReminderInHistory(store *history.Store, input config.ReminderCreateIn
 			Enabled:      &enabled,
 			IntervalSec:  &intervalSec,
 			BreakSec:     &breakSec,
-			DeliveryType: input.DeliveryType,
+			ReminderType: input.ReminderType,
 		})
 		if err == nil {
 			return id, nil

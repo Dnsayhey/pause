@@ -11,7 +11,7 @@ type AnalyticsReminderStat struct {
 	ReminderID          string  `json:"reminderId"`
 	ReminderName        string  `json:"reminderName"`
 	Enabled             bool    `json:"enabled"`
-	DeliveryType        string  `json:"deliveryType"`
+	ReminderType        string  `json:"reminderType"`
 	TriggeredCount      int     `json:"triggeredCount"`
 	CompletedCount      int     `json:"completedCount"`
 	SkippedCount        int     `json:"skippedCount"`
@@ -77,7 +77,7 @@ type AnalyticsBreakTypeDistributionItem struct {
 	CompletionRate  float64 `json:"completionRate"`
 	SkipRate        float64 `json:"skipRate"`
 	TriggeredShare  float64 `json:"triggeredShare"`
-	DeliveryType    string  `json:"deliveryType,omitempty"`
+	ReminderType    string  `json:"reminderType,omitempty"`
 	ReminderEnabled bool    `json:"reminderEnabled"`
 }
 
@@ -178,12 +178,18 @@ func (s *Store) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (Analytic
 
 	rows, err := s.db.QueryContext(
 		context.Background(),
-		`WITH sessions AS (
-		   SELECT started_at, status, actual_break_sec
-		   FROM break_sessions
-		   WHERE started_at >= ?
-		     AND started_at < ?
-		     AND status <> 'running'
+		`WITH overlay_sessions AS (
+		   SELECT DISTINCT session_id
+		   FROM break_session_reminders
+		   WHERE reminder_type_snapshot = 'rest'
+		 ),
+		 sessions AS (
+		   SELECT bs.started_at, bs.status, bs.actual_break_sec
+		   FROM break_sessions bs
+		   INNER JOIN overlay_sessions os ON os.session_id = bs.id
+		   WHERE bs.started_at >= ?
+		     AND bs.started_at < ?
+		     AND bs.status <> 'running'
 		 )
 		 SELECT
 		   strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime') AS day,
@@ -262,7 +268,7 @@ func (s *Store) QueryAnalyticsBreakTypeDistribution(from time.Time, to time.Time
 			CanceledCount:   row.CanceledCount,
 			CompletionRate:  ratio(row.CompletedCount, row.TriggeredCount),
 			SkipRate:        ratio(row.SkippedCount, row.TriggeredCount),
-			DeliveryType:    row.DeliveryType,
+			ReminderType:    row.ReminderType,
 			ReminderEnabled: row.Enabled,
 		}
 		result.TotalTriggered += item.TriggeredCount
@@ -289,12 +295,18 @@ func (s *Store) QueryAnalyticsHourlyHeatmap(from time.Time, to time.Time, metric
 
 	rows, err := s.db.QueryContext(
 		context.Background(),
-		`WITH sessions AS (
-		   SELECT started_at, status
-		   FROM break_sessions
-		   WHERE started_at >= ?
-		     AND started_at < ?
-		     AND status <> 'running'
+		`WITH overlay_sessions AS (
+		   SELECT DISTINCT session_id
+		   FROM break_session_reminders
+		   WHERE reminder_type_snapshot = 'rest'
+		 ),
+		 sessions AS (
+		   SELECT bs.started_at, bs.status
+		   FROM break_sessions bs
+		   INNER JOIN overlay_sessions os ON os.session_id = bs.id
+		   WHERE bs.started_at >= ?
+		     AND bs.started_at < ?
+		     AND bs.status <> 'running'
 		 )
 		 SELECT
 		   strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime') AS day,
@@ -365,7 +377,7 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 		   SELECT
 		     bsr.reminder_id AS reminder_id,
 		     bsr.reminder_name_snapshot AS reminder_name,
-		     bsr.delivery_type_snapshot AS delivery_type,
+		     bsr.reminder_type_snapshot AS reminder_type,
 		     COUNT(s.id) AS triggered_count,
 		     COALESCE(SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_count,
 		     COALESCE(SUM(CASE WHEN s.status = 'skipped' THEN 1 ELSE 0 END), 0) AS skipped_count,
@@ -374,16 +386,17 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 		     COALESCE(ROUND(AVG(CASE WHEN s.status = 'completed' THEN s.actual_break_sec END), 1), 0) AS avg_actual_break_sec
 		   FROM sessions_in_range s
 		   INNER JOIN break_session_reminders bsr ON bsr.session_id = s.id
+		   WHERE bsr.reminder_type_snapshot = 'rest'
 		   GROUP BY
 		     bsr.reminder_id,
 		     bsr.reminder_name_snapshot,
-		     bsr.delivery_type_snapshot
+		     bsr.reminder_type_snapshot
 		 ),
 		 active_zero AS (
 		   SELECT
 		     r.id AS reminder_id,
 		     r.name AS reminder_name,
-		     r.delivery_type AS delivery_type,
+		     r.reminder_type AS reminder_type,
 		     0 AS triggered_count,
 		     0 AS completed_count,
 		     0 AS skipped_count,
@@ -392,6 +405,7 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 		     0.0 AS avg_actual_break_sec
 		   FROM reminders r
 		   WHERE r.deleted_at IS NULL
+		     AND r.reminder_type = 'rest'
 		     AND NOT EXISTS (
 		       SELECT 1
 		       FROM history_agg h
@@ -407,7 +421,7 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 		   c.reminder_id,
 		   c.reminder_name,
 		   COALESCE(r.enabled, 0) AS enabled,
-		   c.delivery_type,
+		   c.reminder_type,
 		   c.triggered_count,
 		   c.completed_count,
 		   c.skipped_count,
@@ -433,7 +447,7 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 			&row.ReminderID,
 			&row.ReminderName,
 			&enabledInt,
-			&row.DeliveryType,
+			&row.ReminderType,
 			&row.TriggeredCount,
 			&row.CompletedCount,
 			&row.SkippedCount,
@@ -456,12 +470,18 @@ func (s *Store) querySummaryAggregateByRange(startUnix int64, endUnix int64) (An
 	summary := AnalyticsSummaryStats{}
 	err := s.db.QueryRowContext(
 		context.Background(),
-		`WITH sessions_in_range AS (
-		   SELECT id, status, actual_break_sec
-		   FROM break_sessions
-		   WHERE started_at >= ?
-		     AND started_at < ?
-		     AND status <> 'running'
+		`WITH overlay_sessions AS (
+		   SELECT DISTINCT session_id
+		   FROM break_session_reminders
+		   WHERE reminder_type_snapshot = 'rest'
+		 ),
+		 sessions_in_range AS (
+		   SELECT bs.id, bs.status, bs.actual_break_sec
+		   FROM break_sessions bs
+		   INNER JOIN overlay_sessions os ON os.session_id = bs.id
+		   WHERE bs.started_at >= ?
+		     AND bs.started_at < ?
+		     AND bs.status <> 'running'
 		 )
 		 SELECT
 		   COUNT(id) AS total_sessions,

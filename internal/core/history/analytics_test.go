@@ -237,11 +237,11 @@ func TestQueryAnalyticsBreakTypeDistributionUsesSnapshotMetadata(t *testing.T) {
 	defer store.Close()
 
 	renamed := "Eye renamed"
-	delivery := "notification"
+	delivery := "notify"
 	if err := store.UpdateReminders([]ReminderMutation{{
 		ID:           "eye",
 		Name:         &renamed,
-		DeliveryType: &delivery,
+		ReminderType: &delivery,
 	}}); err != nil {
 		t.Fatalf("UpdateReminders(eye) error = %v", err)
 	}
@@ -264,8 +264,8 @@ func TestQueryAnalyticsBreakTypeDistributionUsesSnapshotMetadata(t *testing.T) {
 	if eye.ReminderName != "Eye" {
 		t.Fatalf("expected snapshot reminder name Eye, got %q", eye.ReminderName)
 	}
-	if eye.DeliveryType != "overlay" {
-		t.Fatalf("expected snapshot delivery type overlay, got %q", eye.DeliveryType)
+	if eye.ReminderType != "rest" {
+		t.Fatalf("expected snapshot reminder type rest, got %q", eye.ReminderType)
 	}
 }
 
@@ -283,8 +283,8 @@ func prepareAnalyticsTestStore(t *testing.T) (*Store, time.Time, time.Time, map[
 	}
 
 	if err := store.SyncReminders([]ReminderDefinition{
-		{ID: "eye", Name: "Eye", Enabled: true, IntervalSec: 1200, BreakSec: 20, DeliveryType: "overlay"},
-		{ID: "stand", Name: "Stand", Enabled: true, IntervalSec: 3600, BreakSec: 300, DeliveryType: "overlay"},
+		{ID: "eye", Name: "Eye", Enabled: true, IntervalSec: 1200, BreakSec: 20, ReminderType: "rest"},
+		{ID: "stand", Name: "Stand", Enabled: true, IntervalSec: 3600, BreakSec: 300, ReminderType: "rest"},
 	}); err != nil {
 		t.Fatalf("SyncReminders() error = %v", err)
 	}
