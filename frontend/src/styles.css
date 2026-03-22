@@ -49,9 +49,9 @@
   --chart-grid-color: rgba(17, 24, 39, 0.13);
   --chart-tooltip-bg: rgba(255, 255, 255, 0.96);
   --chart-tooltip-border: rgba(17, 24, 39, 0.16);
-  --chart-series-1: #2f7a66;
-  --chart-series-2: #d07b58;
-  --chart-series-3: #5f78ad;
+  --chart-series-1: #64748b;
+  --chart-series-2: #c97352;
+  --chart-series-3: #2f7a66;
   --scrollbar-track: rgba(100, 116, 139, 0.12);
   --scrollbar-thumb: rgba(100, 116, 139, 0.42);
   --scrollbar-thumb-hover: rgba(100, 116, 139, 0.62);
@@ -111,9 +111,9 @@ body[data-theme='dark'] {
   --chart-grid-color: rgba(148, 163, 184, 0.2);
   --chart-tooltip-bg: rgba(17, 24, 39, 0.94);
   --chart-tooltip-border: rgba(148, 163, 184, 0.26);
-  --chart-series-1: #5fb59a;
-  --chart-series-2: #e39a73;
-  --chart-series-3: #90aee2;
+  --chart-series-1: #8a9ab3;
+  --chart-series-2: #d18a67;
+  --chart-series-3: #63b39a;
   --scrollbar-track: rgba(255, 255, 255, 0.1);
   --scrollbar-thumb: rgba(255, 255, 255, 0.34);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.5);

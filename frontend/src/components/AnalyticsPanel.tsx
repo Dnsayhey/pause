@@ -276,7 +276,7 @@ export function AnalyticsPanel({ locale }: AnalyticsPanelProps) {
     return {
       animationDuration: 500,
       animationEasing: 'cubicOut',
-      color: [chartSeries1, chartSeries2, chartSeries3],
+      color: [chartSeries3, chartSeries2],
       tooltip: {
         trigger: 'axis',
         axisPointer: {
@@ -288,7 +288,7 @@ export function AnalyticsPanel({ locale }: AnalyticsPanelProps) {
         textStyle: { color: chartTextColor }
       },
       legend: {
-        data: [t(locale, 'analyticsColCompleted'), t(locale, 'analyticsColSkipped'), t(locale, 'analyticsColCanceled')],
+        data: [t(locale, 'analyticsColCompleted'), t(locale, 'analyticsColSkipped')],
         textStyle: { color: chartTextColor }
       },
       grid: {
@@ -324,19 +324,12 @@ export function AnalyticsPanel({ locale }: AnalyticsPanelProps) {
           type: 'bar',
           stack: 'total',
           data: items.map((item) => item.skippedCount)
-        },
-        {
-          name: t(locale, 'analyticsColCanceled'),
-          type: 'bar',
-          stack: 'total',
-          data: items.map((item) => item.canceledCount)
         }
       ]
     };
   }, [
     bundle,
     chartGridColor,
-    chartSeries1,
     chartSeries2,
     chartSeries3,
     chartSubtleTextColor,
@@ -465,8 +458,6 @@ export function AnalyticsPanel({ locale }: AnalyticsPanelProps) {
             <p className="m-0 text-xs text-[var(--text-tertiary)]">
               {t(locale, 'analyticsRangeLabel')}: {new Date(bundle.summary.fromSec * 1000).toLocaleString()} -{' '}
               {new Date(bundle.summary.toSec * 1000).toLocaleString()}
-              {' • '}
-              {t(locale, 'analyticsRowsCount')}: {bundle.weekly.reminders.length}
             </p>
           </>
         )}
