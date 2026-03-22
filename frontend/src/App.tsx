@@ -48,7 +48,6 @@ export function App() {
     applyLaunchAtLogin,
     applyPatch,
     applyReminderPatch,
-    createReminder,
     setReminderIntervalDraft,
     setReminderBreakDraft,
     normalizeReminderIntervalDraft,
@@ -282,7 +281,6 @@ export function App() {
                   reminders={reminders}
                   runtimeReminders={runtime.reminders}
                   reminderDrafts={reminderDrafts}
-                  onAddReminder={(input) => createReminder(input.name, input.intervalSec, input.breakSec, input.reminderType)}
                   onReminderEnabledChange={(id, enabled) => {
                     void applyReminderPatch(id, { enabled });
                   }}
