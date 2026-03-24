@@ -50,6 +50,13 @@ func NewApp(configPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if store.WasCreated() {
+		language := resolveEffectiveLanguage(store.Get().UI.Language)
+		if err := ensureBuiltInRemindersForFirstInstall(historyStore, language); err != nil {
+			_ = historyStore.Close()
+			return nil, err
+		}
+	}
 
 	adapters := platform.NewAdapters(meta.EffectiveAppBundleID())
 	engine := service.NewEngine(
@@ -279,30 +286,30 @@ func buildBreakNotificationBody(state config.RuntimeState) string {
 		return "Break started"
 	}
 
+	namesByReason := map[string]string{}
+	for _, reminder := range state.Reminders {
+		id := strings.ToLower(strings.TrimSpace(reminder.ID))
+		name := strings.TrimSpace(reminder.Name)
+		if id == "" || name == "" {
+			continue
+		}
+		namesByReason[id] = name
+	}
+
 	parts := make([]string, 0, len(state.CurrentSession.Reasons))
 	for _, reason := range state.CurrentSession.Reasons {
-		switch strings.ToLower(strings.TrimSpace(reason)) {
-		case "eye":
-			parts = append(parts, "Eye")
-		case "stand":
-			parts = append(parts, "Stand")
-		default:
-			cleaned := strings.TrimSpace(reason)
-			if cleaned != "" {
-				runes := []rune(cleaned)
-				runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
-				parts = append(parts, string(runes))
-			}
+		key := strings.ToLower(strings.TrimSpace(reason))
+		if key == "" {
+			continue
 		}
+		parts = append(parts, namesByReason[key])
 	}
 
-	label := "Break"
-	if len(parts) > 0 {
-		label = strings.Join(parts, " + ")
-	}
+	label := strings.Join(parts, " + ")
 
 	if state.CurrentSession.RemainingSec > 0 {
-		return fmt.Sprintf("%s break for %s", label, (time.Duration(state.CurrentSession.RemainingSec) * time.Second).String())
+		duration := (time.Duration(state.CurrentSession.RemainingSec) * time.Second).String()
+		return fmt.Sprintf("%s break for %s", label, duration)
 	}
 	return label + " break started"
 }
@@ -377,20 +384,63 @@ func applyReminderPatchToHistory(store *history.Store, patches []config.Reminder
 	if store == nil || len(patches) == 0 {
 		return nil
 	}
+
+	existingDefs, err := store.ListReminders()
+	if err != nil {
+		return err
+	}
+	existingByID := make(map[string]struct{}, len(existingDefs))
+	for _, def := range existingDefs {
+		id := strings.ToLower(strings.TrimSpace(def.ID))
+		if id == "" {
+			continue
+		}
+		existingByID[id] = struct{}{}
+	}
+
 	mutations := make([]history.ReminderMutation, 0, len(patches))
 	for _, patch := range patches {
 		id := strings.ToLower(strings.TrimSpace(patch.ID))
 		if id == "" {
-			continue
+			return errors.New("reminder id is required")
 		}
-		mutations = append(mutations, history.ReminderMutation{
-			ID:           id,
-			Name:         patch.Name,
-			Enabled:      patch.Enabled,
-			IntervalSec:  patch.IntervalSec,
-			BreakSec:     patch.BreakSec,
-			ReminderType: patch.ReminderType,
-		})
+		if _, ok := existingByID[id]; !ok {
+			return fmt.Errorf("reminder id %q not found", id)
+		}
+
+		mutation := history.ReminderMutation{ID: id}
+		if patch.Name != nil {
+			name := strings.TrimSpace(*patch.Name)
+			if name == "" {
+				return errors.New("reminder name is required")
+			}
+			mutation.Name = &name
+		}
+		if patch.Enabled != nil {
+			mutation.Enabled = patch.Enabled
+		}
+		if patch.IntervalSec != nil {
+			if *patch.IntervalSec <= 0 {
+				return errors.New("reminder intervalSec must be > 0")
+			}
+			intervalSec := *patch.IntervalSec
+			mutation.IntervalSec = &intervalSec
+		}
+		if patch.BreakSec != nil {
+			if *patch.BreakSec <= 0 {
+				return errors.New("reminder breakSec must be > 0")
+			}
+			breakSec := *patch.BreakSec
+			mutation.BreakSec = &breakSec
+		}
+		if patch.ReminderType != nil {
+			reminderType, err := normalizeReminderTypeInput(*patch.ReminderType)
+			if err != nil {
+				return err
+			}
+			mutation.ReminderType = &reminderType
+		}
+		mutations = append(mutations, mutation)
 	}
 	return store.UpdateReminders(mutations)
 }
@@ -407,7 +457,25 @@ func normalizeReminderCreateInput(input config.ReminderCreateInput) (config.Remi
 	if next.BreakSec <= 0 {
 		return config.ReminderCreateInput{}, errors.New("reminder breakSec must be > 0")
 	}
+	if next.ReminderType != nil {
+		reminderType, err := normalizeReminderTypeInput(*next.ReminderType)
+		if err != nil {
+			return config.ReminderCreateInput{}, err
+		}
+		next.ReminderType = &reminderType
+	}
 	return next, nil
+}
+
+func normalizeReminderTypeInput(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "rest":
+		return "rest", nil
+	case "notify":
+		return "notify", nil
+	default:
+		return "", errors.New("reminder reminderType must be rest or notify")
+	}
 }
 
 func reminderIDBaseFromName(name string) string {
@@ -485,6 +553,58 @@ func deleteReminderInHistory(store *history.Store, reminderID string) error {
 		return nil
 	}
 	return store.DeleteReminder(reminderID)
+}
+
+func ensureBuiltInRemindersForFirstInstall(store *history.Store, language string) error {
+	if store == nil {
+		return nil
+	}
+
+	eyeName, standName, waterName := localizedBuiltInReminderSeedNames(language)
+	eyeEnabled := true
+	standEnabled := false
+	waterEnabled := false
+	restType := "rest"
+	notifyType := "notify"
+	eyeIntervalSec := 20 * 60
+	eyeBreakSec := 20
+	standIntervalSec := 60 * 60
+	standBreakSec := 5 * 60
+	waterIntervalSec := 45 * 60
+	waterBreakSec := 1
+	reminders := []history.ReminderMutation{
+		{
+			ID:           config.ReminderIDEye,
+			Name:         &eyeName,
+			Enabled:      &eyeEnabled,
+			IntervalSec:  &eyeIntervalSec,
+			BreakSec:     &eyeBreakSec,
+			ReminderType: &restType,
+		},
+		{
+			ID:           config.ReminderIDStand,
+			Name:         &standName,
+			Enabled:      &standEnabled,
+			IntervalSec:  &standIntervalSec,
+			BreakSec:     &standBreakSec,
+			ReminderType: &restType,
+		},
+		{
+			ID:           config.ReminderIDWater,
+			Name:         &waterName,
+			Enabled:      &waterEnabled,
+			IntervalSec:  &waterIntervalSec,
+			BreakSec:     &waterBreakSec,
+			ReminderType: &notifyType,
+		},
+	}
+
+	for _, reminder := range reminders {
+		if err := store.CreateReminder(reminder); err != nil && !errors.Is(err, history.ErrReminderAlreadyExists) {
+			return err
+		}
+	}
+	return nil
 }
 
 func currentWeekRange(now time.Time) (time.Time, time.Time) {

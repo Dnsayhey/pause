@@ -73,20 +73,13 @@ func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings
 	}
 }
 
-func localizeReminderReason(reason string, language string) string {
-	switch reason {
-	case "eye":
-		if language == config.UILanguageZhCN {
-			return "护眼"
-		}
-		return "eye"
-	case "stand":
-		if language == config.UILanguageZhCN {
-			return "站立"
-		}
-		return "stand"
+func localizedBuiltInReminderSeedNames(language string) (eye string, stand string, water string) {
+	normalized := config.NormalizeUILanguage(strings.TrimSpace(language))
+	switch normalized {
+	case config.UILanguageZhCN:
+		return "护眼", "站立", "喝水"
 	default:
-		return reason
+		return "Eye", "Stand", "Hydrate"
 	}
 }
 

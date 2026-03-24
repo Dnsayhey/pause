@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -311,6 +312,10 @@ func (e *Engine) SetReminderConfigs(reminders []config.ReminderConfig) []config.
 func (e *Engine) UpdateReminderConfigs(patches []config.ReminderPatch) ([]config.ReminderConfig, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	if err := validateReminderPatchesForUpdate(e.reminders, patches); err != nil {
+		return nil, err
+	}
 
 	next := config.ApplyReminderPatches(e.reminders, patches)
 	prev := cloneReminderConfigs(e.reminders)
@@ -800,6 +805,48 @@ func marshalReminderPatchesForLog(patches []config.ReminderPatch) string {
 		return "[]"
 	}
 	return string(raw)
+}
+
+func validateReminderPatchesForUpdate(reminders []config.ReminderConfig, patches []config.ReminderPatch) error {
+	if len(patches) == 0 {
+		return nil
+	}
+
+	knownIDs := make(map[string]struct{}, len(reminders))
+	for _, reminder := range reminders {
+		id := config.NormalizeReminderID(reminder.ID)
+		if id == "" {
+			continue
+		}
+		knownIDs[id] = struct{}{}
+	}
+
+	for _, patch := range patches {
+		id := config.NormalizeReminderID(patch.ID)
+		if id == "" {
+			return errors.New("reminder id is required")
+		}
+		if _, ok := knownIDs[id]; !ok {
+			return fmt.Errorf("reminder id %q not found", id)
+		}
+		if patch.Name != nil && strings.TrimSpace(*patch.Name) == "" {
+			return errors.New("reminder name is required")
+		}
+		if patch.IntervalSec != nil && *patch.IntervalSec <= 0 {
+			return errors.New("reminder intervalSec must be > 0")
+		}
+		if patch.BreakSec != nil && *patch.BreakSec <= 0 {
+			return errors.New("reminder breakSec must be > 0")
+		}
+		if patch.ReminderType != nil {
+			switch strings.ToLower(strings.TrimSpace(*patch.ReminderType)) {
+			case "rest", "notify":
+			default:
+				return errors.New("reminder reminderType must be rest or notify")
+			}
+		}
+	}
+	return nil
 }
 
 func nextReasons(reminders []config.ReminderRuntime, defs []config.ReminderConfig) []string {

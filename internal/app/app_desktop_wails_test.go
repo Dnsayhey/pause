@@ -31,8 +31,8 @@ func TestBuildCountdownLabel_MultiReminderOrder(t *testing.T) {
 	state := config.RuntimeState{
 		GlobalEnabled: true,
 		Reminders: []config.ReminderRuntime{
-			{ID: config.ReminderIDEye, Enabled: true, NextInSec: 300, IntervalSec: 1200},
-			{ID: config.ReminderIDStand, Enabled: true, NextInSec: 120, IntervalSec: 3600},
+			{ID: config.ReminderIDEye, Name: "护眼", Enabled: true, NextInSec: 300, IntervalSec: 1200},
+			{ID: config.ReminderIDStand, Name: "站立", Enabled: true, NextInSec: 120, IntervalSec: 3600},
 		},
 	}
 
@@ -61,8 +61,8 @@ func TestBuildCountdownLabel_Paused(t *testing.T) {
 	state := config.RuntimeState{
 		GlobalEnabled: false,
 		Reminders: []config.ReminderRuntime{
-			{ID: config.ReminderIDEye, Enabled: true, NextInSec: 300, IntervalSec: 1200},
-			{ID: config.ReminderIDStand, Enabled: true, NextInSec: 120, IntervalSec: 3600},
+			{ID: config.ReminderIDEye, Name: "护眼", Enabled: true, NextInSec: 300, IntervalSec: 1200},
+			{ID: config.ReminderIDStand, Name: "站立", Enabled: true, NextInSec: 120, IntervalSec: 3600},
 		},
 	}
 

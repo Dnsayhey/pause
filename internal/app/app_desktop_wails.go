@@ -432,9 +432,6 @@ func buildReminderTitle(choice autoReminderChoice, language string, paused bool)
 		if language == config.UILanguageZhCN {
 			return fmt.Sprintf("%s - 已暂停", reasonText)
 		}
-		if strings.TrimSpace(choice.name) == "" {
-			return fmt.Sprintf("%s - Paused", titleCaseASCII(reasonText))
-		}
 		return fmt.Sprintf("%s - Paused", reasonText)
 	}
 	countdownText := formatCountdown(choice.remaining)
@@ -442,11 +439,8 @@ func buildReminderTitle(choice autoReminderChoice, language string, paused bool)
 }
 
 func reminderDisplayName(choice autoReminderChoice, language string) string {
-	name := strings.TrimSpace(choice.name)
-	if name != "" {
-		return name
-	}
-	return localizeReminderReason(choice.reason, language)
+	_ = language
+	return strings.TrimSpace(choice.name)
 }
 
 func isRestRuntimeReminder(reminder config.ReminderRuntime) bool {
@@ -551,18 +545,6 @@ func reminderProgress(choice autoReminderChoice) float64 {
 	}
 	progress := 1 - (float64(choice.remaining) / float64(choice.total))
 	return clampProgress(progress)
-}
-
-func titleCaseASCII(text string) string {
-	if text == "" {
-		return ""
-	}
-	runes := []rune(text)
-	first := runes[0]
-	if first >= 'a' && first <= 'z' {
-		runes[0] = first - ('a' - 'A')
-	}
-	return string(runes)
 }
 
 func localizeNoRemindersLabel(language string) string {

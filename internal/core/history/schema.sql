@@ -63,17 +63,6 @@ CREATE INDEX IF NOT EXISTS idx_break_session_reminders_reminder_id
 CREATE INDEX IF NOT EXISTS idx_break_session_reminders_session_id
   ON break_session_reminders(session_id);
 
-INSERT OR IGNORE INTO reminders (
-  id,
-  name,
-  enabled,
-  interval_sec,
-  break_sec,
-  reminder_type
-) VALUES
-  ('eye', '护眼', 1, 1200, 20, 'rest'),
-  ('stand', '站立', 1, 3600, 300, 'rest');
-
 CREATE TRIGGER IF NOT EXISTS trg_reminders_updated_at
 AFTER UPDATE ON reminders
 FOR EACH ROW

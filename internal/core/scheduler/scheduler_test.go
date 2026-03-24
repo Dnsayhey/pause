@@ -27,7 +27,7 @@ func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 	if evt == nil {
 		t.Fatalf("expected eye reminder event")
 	}
-	if len(evt.Reasons) != 1 || evt.Reasons[0] != ReminderEye {
+	if len(evt.Reasons) != 1 || evt.Reasons[0] != ReminderType(config.ReminderIDEye) {
 		t.Fatalf("unexpected reasons: %#v", evt.Reasons)
 	}
 	if evt.BreakSec != eye.BreakSec {

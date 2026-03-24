@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"pause/internal/core/config"
-	"pause/internal/core/scheduler"
 )
 
 type fakeIdleProvider struct {
@@ -90,7 +89,19 @@ func newTestEngine(t *testing.T, idle *fakeIdleProvider, startup *fakeStartupMan
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	return NewEngine(store, idle, nil, nil, startup, nil)
+	engine := NewEngine(store, idle, nil, nil, startup, nil)
+	seedDefaultReminders(engine)
+	return engine
+}
+
+func seedDefaultReminders(engine *Engine) {
+	if engine == nil {
+		return
+	}
+	engine.SetReminderConfigs([]config.ReminderConfig{
+		{ID: config.ReminderIDEye, Name: "Eye", Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
+		{ID: config.ReminderIDStand, Name: "Stand", Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
+	})
 }
 
 func reminderPatch(id string, enabled *bool, intervalSec *int, breakSec *int) config.ReminderPatch {
@@ -169,6 +180,7 @@ func TestIdlePauseModePausesImmediatelyWhenScreenLocked(t *testing.T) {
 	}
 
 	engine := NewEngine(store, idle, lockState, nil, &fakeStartupManager{}, nil)
+	seedDefaultReminders(engine)
 
 	standEnabled := false
 	eyeInterval := 2
@@ -469,7 +481,7 @@ func TestStartBreakNowForReason_ResetsOnlySelectedReminder(t *testing.T) {
 	engine.Tick(base)
 	engine.Tick(base.Add(600 * time.Second))
 
-	state, err := engine.StartBreakNowForReason(string(scheduler.ReminderEye), base.Add(601*time.Second))
+	state, err := engine.StartBreakNowForReason(config.ReminderIDEye, base.Add(601*time.Second))
 	if err != nil {
 		t.Fatalf("StartBreakNowForReason() error = %v", err)
 	}
@@ -537,6 +549,7 @@ func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 		t.Fatalf("NewStore() error = %v", err)
 	}
 	engine := NewEngine(store, idle, nil, nil, startup, history)
+	seedDefaultReminders(engine)
 
 	standEnabled := false
 	eyeInterval := 1200
@@ -584,6 +597,7 @@ func TestHistoryRecorder_SkipBreak(t *testing.T) {
 		t.Fatalf("NewStore() error = %v", err)
 	}
 	engine := NewEngine(store, idle, nil, nil, startup, history)
+	seedDefaultReminders(engine)
 
 	standEnabled := false
 	eyeInterval := 1200
@@ -644,6 +658,32 @@ func TestSetReminderConfigsAllowsEmptySnapshot(t *testing.T) {
 	}
 	if _, err := engine.StartBreakNow(base.Add(time.Second)); err == nil {
 		t.Fatalf("expected StartBreakNow to fail when reminders snapshot is empty")
+	}
+}
+
+func TestUpdateReminderConfigsRejectsUnknownReminderID(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	engine := newTestEngine(t, idle, &fakeStartupManager{})
+
+	enabled := true
+	_, err := engine.UpdateReminderConfigs([]config.ReminderPatch{
+		{ID: "unknown", Enabled: &enabled},
+	})
+	if err == nil {
+		t.Fatalf("expected unknown reminder id patch to fail")
+	}
+}
+
+func TestUpdateReminderConfigsRejectsInvalidInterval(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	engine := newTestEngine(t, idle, &fakeStartupManager{})
+
+	interval := 0
+	_, err := engine.UpdateReminderConfigs([]config.ReminderPatch{
+		{ID: config.ReminderIDEye, IntervalSec: &interval},
+	})
+	if err == nil {
+		t.Fatalf("expected invalid interval patch to fail")
 	}
 }
 

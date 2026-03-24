@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestOpenStoreMigratesAndSeedsDefaults(t *testing.T) {
+func TestOpenStoreMigratesWithoutSeedingDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := OpenStore(path)
 	if err != nil {
@@ -17,12 +17,12 @@ func TestOpenStoreMigratesAndSeedsDefaults(t *testing.T) {
 	}
 	defer store.Close()
 
-	stats, err := store.QueryAnalyticsWeeklyStats(time.Unix(0, 0), time.Unix(4_102_444_800, 0))
+	reminders, err := store.ListReminders()
 	if err != nil {
-		t.Fatalf("QueryAnalyticsWeeklyStats() error = %v", err)
+		t.Fatalf("ListReminders() error = %v", err)
 	}
-	if len(stats.Reminders) < 2 {
-		t.Fatalf("expected seeded reminders, got %d", len(stats.Reminders))
+	if len(reminders) != 0 {
+		t.Fatalf("expected no seeded reminders on fresh history db, got %d", len(reminders))
 	}
 }
 
@@ -82,6 +82,10 @@ func TestListRemindersSkipsSoftDeletedRows(t *testing.T) {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	defer store.Close()
+
+	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
+		t.Fatalf("CreateReminder(eye) error = %v", err)
+	}
 
 	if _, err := store.db.ExecContext(context.Background(), `UPDATE reminders SET deleted_at = unixepoch() WHERE id = 'eye'`); err != nil {
 		t.Fatalf("soft delete reminder error = %v", err)
@@ -207,6 +211,10 @@ func TestCreateReminderRejectsExistingActiveReminder(t *testing.T) {
 	}
 	defer store.Close()
 
+	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
+		t.Fatalf("CreateReminder(seed eye) error = %v", err)
+	}
+
 	err = store.CreateReminder(ReminderMutation{ID: "eye"})
 	if !errors.Is(err, ErrReminderAlreadyExists) {
 		t.Fatalf("CreateReminder(existing) error = %v, want %v", err, ErrReminderAlreadyExists)
@@ -220,6 +228,10 @@ func TestCreateReminderRestoresSoftDeletedReminder(t *testing.T) {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	defer store.Close()
+
+	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
+		t.Fatalf("CreateReminder(seed eye) error = %v", err)
+	}
 
 	if err := store.DeleteReminder("eye"); err != nil {
 		t.Fatalf("DeleteReminder(eye) error = %v", err)
@@ -279,6 +291,10 @@ func TestDeleteReminderSoftDeletesAndReturnsNotFoundForMissing(t *testing.T) {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	defer store.Close()
+
+	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
+		t.Fatalf("CreateReminder(seed eye) error = %v", err)
+	}
 
 	if err := store.DeleteReminder("eye"); err != nil {
 		t.Fatalf("DeleteReminder(eye) error = %v", err)

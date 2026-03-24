@@ -1,7 +1,6 @@
 import type { TranslationKey } from './i18n';
 
 export type ReminderFieldSpec = {
-  titleKey?: TranslationKey;
   intervalLabelKey: TranslationKey;
   breakLabelKey: TranslationKey;
   intervalUnitSec: number;
@@ -22,30 +21,7 @@ const DEFAULT_SPEC: ReminderFieldSpec = {
 };
 
 export function reminderFieldSpecByID(id: string): ReminderFieldSpec {
-  if (id === 'eye') {
-    return {
-      titleKey: 'eyeReminder',
-      intervalLabelKey: 'eyeIntervalMin',
-      breakLabelKey: 'eyeBreakSec',
-      intervalUnitSec: 60,
-      breakUnitSec: 1,
-      intervalMin: 1,
-      breakMin: 10,
-      breakMax: 60
-    };
-  }
-  if (id === 'stand') {
-    return {
-      titleKey: 'standReminder',
-      intervalLabelKey: 'standIntervalHour',
-      breakLabelKey: 'standBreakMin',
-      intervalUnitSec: 3600,
-      breakUnitSec: 60,
-      intervalMin: 1,
-      breakMin: 1,
-      breakMax: 10
-    };
-  }
+  void id;
   return DEFAULT_SPEC;
 }
 

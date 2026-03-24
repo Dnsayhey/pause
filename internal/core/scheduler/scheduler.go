@@ -10,11 +10,6 @@ const mergeWindowSec = 60
 
 type ReminderType string
 
-const (
-	ReminderEye   ReminderType = ReminderType(config.ReminderIDEye)
-	ReminderStand ReminderType = ReminderType(config.ReminderIDStand)
-)
-
 type Event struct {
 	Reasons  []ReminderType
 	BreakSec int

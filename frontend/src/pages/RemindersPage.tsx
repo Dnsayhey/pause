@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getAnalyticsWeeklyStats } from '../api';
-import { localizeReason, t, type Locale } from '../i18n';
+import { t, type Locale } from '../i18n';
 import { reminderFieldSpecByID, toDraftBreakValue, toDraftIntervalValue } from '../reminderFields';
 import type { ReminderConfig, ReminderRuntime } from '../types';
 import { ReminderCard } from '../components/ReminderCard';
@@ -52,17 +52,12 @@ const INTERVAL_SWITCH_UNITS_SEC = [60, 3600] as const;
 const BREAK_SWITCH_UNITS_SEC = [60, 1] as const;
 
 function reminderTitle(reminder: ReminderConfig, locale: Locale): string {
-  const id = reminder.id;
-  if (id === 'eye') {
-    return t(locale, 'eyeReminder');
+  void locale;
+  const name = reminder.name.trim();
+  if (name !== '') {
+    return name;
   }
-  if (id === 'stand') {
-    return t(locale, 'standReminder');
-  }
-  if (reminder.name.trim() !== '') {
-    return reminder.name;
-  }
-  return localizeReason(id, locale);
+  return reminder.id;
 }
 
 function parsePositiveInteger(value: string): number | null {
@@ -71,10 +66,6 @@ function parsePositiveInteger(value: string): number | null {
     return null;
   }
   return parsed;
-}
-
-function isCustomReminder(id: string): boolean {
-  return id !== 'eye' && id !== 'stand';
 }
 
 function unitBounds(min: number, max: number | undefined, baseUnitSec: number, activeUnitSec: number) {
@@ -101,31 +92,14 @@ function parseAndClampDraft(value: string, fallbackSec: number, unitSec: number,
 }
 
 function deriveDefaultEditUnits(reminder: ReminderConfig): ReminderEditUnits {
-  const custom = isCustomReminder(reminder.id);
   const intervalUnitSec =
-    custom && reminder.intervalSec >= 3600 && reminder.intervalSec % 3600 === 0 ? 3600 : 60;
+    reminder.intervalSec >= 3600 && reminder.intervalSec % 3600 === 0 ? 3600 : 60;
   const breakUnitSec =
-    custom && reminder.breakSec >= 60 && reminder.breakSec % 60 === 0 ? 60 : 1;
+    reminder.breakSec >= 60 && reminder.breakSec % 60 === 0 ? 60 : 1;
   return {
     intervalUnitSec,
     breakUnitSec
   };
-}
-
-function customFriendlyBounds(
-  reminderID: string,
-  min: number,
-  max: number | undefined,
-  baseUnitSec: number,
-  activeUnitSec: number
-) {
-  if (isCustomReminder(reminderID)) {
-    return {
-      unitMin: 1,
-      unitMax: undefined as number | undefined
-    };
-  }
-  return unitBounds(min, max, baseUnitSec, activeUnitSec);
 }
 
 const createFieldInputClassName =
@@ -232,8 +206,7 @@ export function RemindersPage({
     if (createPanelRequestId <= 0) return;
     if (createPanelRequestId === lastHandledCreatePanelRequestIdRef.current) return;
     lastHandledCreatePanelRequestIdRef.current = createPanelRequestId;
-    const customReminderCount = reminders.filter((reminder) => reminder.id !== 'eye' && reminder.id !== 'stand').length;
-    setCreateName(`${t(locale, 'addReminderDefaultName')} ${customReminderCount + 1}`);
+    setCreateName(`${t(locale, 'addReminderDefaultName')} ${reminders.length + 1}`);
     setCreateType('rest');
     setCreateIntervalValue('25');
     setCreateIntervalUnit('minute');
@@ -301,18 +274,15 @@ export function RemindersPage({
       <section className="mt-3 mx-auto grid w-full max-w-[760px] grid-cols-1 gap-1 px-2 sm:px-3">
         {reminders.map((reminder) => {
           const isNotificationReminder = reminder.reminderType === 'notify';
-          const isCustom = isCustomReminder(reminder.id);
           const spec = reminderFieldSpecByID(reminder.id);
           const unitState = editUnitsByReminderID[reminder.id] ?? deriveDefaultEditUnits(reminder);
-          const intervalBounds = customFriendlyBounds(
-            reminder.id,
+          const intervalBounds = unitBounds(
             spec.intervalMin,
             spec.intervalMax,
             spec.intervalUnitSec,
             unitState.intervalUnitSec
           );
-          const breakBounds = customFriendlyBounds(
-            reminder.id,
+          const breakBounds = unitBounds(
             spec.breakMin,
             spec.breakMax,
             spec.breakUnitSec,
@@ -369,7 +339,7 @@ export function RemindersPage({
               intervalUnitSec={unitState.intervalUnitSec}
               intervalMin={intervalBounds.unitMin}
               intervalMax={intervalBounds.unitMax}
-              canToggleIntervalUnit={isCustom}
+              canToggleIntervalUnit
               onIntervalUnitToggle={() => {
                 const currentUnitSec = unitState.intervalUnitSec;
                 const currentIndex = INTERVAL_SWITCH_UNITS_SEC.indexOf(currentUnitSec as (typeof INTERVAL_SWITCH_UNITS_SEC)[number]);
@@ -385,8 +355,7 @@ export function RemindersPage({
                   intervalBounds.unitMax
                 );
                 const currentSec = currentValue * currentUnitSec;
-                const nextBounds = customFriendlyBounds(
-                  reminder.id,
+                const nextBounds = unitBounds(
                   spec.intervalMin,
                   spec.intervalMax,
                   spec.intervalUnitSec,
@@ -413,7 +382,7 @@ export function RemindersPage({
               breakUnitSec={unitState.breakUnitSec}
               breakMin={breakBounds.unitMin}
               breakMax={breakBounds.unitMax}
-              canToggleBreakUnit={isCustom && !isNotificationReminder}
+              canToggleBreakUnit={!isNotificationReminder}
               onBreakUnitToggle={() => {
                 const currentUnitSec = unitState.breakUnitSec;
                 const currentIndex = BREAK_SWITCH_UNITS_SEC.indexOf(currentUnitSec as (typeof BREAK_SWITCH_UNITS_SEC)[number]);
@@ -427,8 +396,7 @@ export function RemindersPage({
                   breakBounds.unitMax
                 );
                 const currentSec = currentValue * currentUnitSec;
-                const nextBounds = customFriendlyBounds(
-                  reminder.id,
+                const nextBounds = unitBounds(
                   spec.breakMin,
                   spec.breakMax,
                   spec.breakUnitSec,

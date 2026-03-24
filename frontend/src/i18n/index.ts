@@ -20,13 +20,3 @@ export function resolveLocale(effectiveLanguage?: string): Locale {
 export function t(locale: Locale, key: TranslationKey): string {
   return dictionaries[locale][key];
 }
-
-export function localizeReason(reason: string, locale: Locale): string {
-  if (reason === 'eye') {
-    return t(locale, 'reasonEye');
-  }
-  if (reason === 'stand') {
-    return t(locale, 'reasonStand');
-  }
-  return reason;
-}

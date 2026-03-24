@@ -13,6 +13,7 @@ const (
 const (
 	ReminderIDEye   = "eye"
 	ReminderIDStand = "stand"
+	ReminderIDWater = "water"
 )
 
 type ReminderConfig struct {
@@ -217,7 +218,6 @@ func normalizeReminders(reminders []ReminderConfig) []ReminderConfig {
 		if id == "" {
 			continue
 		}
-		intervalDef, breakDef := reminderDefaultsForID(id)
 		next := ReminderConfig{
 			ID:           id,
 			Name:         strings.TrimSpace(reminder.Name),
@@ -225,15 +225,6 @@ func normalizeReminders(reminders []ReminderConfig) []ReminderConfig {
 			IntervalSec:  reminder.IntervalSec,
 			BreakSec:     reminder.BreakSec,
 			ReminderType: normalizeReminderType(reminder.ReminderType),
-		}
-		if next.IntervalSec <= 0 {
-			next.IntervalSec = intervalDef
-		}
-		if next.BreakSec <= 0 {
-			next.BreakSec = breakDef
-		}
-		if next.ReminderType == "" {
-			next.ReminderType = "rest"
 		}
 
 		if idx, ok := indexByID[id]; ok {
@@ -244,17 +235,6 @@ func normalizeReminders(reminders []ReminderConfig) []ReminderConfig {
 		result = append(result, next)
 	}
 	return result
-}
-
-func reminderDefaultsForID(id string) (intervalSec int, breakSec int) {
-	switch NormalizeReminderID(id) {
-	case ReminderIDEye:
-		return 20 * 60, 20
-	case ReminderIDStand:
-		return 60 * 60, 5 * 60
-	default:
-		return 20 * 60, 20
-	}
 }
 
 func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []ReminderConfig {
@@ -271,15 +251,7 @@ func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []Remin
 		}
 	}
 	if idx < 0 {
-		intervalDef, breakDef := reminderDefaultsForID(id)
-		reminders = append(reminders, ReminderConfig{
-			ID:           id,
-			Enabled:      true,
-			IntervalSec:  intervalDef,
-			BreakSec:     breakDef,
-			ReminderType: "rest",
-		})
-		idx = len(reminders) - 1
+		return reminders
 	}
 
 	if patch.Name != nil {
