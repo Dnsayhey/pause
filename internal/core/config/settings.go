@@ -7,12 +7,6 @@ const (
 	TimerModeRealTime  = "real_time"
 )
 
-const (
-	ReminderIDEye   int64 = 1
-	ReminderIDStand int64 = 2
-	ReminderIDWater int64 = 3
-)
-
 type ReminderConfig struct {
 	ID           int64  `json:"id"`
 	Name         string `json:"name,omitempty"`
@@ -149,35 +143,6 @@ func DefaultSettings() Settings {
 	}
 }
 
-func NormalizeReminderID(id int64) int64 {
-	if id <= 0 {
-		return 0
-	}
-	return id
-}
-
-func NormalizeReminderConfigs(reminders []ReminderConfig) []ReminderConfig {
-	return cloneReminderConfigs(reminders)
-}
-
-func ReminderByID(reminders []ReminderConfig, id int64) (ReminderConfig, bool) {
-	norm := NormalizeReminderID(id)
-	for _, reminder := range reminders {
-		if reminder.ID == norm {
-			return reminder, true
-		}
-	}
-	return ReminderConfig{}, false
-}
-
-func ApplyReminderPatches(reminders []ReminderConfig, patches []ReminderPatch) []ReminderConfig {
-	updated := cloneReminderConfigs(reminders)
-	for _, patch := range patches {
-		updated = applyReminderPatch(updated, patch)
-	}
-	return updated
-}
-
 func (s Settings) Normalize() Settings {
 	d := DefaultSettings()
 
@@ -200,50 +165,6 @@ func (s Settings) Normalize() Settings {
 	}
 
 	return s
-}
-
-func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []ReminderConfig {
-	id := NormalizeReminderID(patch.ID)
-	if id <= 0 {
-		return reminders
-	}
-
-	idx := -1
-	for i, reminder := range reminders {
-		if reminder.ID == id {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 {
-		return reminders
-	}
-
-	if patch.Name != nil {
-		reminders[idx].Name = *patch.Name
-	}
-	if patch.Enabled != nil {
-		reminders[idx].Enabled = *patch.Enabled
-	}
-	if patch.IntervalSec != nil {
-		reminders[idx].IntervalSec = *patch.IntervalSec
-	}
-	if patch.BreakSec != nil {
-		reminders[idx].BreakSec = *patch.BreakSec
-	}
-	if patch.ReminderType != nil {
-		reminders[idx].ReminderType = *patch.ReminderType
-	}
-	return reminders
-}
-
-func cloneReminderConfigs(reminders []ReminderConfig) []ReminderConfig {
-	if len(reminders) == 0 {
-		return nil
-	}
-	cloned := make([]ReminderConfig, 0, len(reminders))
-	cloned = append(cloned, reminders...)
-	return cloned
 }
 
 func (s Settings) ApplyPatch(p SettingsPatch) Settings {

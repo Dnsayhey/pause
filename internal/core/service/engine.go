@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"pause/internal/core/config"
+	"pause/internal/core/reminder"
 	"pause/internal/core/scheduler"
 	"pause/internal/core/session"
 	"pause/internal/logx"
@@ -82,7 +83,7 @@ func NewEngine(
 
 	return &Engine{
 		store:          store,
-		reminders:      config.NormalizeReminderConfigs(nil),
+		reminders:      reminder.CloneConfigs(nil),
 		scheduler:      scheduler.New(),
 		session:        session.NewManager(),
 		history:        history,
@@ -299,12 +300,12 @@ func (e *Engine) SetReminderConfigs(reminders []config.ReminderConfig) []config.
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	next := config.NormalizeReminderConfigs(reminders)
-	prev := cloneReminderConfigs(e.reminders)
-	e.reminders = cloneReminderConfigs(next)
+	next := reminder.CloneConfigs(reminders)
+	prev := reminder.CloneConfigs(e.reminders)
+	e.reminders = reminder.CloneConfigs(next)
 	e.applyReminderConfigPatchLocked(prev, next)
 	logx.Infof("reminders.synced count=%d", len(e.reminders))
-	return cloneReminderConfigs(e.reminders)
+	return reminder.CloneConfigs(e.reminders)
 }
 
 func (e *Engine) UpdateReminderConfigs(patches []config.ReminderPatch) ([]config.ReminderConfig, error) {
@@ -315,12 +316,12 @@ func (e *Engine) UpdateReminderConfigs(patches []config.ReminderPatch) ([]config
 		return nil, err
 	}
 
-	next := config.ApplyReminderPatches(e.reminders, patches)
-	prev := cloneReminderConfigs(e.reminders)
-	e.reminders = cloneReminderConfigs(next)
+	next := reminder.ApplyPatches(e.reminders, patches)
+	prev := reminder.CloneConfigs(e.reminders)
+	e.reminders = reminder.CloneConfigs(next)
 	e.applyReminderConfigPatchLocked(prev, next)
 	logx.Infof("reminders.updated patches=%s count=%d", marshalReminderPatchesForLog(patches), len(e.reminders))
-	return cloneReminderConfigs(e.reminders), nil
+	return reminder.CloneConfigs(e.reminders), nil
 }
 
 func (e *Engine) GetLaunchAtLogin() (bool, error) {
@@ -402,7 +403,7 @@ func (e *Engine) PauseReminder(reminderID int64, now time.Time) (config.RuntimeS
 	if key <= 0 {
 		return config.RuntimeState{}, errors.New("invalid reminder reason")
 	}
-	if _, ok := config.ReminderByID(e.reminders, key); !ok {
+	if _, ok := reminder.FindByID(e.reminders, key); !ok {
 		return config.RuntimeState{}, errors.New("unknown reminder reason")
 	}
 	wasPaused := e.pausedReminder[key]
@@ -724,18 +725,18 @@ func buildImmediateBreakEvent(reminders []config.ReminderConfig, nextByID map[in
 	if reasonKey <= 0 {
 		return nil
 	}
-	reminder, ok := config.ReminderByID(reminders, reasonKey)
-	if !ok || !reminder.Enabled || reminder.BreakSec <= 0 || !isRestReminderType(reminder.ReminderType) {
+	cfg, ok := reminder.FindByID(reminders, reasonKey)
+	if !ok || !cfg.Enabled || cfg.BreakSec <= 0 || !isRestReminderType(cfg.ReminderType) {
 		return nil
 	}
 	return &scheduler.Event{
 		Reasons:  []scheduler.ReminderType{scheduler.ReminderType(reasonKey)},
-		BreakSec: reminder.BreakSec,
+		BreakSec: cfg.BreakSec,
 	}
 }
 
 func normalizeReminderID(id int64) int64 {
-	return config.NormalizeReminderID(id)
+	return reminder.NormalizeID(id)
 }
 
 func selectImmediateReason(nextByID map[int64]int) int64 {
@@ -813,8 +814,8 @@ func validateReminderPatchesForUpdate(reminders []config.ReminderConfig, patches
 	}
 
 	knownIDs := make(map[int64]struct{}, len(reminders))
-	for _, reminder := range reminders {
-		id := config.NormalizeReminderID(reminder.ID)
+	for _, cfg := range reminders {
+		id := reminder.NormalizeID(cfg.ID)
 		if id <= 0 {
 			continue
 		}
@@ -822,7 +823,7 @@ func validateReminderPatchesForUpdate(reminders []config.ReminderConfig, patches
 	}
 
 	for _, patch := range patches {
-		id := config.NormalizeReminderID(patch.ID)
+		id := reminder.NormalizeID(patch.ID)
 		if id <= 0 {
 			return errors.New("reminder id is required")
 		}
@@ -1002,13 +1003,4 @@ func (e *Engine) notifyRemindersLocked(reminderIDs []int64, language string) {
 		}
 		logx.Infof("reminder.notification_sent reminders=%s", key)
 	}(notifier, title, body, reminderKey)
-}
-
-func cloneReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {
-	if len(reminders) == 0 {
-		return nil
-	}
-	cloned := make([]config.ReminderConfig, 0, len(reminders))
-	cloned = append(cloned, reminders...)
-	return cloned
 }

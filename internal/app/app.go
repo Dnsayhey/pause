@@ -12,6 +12,7 @@ import (
 
 	"pause/internal/core/config"
 	"pause/internal/core/history"
+	"pause/internal/core/reminder"
 	"pause/internal/core/service"
 	"pause/internal/logx"
 	"pause/internal/meta"
@@ -359,7 +360,7 @@ func historyDefsToConfig(defs []history.ReminderDefinition) []config.ReminderCon
 			ReminderType: strings.TrimSpace(def.ReminderType),
 		})
 	}
-	return config.NormalizeReminderConfigs(result)
+	return reminder.CloneConfigs(result)
 }
 
 func loadReminderConfigsFromHistory(store *history.Store) ([]config.ReminderConfig, error) {

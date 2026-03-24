@@ -4,19 +4,25 @@ import (
 	"testing"
 
 	"pause/internal/core/config"
+	"pause/internal/core/reminder"
+)
+
+const (
+	testReminderIDEye   int64 = 1
+	testReminderIDStand int64 = 2
 )
 
 func defaultReminderFixtures() []config.ReminderConfig {
 	return []config.ReminderConfig{
-		{ID: config.ReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
-		{ID: config.ReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
+		{ID: testReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
+		{ID: testReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
 	}
 }
 
 func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 	s := New()
 	reminders := defaultReminderFixtures()
-	eye, _ := config.ReminderByID(reminders, config.ReminderIDEye)
+	eye, _ := reminder.FindByID(reminders, testReminderIDEye)
 
 	evt := s.OnActiveSeconds(eye.IntervalSec-1, reminders)
 	if evt != nil {
@@ -27,7 +33,7 @@ func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 	if evt == nil {
 		t.Fatalf("expected eye reminder event")
 	}
-	if len(evt.Reasons) != 1 || evt.Reasons[0] != ReminderType(config.ReminderIDEye) {
+	if len(evt.Reasons) != 1 || evt.Reasons[0] != ReminderType(testReminderIDEye) {
 		t.Fatalf("unexpected reasons: %#v", evt.Reasons)
 	}
 	if evt.BreakSec != eye.BreakSec {
@@ -38,10 +44,10 @@ func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 func TestMergeConflictWithinWindow(t *testing.T) {
 	s := New()
 	reminders := []config.ReminderConfig{
-		{ID: config.ReminderIDEye, Enabled: true, IntervalSec: 1200, BreakSec: 20},
-		{ID: config.ReminderIDStand, Enabled: true, IntervalSec: 1230, BreakSec: 300},
+		{ID: testReminderIDEye, Enabled: true, IntervalSec: 1200, BreakSec: 20},
+		{ID: testReminderIDStand, Enabled: true, IntervalSec: 1230, BreakSec: 300},
 	}
-	stand, _ := config.ReminderByID(reminders, config.ReminderIDStand)
+	stand, _ := reminder.FindByID(reminders, testReminderIDStand)
 
 	evt := s.OnActiveSeconds(1200, reminders)
 	if evt == nil {
@@ -58,14 +64,14 @@ func TestMergeConflictWithinWindow(t *testing.T) {
 func TestNextCountdown(t *testing.T) {
 	s := New()
 	reminders := defaultReminderFixtures()
-	eye, _ := config.ReminderByID(reminders, config.ReminderIDEye)
-	stand, _ := config.ReminderByID(reminders, config.ReminderIDStand)
+	eye, _ := reminder.FindByID(reminders, testReminderIDEye)
+	stand, _ := reminder.FindByID(reminders, testReminderIDStand)
 
 	s.OnActiveSeconds(100, reminders)
-	if got := s.NextInSec(reminders, config.ReminderIDEye); got != eye.IntervalSec-100 {
+	if got := s.NextInSec(reminders, testReminderIDEye); got != eye.IntervalSec-100 {
 		t.Fatalf("unexpected next eye in sec: %d", got)
 	}
-	if got := s.NextInSec(reminders, config.ReminderIDStand); got != stand.IntervalSec-100 {
+	if got := s.NextInSec(reminders, testReminderIDStand); got != stand.IntervalSec-100 {
 		t.Fatalf("unexpected next stand in sec: %d", got)
 	}
 }
