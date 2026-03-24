@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -49,7 +50,7 @@ func TestNormalizeReminderCreateInput(t *testing.T) {
 
 func TestCreateReminderInHistoryUsesAutoIncrementID(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(path)
+	store, err := history.OpenStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -59,7 +60,7 @@ func TestCreateReminderInHistoryUsesAutoIncrementID(t *testing.T) {
 	inputA := config.ReminderCreateInput{Name: "Focus Time A", IntervalSec: 1500, BreakSec: 30, ReminderType: &reminderType}
 	inputB := config.ReminderCreateInput{Name: "Focus Time B", IntervalSec: 1200, BreakSec: 20, ReminderType: &reminderType}
 
-	id1, err := createReminderInHistory(store, inputA)
+	id1, err := createReminderInHistory(context.Background(), store, inputA)
 	if err != nil {
 		t.Fatalf("createReminderInHistory(first) error = %v", err)
 	}
@@ -67,7 +68,7 @@ func TestCreateReminderInHistoryUsesAutoIncrementID(t *testing.T) {
 		t.Fatalf("expected first id > 0, got %d", id1)
 	}
 
-	id2, err := createReminderInHistory(store, inputB)
+	id2, err := createReminderInHistory(context.Background(), store, inputB)
 	if err != nil {
 		t.Fatalf("createReminderInHistory(second) error = %v", err)
 	}
@@ -78,7 +79,7 @@ func TestCreateReminderInHistoryUsesAutoIncrementID(t *testing.T) {
 
 func TestApplyReminderPatchToHistoryRejectsUnknownReminderID(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(path)
+	store, err := history.OpenStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -89,25 +90,25 @@ func TestApplyReminderPatchToHistoryRejectsUnknownReminderID(t *testing.T) {
 	intervalSec := 20 * 60
 	breakSec := 20
 	reminderType := "rest"
-	if _, err := store.CreateReminder(history.ReminderMutation{
-		Name:         &name,
-		Enabled:      &enabled,
-		IntervalSec:  &intervalSec,
-		BreakSec:     &breakSec,
-		ReminderType: &reminderType,
+	if _, err := store.CreateReminder(context.Background(), history.Reminder{
+		Name:         name,
+		Enabled:      enabled,
+		IntervalSec:  intervalSec,
+		BreakSec:     breakSec,
+		ReminderType: reminderType,
 	}); err != nil {
 		t.Fatalf("CreateReminder(eye) error = %v", err)
 	}
 
-	patches := []config.ReminderPatch{{ID: 999999, Enabled: &enabled}}
-	if err := applyReminderPatchToHistory(store, patches); err == nil {
+	patch := config.ReminderPatch{ID: 999999, Enabled: &enabled}
+	if err := applyReminderUpdateToHistory(context.Background(), store, patch); err == nil {
 		t.Fatalf("expected unknown reminder id patch to fail")
 	}
 }
 
 func TestApplyReminderPatchToHistoryRejectsInvalidPatchValues(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(path)
+	store, err := history.OpenStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -118,12 +119,12 @@ func TestApplyReminderPatchToHistoryRejectsInvalidPatchValues(t *testing.T) {
 	intervalSec := 20 * 60
 	breakSec := 20
 	reminderType := "rest"
-	id, err := store.CreateReminder(history.ReminderMutation{
-		Name:         &name,
-		Enabled:      &enabled,
-		IntervalSec:  &intervalSec,
-		BreakSec:     &breakSec,
-		ReminderType: &reminderType,
+	id, err := store.CreateReminder(context.Background(), history.Reminder{
+		Name:         name,
+		Enabled:      enabled,
+		IntervalSec:  intervalSec,
+		BreakSec:     breakSec,
+		ReminderType: reminderType,
 	})
 	if err != nil {
 		t.Fatalf("CreateReminder(eye) error = %v", err)
@@ -131,12 +132,12 @@ func TestApplyReminderPatchToHistoryRejectsInvalidPatchValues(t *testing.T) {
 
 	zero := 0
 	invalidType := "x"
-	patches := []config.ReminderPatch{{ID: id, IntervalSec: &zero}}
-	if err := applyReminderPatchToHistory(store, patches); err == nil {
+	patch := config.ReminderPatch{ID: id, IntervalSec: &zero}
+	if err := applyReminderUpdateToHistory(context.Background(), store, patch); err == nil {
 		t.Fatalf("expected invalid interval patch to fail")
 	}
-	patches = []config.ReminderPatch{{ID: id, ReminderType: &invalidType}}
-	if err := applyReminderPatchToHistory(store, patches); err == nil {
+	patch = config.ReminderPatch{ID: id, ReminderType: &invalidType}
+	if err := applyReminderUpdateToHistory(context.Background(), store, patch); err == nil {
 		t.Fatalf("expected invalid reminder type patch to fail")
 	}
 }

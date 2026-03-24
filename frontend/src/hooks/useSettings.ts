@@ -6,7 +6,7 @@ import {
   getReminders,
   getSettings,
   setLaunchAtLogin,
-  updateReminders,
+  updateReminder,
   updateSettings
 } from '../api';
 import {
@@ -246,12 +246,10 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
 
       setError('');
       try {
-        const next = await updateReminders([
-          {
-            id,
-            ...nextPatch
-          }
-        ]);
+        const next = await updateReminder({
+          id,
+          ...nextPatch
+        });
         setReminders(next);
         await refreshRuntime();
       } catch (err) {

@@ -75,14 +75,14 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 
 ## 提醒结构（history.db / reminders）
 
-提醒规则不写入 `settings.json`，而是通过 `GetReminders/UpdateReminders` 读写。运行时会由应用编排层组装为统一状态供调度器消费。
+提醒规则不写入 `settings.json`，而是通过 `GetReminders/UpdateReminder` 读写。运行时会由应用编排层组装为统一状态供调度器消费。
 
 ## Wails 绑定 API
 
 - `GetSettings() -> Settings`
 - `UpdateSettings(patch) -> Settings`
 - `GetReminders() -> []ReminderConfig`
-- `UpdateReminders(patches) -> []ReminderConfig`
+- `UpdateReminder(patch) -> []ReminderConfig`
 - `GetRuntimeState() -> RuntimeState`
 - `GetLaunchAtLogin() -> bool`
 - `SetLaunchAtLogin(enabled) -> bool`

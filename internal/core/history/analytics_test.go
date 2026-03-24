@@ -1,6 +1,7 @@
 package history
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -16,54 +17,46 @@ type analyticsFixture struct {
 func prepareAnalyticsFixture(t *testing.T) (*Store, analyticsFixture) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(path)
+	store, err := OpenStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 
-	eyeName := "Eye"
-	standName := "Stand"
-	enabled := true
-	eyeIntervalSec := 20 * 60
-	eyeBreakSec := 20
-	standIntervalSec := 60 * 60
-	standBreakSec := 5 * 60
-	reminderType := "rest"
-	eyeID, err := store.CreateReminder(ReminderMutation{
-		Name:         &eyeName,
-		Enabled:      &enabled,
-		IntervalSec:  &eyeIntervalSec,
-		BreakSec:     &eyeBreakSec,
-		ReminderType: &reminderType,
+	eyeID, err := store.CreateReminder(context.Background(), Reminder{
+		Name:         "Eye",
+		Enabled:      true,
+		IntervalSec:  20 * 60,
+		BreakSec:     20,
+		ReminderType: "rest",
 	})
 	if err != nil {
 		t.Fatalf("CreateReminder(eye) error = %v", err)
 	}
-	standID, err := store.CreateReminder(ReminderMutation{
-		Name:         &standName,
-		Enabled:      &enabled,
-		IntervalSec:  &standIntervalSec,
-		BreakSec:     &standBreakSec,
-		ReminderType: &reminderType,
+	standID, err := store.CreateReminder(context.Background(), Reminder{
+		Name:         "Stand",
+		Enabled:      true,
+		IntervalSec:  60 * 60,
+		BreakSec:     5 * 60,
+		ReminderType: "rest",
 	})
 	if err != nil {
 		t.Fatalf("CreateReminder(stand) error = %v", err)
 	}
 
 	base := time.Unix(1_700_000_000, 0).UTC()
-	s1, err := store.StartBreak(base, "scheduled", 20, []int64{eyeID})
+	s1, err := store.StartBreak(context.Background(), base, "scheduled", 20, []int64{eyeID})
 	if err != nil {
 		t.Fatalf("StartBreak(s1) error = %v", err)
 	}
-	if err := store.CompleteBreak(s1, base.Add(20*time.Second), 20); err != nil {
+	if err := store.CompleteBreak(context.Background(), s1, base.Add(20*time.Second), 20); err != nil {
 		t.Fatalf("CompleteBreak(s1) error = %v", err)
 	}
 
-	s2, err := store.StartBreak(base.Add(2*time.Hour), "manual", 300, []int64{standID})
+	s2, err := store.StartBreak(context.Background(), base.Add(2*time.Hour), "manual", 300, []int64{standID})
 	if err != nil {
 		t.Fatalf("StartBreak(s2) error = %v", err)
 	}
-	if err := store.SkipBreak(s2, base.Add(2*time.Hour+40*time.Second), 40); err != nil {
+	if err := store.SkipBreak(context.Background(), s2, base.Add(2*time.Hour+40*time.Second), 40); err != nil {
 		t.Fatalf("SkipBreak(s2) error = %v", err)
 	}
 

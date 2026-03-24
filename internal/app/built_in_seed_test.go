@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -12,11 +13,11 @@ func TestEnsureBuiltInRemindersForFirstInstallSeedsZhNames(t *testing.T) {
 	store := openHistoryStoreForSeedTest(t)
 	defer store.Close()
 
-	if err := ensureBuiltInRemindersForFirstInstall(store, config.UILanguageZhCN); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, config.UILanguageZhCN); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
-	reminders, err := store.ListReminders()
+	reminders, err := store.ListReminders(context.Background())
 	if err != nil {
 		t.Fatalf("ListReminders() error = %v", err)
 	}
@@ -59,11 +60,11 @@ func TestEnsureBuiltInRemindersForFirstInstallSeedsEnglishNames(t *testing.T) {
 	store := openHistoryStoreForSeedTest(t)
 	defer store.Close()
 
-	if err := ensureBuiltInRemindersForFirstInstall(store, config.UILanguageEnUS); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, config.UILanguageEnUS); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
-	reminders, err := store.ListReminders()
+	reminders, err := store.ListReminders(context.Background())
 	if err != nil {
 		t.Fatalf("ListReminders() error = %v", err)
 	}
@@ -82,21 +83,21 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 	intervalSec := 999
 	breakSec := 11
 	reminderType := "rest"
-	if _, err := store.CreateReminder(history.ReminderMutation{
-		Name:         &customName,
-		Enabled:      &enabled,
-		IntervalSec:  &intervalSec,
-		BreakSec:     &breakSec,
-		ReminderType: &reminderType,
+	if _, err := store.CreateReminder(context.Background(), history.Reminder{
+		Name:         customName,
+		Enabled:      enabled,
+		IntervalSec:  intervalSec,
+		BreakSec:     breakSec,
+		ReminderType: reminderType,
 	}); err != nil {
 		t.Fatalf("CreateReminder(eye) error = %v", err)
 	}
 
-	if err := ensureBuiltInRemindersForFirstInstall(store, config.UILanguageZhCN); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, config.UILanguageZhCN); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
-	reminders, err := store.ListReminders()
+	reminders, err := store.ListReminders(context.Background())
 	if err != nil {
 		t.Fatalf("ListReminders() error = %v", err)
 	}
@@ -115,14 +116,14 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 func openHistoryStoreForSeedTest(t *testing.T) *history.Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(path)
+	store, err := history.OpenStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	return store
 }
 
-func requireReminderByName(t *testing.T, reminders []history.ReminderDefinition, name string) history.ReminderDefinition {
+func requireReminderByName(t *testing.T, reminders []history.Reminder, name string) history.Reminder {
 	t.Helper()
 	for _, reminder := range reminders {
 		if reminder.Name == name {
@@ -130,5 +131,5 @@ func requireReminderByName(t *testing.T, reminders []history.ReminderDefinition,
 		}
 	}
 	t.Fatalf("expected reminder %q in list", name)
-	return history.ReminderDefinition{}
+	return history.Reminder{}
 }

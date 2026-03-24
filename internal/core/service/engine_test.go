@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -61,7 +62,7 @@ func (f *fakeStartupManager) GetLaunchAtLogin() (bool, error) {
 	return f.current, nil
 }
 
-func (f *fakeHistoryRecorder) StartBreak(_ time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error) {
+func (f *fakeHistoryRecorder) StartBreak(_ context.Context, _ time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error) {
 	f.nextID++
 	sessionID := f.nextID
 	copied := append([]int64(nil), reminderIDs...)
@@ -74,7 +75,7 @@ func (f *fakeHistoryRecorder) StartBreak(_ time.Time, source string, plannedBrea
 	return sessionID, nil
 }
 
-func (f *fakeHistoryRecorder) CompleteBreak(sessionID int64, _ time.Time, actualBreakSec int) error {
+func (f *fakeHistoryRecorder) CompleteBreak(_ context.Context, sessionID int64, _ time.Time, actualBreakSec int) error {
 	f.completes = append(f.completes, historyFinishCall{
 		sessionID:      sessionID,
 		actualBreakSec: actualBreakSec,
@@ -82,7 +83,7 @@ func (f *fakeHistoryRecorder) CompleteBreak(sessionID int64, _ time.Time, actual
 	return nil
 }
 
-func (f *fakeHistoryRecorder) SkipBreak(sessionID int64, _ time.Time, actualBreakSec int) error {
+func (f *fakeHistoryRecorder) SkipBreak(_ context.Context, sessionID int64, _ time.Time, actualBreakSec int) error {
 	f.skips = append(f.skips, historyFinishCall{
 		sessionID:      sessionID,
 		actualBreakSec: actualBreakSec,

@@ -24,7 +24,6 @@ const (
 	statusCompleted    = "completed"
 	statusSkipped      = "skipped"
 	statusCanceled     = "canceled"
-	historySchemaVer   = 2
 )
 
 var (
@@ -39,7 +38,7 @@ type Store struct {
 	db *sql.DB
 }
 
-type ReminderDefinition struct {
+type Reminder struct {
 	ID           int64
 	Name         string
 	Enabled      bool
@@ -48,8 +47,7 @@ type ReminderDefinition struct {
 	ReminderType string
 }
 
-type ReminderMutation struct {
-	ID           int64
+type ReminderPatch struct {
 	Name         *string
 	Enabled      *bool
 	IntervalSec  *int
@@ -57,7 +55,11 @@ type ReminderMutation struct {
 	ReminderType *string
 }
 
-func OpenStore(path string) (*Store, error) {
+func OpenStore(ctx context.Context, path string) (*Store, error) {
+	if ctx == nil {
+		return nil, errors.New("context is required")
+	}
+
 	clean := strings.TrimSpace(path)
 	if clean == "" {
 		return nil, errors.New("history db path is required")
@@ -76,7 +78,7 @@ func OpenStore(path string) (*Store, error) {
 	db.SetConnMaxLifetime(0)
 
 	store := &Store{db: db}
-	if err := store.migrate(context.Background()); err != nil {
+	if err := store.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -95,47 +97,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		return errors.New("history store is not initialized")
 	}
 
-	var currentVersion int
-	if err := s.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&currentVersion); err != nil {
-		return fmt.Errorf("history read schema version failed: %w", err)
-	}
-	if currentVersion != historySchemaVer {
-		if err := s.recreateSchema(ctx); err != nil {
-			return fmt.Errorf("history recreate schema failed: %w", err)
-		}
-	} else {
-		if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
-			return fmt.Errorf("history migrate failed: %w", err)
-		}
+	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
+		return fmt.Errorf("history migrate failed: %w", err)
 	}
 
 	if err := s.cleanupDanglingRunningSessions(ctx); err != nil {
 		return fmt.Errorf("history migrate cleanup running sessions failed: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) recreateSchema(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, `DROP TABLE IF EXISTS break_session_reminders`); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, `DROP TABLE IF EXISTS break_sessions`); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, `DROP TABLE IF EXISTS reminders`); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, historySchemaVer)); err != nil {
-		return err
 	}
 	return nil
 }
@@ -179,7 +146,10 @@ func validateReminderName(name string) error {
 	return nil
 }
 
-func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
+func (s *Store) SyncReminders(ctx context.Context, reminders []Reminder) error {
+	if ctx == nil {
+		return errors.New("context is required")
+	}
 	if s == nil || s.db == nil {
 		return errors.New("history store is not initialized")
 	}
@@ -187,7 +157,7 @@ func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(context.Background(), nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -208,7 +178,7 @@ func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
 		}
 		if reminder.ID > 0 {
 			_, err := tx.ExecContext(
-				context.Background(),
+				ctx,
 				`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, reminder_type)
 				 VALUES(?, ?, ?, ?, ?, ?)
 				 ON CONFLICT(id) DO UPDATE SET
@@ -232,7 +202,7 @@ func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
 			continue
 		}
 		_, err = tx.ExecContext(
-			context.Background(),
+			ctx,
 			`INSERT INTO reminders(name, enabled, interval_sec, break_sec, reminder_type)
 			 VALUES(?, ?, ?, ?, ?)
 			 ON CONFLICT(name) DO UPDATE SET
@@ -256,13 +226,16 @@ func (s *Store) SyncReminders(reminders []ReminderDefinition) error {
 	return tx.Commit()
 }
 
-func (s *Store) ListReminders() ([]ReminderDefinition, error) {
+func (s *Store) ListReminders(ctx context.Context) ([]Reminder, error) {
+	if ctx == nil {
+		return nil, errors.New("context is required")
+	}
 	if s == nil || s.db == nil {
 		return nil, errors.New("history store is not initialized")
 	}
 
 	rows, err := s.db.QueryContext(
-		context.Background(),
+		ctx,
 		`SELECT id, name, enabled, interval_sec, break_sec, reminder_type
 		 FROM reminders
 		 WHERE deleted_at IS NULL
@@ -273,9 +246,9 @@ func (s *Store) ListReminders() ([]ReminderDefinition, error) {
 	}
 	defer rows.Close()
 
-	result := []ReminderDefinition{}
+	result := []Reminder{}
 	for rows.Next() {
-		var r ReminderDefinition
+		var r Reminder
 		var enabledInt int
 		if err := rows.Scan(&r.ID, &r.Name, &enabledInt, &r.IntervalSec, &r.BreakSec, &r.ReminderType); err != nil {
 			return nil, err
@@ -289,137 +262,124 @@ func (s *Store) ListReminders() ([]ReminderDefinition, error) {
 	return result, nil
 }
 
-func (s *Store) UpdateReminders(mutations []ReminderMutation) error {
+func (s *Store) UpdateReminder(ctx context.Context, reminderID int64, patch ReminderPatch) error {
+	if ctx == nil {
+		return errors.New("context is required")
+	}
 	if s == nil || s.db == nil {
 		return errors.New("history store is not initialized")
 	}
-	if len(mutations) == 0 {
-		return nil
+	if reminderID <= 0 {
+		return errors.New("reminder id is required")
 	}
 
-	tx, err := s.db.BeginTx(context.Background(), nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	for _, mutation := range mutations {
-		if mutation.ID <= 0 {
-			continue
-		}
+	current := Reminder{ID: reminderID}
+	row := tx.QueryRowContext(
+		ctx,
+		`SELECT name, enabled, interval_sec, break_sec, reminder_type
+		 FROM reminders
+		 WHERE id = ?
+		   AND deleted_at IS NULL`,
+		reminderID,
+	)
+	var enabledInt int
+	switch err := row.Scan(&current.Name, &enabledInt, &current.IntervalSec, &current.BreakSec, &current.ReminderType); {
+	case err == nil:
+		current.Enabled = enabledInt == 1
+	case errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("reminder id %d: %w", reminderID, ErrReminderNotFound)
+	default:
+		return err
+	}
 
-		current := ReminderDefinition{ID: mutation.ID}
-
-		row := tx.QueryRowContext(
-			context.Background(),
-			`SELECT name, enabled, interval_sec, break_sec, reminder_type
-			 FROM reminders WHERE id = ?`,
-			mutation.ID,
-		)
-		var enabledInt int
-		switch err := row.Scan(&current.Name, &enabledInt, &current.IntervalSec, &current.BreakSec, &current.ReminderType); {
-		case err == nil:
-			current.Enabled = enabledInt == 1
-		case errors.Is(err, sql.ErrNoRows):
-			return fmt.Errorf("reminder id %d not found", mutation.ID)
-		default:
+	if patch.Name != nil {
+		if err := validateReminderName(*patch.Name); err != nil {
 			return err
 		}
+		current.Name = *patch.Name
+	}
+	if patch.Enabled != nil {
+		current.Enabled = *patch.Enabled
+	}
+	if patch.IntervalSec != nil {
+		if *patch.IntervalSec <= 0 {
+			return errors.New("reminder intervalSec must be > 0")
+		}
+		current.IntervalSec = *patch.IntervalSec
+	}
+	if patch.BreakSec != nil {
+		if *patch.BreakSec <= 0 {
+			return errors.New("reminder breakSec must be > 0")
+		}
+		current.BreakSec = *patch.BreakSec
+	}
+	if patch.ReminderType != nil {
+		if !isValidReminderType(*patch.ReminderType) {
+			return errors.New("reminder reminderType must be rest or notify")
+		}
+		current.ReminderType = *patch.ReminderType
+	}
 
-		if mutation.Name != nil {
-			if err := validateReminderName(*mutation.Name); err != nil {
-				return err
-			}
-			current.Name = *mutation.Name
-		}
-		if mutation.Enabled != nil {
-			current.Enabled = *mutation.Enabled
-		}
-		if mutation.IntervalSec != nil {
-			if *mutation.IntervalSec <= 0 {
-				return errors.New("reminder intervalSec must be > 0")
-			}
-			current.IntervalSec = *mutation.IntervalSec
-		}
-		if mutation.BreakSec != nil {
-			if *mutation.BreakSec <= 0 {
-				return errors.New("reminder breakSec must be > 0")
-			}
-			current.BreakSec = *mutation.BreakSec
-		}
-		if mutation.ReminderType != nil {
-			if !isValidReminderType(*mutation.ReminderType) {
-				return errors.New("reminder reminderType must be rest or notify")
-			}
-			current.ReminderType = *mutation.ReminderType
-		}
-
-		_, err := tx.ExecContext(
-			context.Background(),
-			`UPDATE reminders
-			 SET name = ?,
-			     enabled = ?,
-			     interval_sec = ?,
-			     break_sec = ?,
-			     reminder_type = ?,
-			     deleted_at = NULL,
-			     updated_at = unixepoch()
-			 WHERE id = ?`,
-			current.Name,
-			boolToInt(current.Enabled),
-			current.IntervalSec,
-			current.BreakSec,
-			current.ReminderType,
-			current.ID,
-		)
-		if err != nil {
-			return err
-		}
+	res, err := tx.ExecContext(
+		ctx,
+		`UPDATE reminders
+		 SET name = ?,
+		     enabled = ?,
+		     interval_sec = ?,
+		     break_sec = ?,
+		     reminder_type = ?,
+		     updated_at = unixepoch()
+		 WHERE id = ?
+		   AND deleted_at IS NULL`,
+		current.Name,
+		boolToInt(current.Enabled),
+		current.IntervalSec,
+		current.BreakSec,
+		current.ReminderType,
+		current.ID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return fmt.Errorf("reminder id %d: %w", reminderID, ErrReminderNotFound)
 	}
 
 	return tx.Commit()
 }
 
-func (s *Store) CreateReminder(mutation ReminderMutation) (int64, error) {
+func (s *Store) CreateReminder(ctx context.Context, reminder Reminder) (int64, error) {
+	if ctx == nil {
+		return 0, errors.New("context is required")
+	}
 	if s == nil || s.db == nil {
 		return 0, errors.New("history store is not initialized")
 	}
 
-	if mutation.Name == nil {
-		return 0, errors.New("reminder name is required")
-	}
-	if err := validateReminderName(*mutation.Name); err != nil {
+	if err := validateReminderName(reminder.Name); err != nil {
 		return 0, err
 	}
-	if mutation.Enabled == nil {
-		return 0, errors.New("reminder enabled is required")
-	}
-	if mutation.IntervalSec == nil || *mutation.IntervalSec <= 0 {
+	if reminder.IntervalSec <= 0 {
 		return 0, errors.New("reminder intervalSec must be > 0")
 	}
-	if mutation.BreakSec == nil || *mutation.BreakSec <= 0 {
+	if reminder.BreakSec <= 0 {
 		return 0, errors.New("reminder breakSec must be > 0")
 	}
-	if mutation.ReminderType == nil {
-		return 0, errors.New("reminder reminderType is required")
-	}
-	if !isValidReminderType(*mutation.ReminderType) {
+	if !isValidReminderType(reminder.ReminderType) {
 		return 0, errors.New("reminder reminderType must be rest or notify")
 	}
 
-	next := ReminderDefinition{
-		ID:           mutation.ID,
-		Name:         *mutation.Name,
-		Enabled:      *mutation.Enabled,
-		IntervalSec:  *mutation.IntervalSec,
-		BreakSec:     *mutation.BreakSec,
-		ReminderType: *mutation.ReminderType,
-	}
-	if err := validateReminderName(next.Name); err != nil {
-		return 0, err
-	}
-
-	tx, err := s.db.BeginTx(context.Background(), nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -428,18 +388,18 @@ func (s *Store) CreateReminder(mutation ReminderMutation) (int64, error) {
 	var existingID int64
 	var deletedAt sql.NullInt64
 	err = tx.QueryRowContext(
-		context.Background(),
+		ctx,
 		`SELECT id, deleted_at
 		 FROM reminders
 		 WHERE name = ? COLLATE NOCASE`,
-		next.Name,
+		reminder.Name,
 	).Scan(&existingID, &deletedAt)
 	switch {
 	case err == nil && !deletedAt.Valid:
 		return 0, ErrReminderAlreadyExists
 	case err == nil && deletedAt.Valid:
 		_, err = tx.ExecContext(
-			context.Background(),
+			ctx,
 			`UPDATE reminders
 			 SET name = ?,
 			     enabled = ?,
@@ -449,11 +409,11 @@ func (s *Store) CreateReminder(mutation ReminderMutation) (int64, error) {
 			     deleted_at = NULL,
 			     updated_at = unixepoch()
 			 WHERE id = ?`,
-			next.Name,
-			boolToInt(next.Enabled),
-			next.IntervalSec,
-			next.BreakSec,
-			next.ReminderType,
+			reminder.Name,
+			boolToInt(reminder.Enabled),
+			reminder.IntervalSec,
+			reminder.BreakSec,
+			reminder.ReminderType,
 			existingID,
 		)
 		if err != nil {
@@ -469,34 +429,34 @@ func (s *Store) CreateReminder(mutation ReminderMutation) (int64, error) {
 	}
 
 	var res sql.Result
-	if next.ID > 0 {
+	if reminder.ID > 0 {
 		res, err = tx.ExecContext(
-			context.Background(),
+			ctx,
 			`INSERT INTO reminders(id, name, enabled, interval_sec, break_sec, reminder_type)
 			 VALUES(?, ?, ?, ?, ?, ?)`,
-			next.ID,
-			next.Name,
-			boolToInt(next.Enabled),
-			next.IntervalSec,
-			next.BreakSec,
-			next.ReminderType,
+			reminder.ID,
+			reminder.Name,
+			boolToInt(reminder.Enabled),
+			reminder.IntervalSec,
+			reminder.BreakSec,
+			reminder.ReminderType,
 		)
 	} else {
 		res, err = tx.ExecContext(
-			context.Background(),
+			ctx,
 			`INSERT INTO reminders(name, enabled, interval_sec, break_sec, reminder_type)
 			 VALUES(?, ?, ?, ?, ?)`,
-			next.Name,
-			boolToInt(next.Enabled),
-			next.IntervalSec,
-			next.BreakSec,
-			next.ReminderType,
+			reminder.Name,
+			boolToInt(reminder.Enabled),
+			reminder.IntervalSec,
+			reminder.BreakSec,
+			reminder.ReminderType,
 		)
 	}
 	if err != nil {
 		return 0, err
 	}
-	insertedID := next.ID
+	insertedID := reminder.ID
 	if insertedID <= 0 {
 		insertedID, err = res.LastInsertId()
 		if err != nil {
@@ -509,7 +469,10 @@ func (s *Store) CreateReminder(mutation ReminderMutation) (int64, error) {
 	return insertedID, nil
 }
 
-func (s *Store) DeleteReminder(reminderID int64) error {
+func (s *Store) DeleteReminder(ctx context.Context, reminderID int64) error {
+	if ctx == nil {
+		return errors.New("context is required")
+	}
 	if s == nil || s.db == nil {
 		return errors.New("history store is not initialized")
 	}
@@ -518,7 +481,7 @@ func (s *Store) DeleteReminder(reminderID int64) error {
 	}
 
 	res, err := s.db.ExecContext(
-		context.Background(),
+		ctx,
 		`UPDATE reminders
 		 SET deleted_at = unixepoch(),
 		     updated_at = unixepoch()
@@ -559,7 +522,10 @@ func dedupeReminderIDs(reminderIDs []int64) []int64 {
 	return result
 }
 
-func (s *Store) StartBreak(startedAt time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error) {
+func (s *Store) StartBreak(ctx context.Context, startedAt time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error) {
+	if ctx == nil {
+		return 0, errors.New("context is required")
+	}
 	if s == nil || s.db == nil {
 		return 0, errors.New("history store is not initialized")
 	}
@@ -575,14 +541,14 @@ func (s *Store) StartBreak(startedAt time.Time, source string, plannedBreakSec i
 		return 0, errors.New("reminder ids must be unique positive integers")
 	}
 
-	tx, err := s.db.BeginTx(context.Background(), nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(
-		context.Background(),
+		ctx,
 		`INSERT INTO break_sessions(trigger_source, status, started_at, planned_break_sec, actual_break_sec)
 		 VALUES(?, ?, ?, ?, 0)`,
 		source,
@@ -605,7 +571,7 @@ func (s *Store) StartBreak(startedAt time.Time, source string, plannedBreakSec i
 		reminderType := reminderTypeRest
 
 		row := tx.QueryRowContext(
-			context.Background(),
+			ctx,
 			`SELECT name, interval_sec, break_sec, reminder_type
 			 FROM reminders
 			 WHERE id = ?
@@ -634,7 +600,7 @@ func (s *Store) StartBreak(startedAt time.Time, source string, plannedBreakSec i
 		}
 
 		_, err = tx.ExecContext(
-			context.Background(),
+			ctx,
 			`INSERT INTO break_session_reminders(
 			   session_id, reminder_id, reminder_name_snapshot, interval_sec_snapshot, break_sec_snapshot, reminder_type_snapshot
 			 ) VALUES(?, ?, ?, ?, ?, ?)`,
@@ -656,15 +622,18 @@ func (s *Store) StartBreak(startedAt time.Time, source string, plannedBreakSec i
 	return sessionID, nil
 }
 
-func (s *Store) CompleteBreak(sessionID int64, endedAt time.Time, actualBreakSec int) error {
-	return s.finishBreak(sessionID, statusCompleted, endedAt, 0, actualBreakSec)
+func (s *Store) CompleteBreak(ctx context.Context, sessionID int64, endedAt time.Time, actualBreakSec int) error {
+	return s.finishBreak(ctx, sessionID, statusCompleted, endedAt, 0, actualBreakSec)
 }
 
-func (s *Store) SkipBreak(sessionID int64, skippedAt time.Time, actualBreakSec int) error {
-	return s.finishBreak(sessionID, statusSkipped, skippedAt, skippedAt.UTC().Unix(), actualBreakSec)
+func (s *Store) SkipBreak(ctx context.Context, sessionID int64, skippedAt time.Time, actualBreakSec int) error {
+	return s.finishBreak(ctx, sessionID, statusSkipped, skippedAt, skippedAt.UTC().Unix(), actualBreakSec)
 }
 
-func (s *Store) finishBreak(sessionID int64, status string, endedAt time.Time, skippedAtUnix int64, actualBreakSec int) error {
+func (s *Store) finishBreak(ctx context.Context, sessionID int64, status string, endedAt time.Time, skippedAtUnix int64, actualBreakSec int) error {
+	if ctx == nil {
+		return errors.New("context is required")
+	}
 	if s == nil || s.db == nil {
 		return errors.New("history store is not initialized")
 	}
@@ -676,7 +645,7 @@ func (s *Store) finishBreak(sessionID int64, status string, endedAt time.Time, s
 	}
 
 	res, err := s.db.ExecContext(
-		context.Background(),
+		ctx,
 		`UPDATE break_sessions
 		 SET status = ?,
 		     ended_at = ?,

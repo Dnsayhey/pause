@@ -27,9 +27,9 @@ const (
 )
 
 type BreakHistoryRecorder interface {
-	StartBreak(startedAt time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error)
-	CompleteBreak(sessionID int64, endedAt time.Time, actualBreakSec int) error
-	SkipBreak(sessionID int64, skippedAt time.Time, actualBreakSec int) error
+	StartBreak(ctx context.Context, startedAt time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error)
+	CompleteBreak(ctx context.Context, sessionID int64, endedAt time.Time, actualBreakSec int) error
+	SkipBreak(ctx context.Context, sessionID int64, skippedAt time.Time, actualBreakSec int) error
 }
 
 type Engine struct {
@@ -584,7 +584,7 @@ func (e *Engine) recordBreakStartedLocked(now time.Time, source string, evt *sch
 		return
 	}
 
-	sessionID, err := e.history.StartBreak(now, source, evt.BreakSec, reminderIDsFromEvent(evt))
+	sessionID, err := e.history.StartBreak(context.Background(), now, source, evt.BreakSec, reminderIDsFromEvent(evt))
 	if err != nil {
 		logx.Warnf("history.break_start_err session_id=%d source=%s err=%v", sessionID, source, err)
 		return
@@ -601,7 +601,7 @@ func (e *Engine) recordBreakCompletedLocked(view *config.BreakSessionView) {
 	if actualBreakSec < 0 {
 		actualBreakSec = 0
 	}
-	if err := e.history.CompleteBreak(e.activeHistorySessionID, view.EndsAt, actualBreakSec); err != nil {
+	if err := e.history.CompleteBreak(context.Background(), e.activeHistorySessionID, view.EndsAt, actualBreakSec); err != nil {
 		logx.Warnf("history.break_complete_err session_id=%d err=%v", e.activeHistorySessionID, err)
 	}
 	e.activeHistorySessionID = 0
@@ -616,7 +616,7 @@ func (e *Engine) recordBreakSkippedLocked(now time.Time, view *config.BreakSessi
 	if actualBreakSec < 0 {
 		actualBreakSec = 0
 	}
-	if err := e.history.SkipBreak(e.activeHistorySessionID, now, actualBreakSec); err != nil {
+	if err := e.history.SkipBreak(context.Background(), e.activeHistorySessionID, now, actualBreakSec); err != nil {
 		logx.Warnf("history.break_skip_err session_id=%d err=%v", e.activeHistorySessionID, err)
 	}
 	e.activeHistorySessionID = 0
