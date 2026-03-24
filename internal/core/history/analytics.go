@@ -8,7 +8,7 @@ import (
 )
 
 type AnalyticsReminderStat struct {
-	ReminderID          string  `json:"reminderId"`
+	ReminderID          int64   `json:"reminderId"`
 	ReminderName        string  `json:"reminderName"`
 	Enabled             bool    `json:"enabled"`
 	ReminderType        string  `json:"reminderType"`
@@ -68,7 +68,7 @@ type AnalyticsTrend struct {
 }
 
 type AnalyticsBreakTypeDistributionItem struct {
-	ReminderID      string  `json:"reminderId"`
+	ReminderID      int64   `json:"reminderId"`
 	ReminderName    string  `json:"reminderName"`
 	TriggeredCount  int     `json:"triggeredCount"`
 	CompletedCount  int     `json:"completedCount"`

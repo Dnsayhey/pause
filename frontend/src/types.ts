@@ -1,5 +1,5 @@
 export type ReminderConfig = {
-  id: string;
+  id: number;
   name: string;
   reminderType: 'rest' | 'notify';
   enabled: boolean;
@@ -8,7 +8,7 @@ export type ReminderConfig = {
 };
 
 export type ReminderPatch = {
-  id: string;
+  id: number;
   name?: string;
   reminderType?: 'rest' | 'notify';
   enabled?: boolean;
@@ -25,7 +25,7 @@ export type ReminderCreateInput = {
 };
 
 export type ReminderRuntime = {
-  id: string;
+  id: number;
   enabled: boolean;
   paused: boolean;
   nextInSec: number;
@@ -56,12 +56,12 @@ export type Settings = {
 export type RuntimeState = {
   currentSession?: {
     status: string;
-    reasons: string[];
+    reasons: number[];
     remainingSec: number;
     canSkip: boolean;
   };
   reminders: ReminderRuntime[];
-  nextBreakReason: string[];
+  nextBreakReason: number[];
   globalEnabled: boolean;
   timerMode: string;
   idleThresholdSec: number;
@@ -83,7 +83,7 @@ export type SettingsPatch = Partial<{
 }>;
 
 export type AnalyticsReminderStat = {
-  reminderId: string;
+  reminderId: number;
   reminderName: string;
   enabled: boolean;
   reminderType: string;
@@ -143,7 +143,7 @@ export type AnalyticsTrend = {
 };
 
 export type AnalyticsBreakTypeDistributionItem = {
-  reminderId: string;
+  reminderId: number;
   reminderName: string;
   triggeredCount: number;
   completedCount: number;

@@ -20,7 +20,7 @@ const (
 
 type Session struct {
 	status    Status
-	reasons   []string
+	reasons   []int64
 	startedAt time.Time
 	endsAt    time.Time
 	canSkip   bool
@@ -43,9 +43,9 @@ func (m *Manager) StartBreak(now time.Time, evt *scheduler.Event, canSkip bool) 
 		return
 	}
 
-	reasons := make([]string, 0, len(evt.Reasons))
+	reasons := make([]int64, 0, len(evt.Reasons))
 	for _, reason := range evt.Reasons {
-		reasons = append(reasons, string(reason))
+		reasons = append(reasons, int64(reason))
 	}
 
 	m.current = &Session{
@@ -108,7 +108,7 @@ func (m *Manager) CurrentView(now time.Time) *config.BreakSessionView {
 
 	return &config.BreakSessionView{
 		Status:       string(m.current.status),
-		Reasons:      append([]string(nil), m.current.reasons...),
+		Reasons:      append([]int64(nil), m.current.reasons...),
 		StartedAt:    m.current.startedAt,
 		EndsAt:       m.current.endsAt,
 		RemainingSec: remaining,

@@ -30,17 +30,18 @@ type fakeHistoryRecorder struct {
 	starts    []historyStartCall
 	completes []historyFinishCall
 	skips     []historyFinishCall
+	nextID    int64
 }
 
 type historyStartCall struct {
-	sessionID       string
+	sessionID       int64
 	source          string
 	plannedBreakSec int
-	reminderIDs     []string
+	reminderIDs     []int64
 }
 
 type historyFinishCall struct {
-	sessionID      string
+	sessionID      int64
 	actualBreakSec int
 }
 
@@ -55,18 +56,20 @@ func (f *fakeStartupManager) GetLaunchAtLogin() (bool, error) {
 	return f.current, nil
 }
 
-func (f *fakeHistoryRecorder) StartBreak(sessionID string, _ time.Time, source string, plannedBreakSec int, reminderIDs []string) error {
-	copied := append([]string(nil), reminderIDs...)
+func (f *fakeHistoryRecorder) StartBreak(_ time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error) {
+	f.nextID++
+	sessionID := f.nextID
+	copied := append([]int64(nil), reminderIDs...)
 	f.starts = append(f.starts, historyStartCall{
 		sessionID:       sessionID,
 		source:          source,
 		plannedBreakSec: plannedBreakSec,
 		reminderIDs:     copied,
 	})
-	return nil
+	return sessionID, nil
 }
 
-func (f *fakeHistoryRecorder) CompleteBreak(sessionID string, _ time.Time, actualBreakSec int) error {
+func (f *fakeHistoryRecorder) CompleteBreak(sessionID int64, _ time.Time, actualBreakSec int) error {
 	f.completes = append(f.completes, historyFinishCall{
 		sessionID:      sessionID,
 		actualBreakSec: actualBreakSec,
@@ -74,7 +77,7 @@ func (f *fakeHistoryRecorder) CompleteBreak(sessionID string, _ time.Time, actua
 	return nil
 }
 
-func (f *fakeHistoryRecorder) SkipBreak(sessionID string, _ time.Time, actualBreakSec int) error {
+func (f *fakeHistoryRecorder) SkipBreak(sessionID int64, _ time.Time, actualBreakSec int) error {
 	f.skips = append(f.skips, historyFinishCall{
 		sessionID:      sessionID,
 		actualBreakSec: actualBreakSec,
@@ -104,7 +107,7 @@ func seedDefaultReminders(engine *Engine) {
 	})
 }
 
-func reminderPatch(id string, enabled *bool, intervalSec *int, breakSec *int) config.ReminderPatch {
+func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) config.ReminderPatch {
 	return config.ReminderPatch{
 		ID:          id,
 		Enabled:     enabled,
@@ -120,14 +123,14 @@ func setReminderPatches(t *testing.T, engine *Engine, patches ...config.Reminder
 	}
 }
 
-func requireReminderRuntime(t *testing.T, state config.RuntimeState, id string) config.ReminderRuntime {
+func requireReminderRuntime(t *testing.T, state config.RuntimeState, id int64) config.ReminderRuntime {
 	t.Helper()
 	for _, reminder := range state.Reminders {
 		if reminder.ID == id {
 			return reminder
 		}
 	}
-	t.Fatalf("expected reminder runtime for id %q", id)
+	t.Fatalf("expected reminder runtime for id %d", id)
 	return config.ReminderRuntime{}
 }
 
@@ -510,7 +513,7 @@ func TestPauseReminder_AffectsOnlySelectedReminder(t *testing.T) {
 	engine.Tick(base)
 	engine.Tick(base.Add(120 * time.Second))
 
-	state, err := engine.PauseReminder("eye", base.Add(121*time.Second))
+	state, err := engine.PauseReminder(config.ReminderIDEye, base.Add(121*time.Second))
 	if err != nil {
 		t.Fatalf("PauseReminder() error = %v", err)
 	}
@@ -526,7 +529,7 @@ func TestPauseReminder_AffectsOnlySelectedReminder(t *testing.T) {
 		t.Fatalf("expected stand countdown still active, got %d", stand.NextInSec)
 	}
 
-	state, err = engine.ResumeReminder("eye", base.Add(122*time.Second))
+	state, err = engine.ResumeReminder(config.ReminderIDEye, base.Add(122*time.Second))
 	if err != nil {
 		t.Fatalf("ResumeReminder() error = %v", err)
 	}
@@ -667,7 +670,7 @@ func TestUpdateReminderConfigsRejectsUnknownReminderID(t *testing.T) {
 
 	enabled := true
 	_, err := engine.UpdateReminderConfigs([]config.ReminderPatch{
-		{ID: "unknown", Enabled: &enabled},
+		{ID: -1, Enabled: &enabled},
 	})
 	if err == nil {
 		t.Fatalf("expected unknown reminder id patch to fail")

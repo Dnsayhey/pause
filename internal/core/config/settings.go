@@ -1,9 +1,6 @@
 package config
 
-import (
-	"strings"
-	"time"
-)
+import "time"
 
 const (
 	TimerModeIdlePause = "idle_pause"
@@ -11,13 +8,13 @@ const (
 )
 
 const (
-	ReminderIDEye   = "eye"
-	ReminderIDStand = "stand"
-	ReminderIDWater = "water"
+	ReminderIDEye   int64 = 1
+	ReminderIDStand int64 = 2
+	ReminderIDWater int64 = 3
 )
 
 type ReminderConfig struct {
-	ID           string `json:"id"`
+	ID           int64  `json:"id"`
 	Name         string `json:"name,omitempty"`
 	Enabled      bool   `json:"enabled"`
 	IntervalSec  int    `json:"intervalSec"`
@@ -54,7 +51,7 @@ type Settings struct {
 }
 
 type ReminderPatch struct {
-	ID           string  `json:"id"`
+	ID           int64   `json:"id"`
 	Name         *string `json:"name,omitempty"`
 	Enabled      *bool   `json:"enabled,omitempty"`
 	IntervalSec  *int    `json:"intervalSec,omitempty"`
@@ -99,7 +96,7 @@ type SettingsPatch struct {
 }
 
 type ReminderRuntime struct {
-	ID           string `json:"id"`
+	ID           int64  `json:"id"`
 	Name         string `json:"name,omitempty"`
 	ReminderType string `json:"reminderType,omitempty"`
 	Enabled      bool   `json:"enabled"`
@@ -113,7 +110,7 @@ type RuntimeState struct {
 	Now                time.Time         `json:"now"`
 	CurrentSession     *BreakSessionView `json:"currentSession,omitempty"`
 	Reminders          []ReminderRuntime `json:"reminders"`
-	NextBreakReason    []string          `json:"nextBreakReason"`
+	NextBreakReason    []int64           `json:"nextBreakReason"`
 	GlobalEnabled      bool              `json:"globalEnabled"`
 	TimerMode          string            `json:"timerMode"`
 	IdleThresholdSec   int               `json:"idleThresholdSec"`
@@ -128,7 +125,7 @@ type RuntimeState struct {
 
 type BreakSessionView struct {
 	Status       string    `json:"status"`
-	Reasons      []string  `json:"reasons"`
+	Reasons      []int64   `json:"reasons"`
 	StartedAt    time.Time `json:"startedAt"`
 	EndsAt       time.Time `json:"endsAt"`
 	RemainingSec int       `json:"remainingSec"`
@@ -152,19 +149,18 @@ func DefaultSettings() Settings {
 	}
 }
 
-func NormalizeReminderID(id string) string {
-	return strings.ToLower(strings.TrimSpace(id))
+func NormalizeReminderID(id int64) int64 {
+	if id <= 0 {
+		return 0
+	}
+	return id
 }
 
 func NormalizeReminderConfigs(reminders []ReminderConfig) []ReminderConfig {
-	return normalizeReminders(reminders)
+	return cloneReminderConfigs(reminders)
 }
 
-func NormalizeReminderConfigsKeepEmpty(reminders []ReminderConfig) []ReminderConfig {
-	return NormalizeReminderConfigs(reminders)
-}
-
-func ReminderByID(reminders []ReminderConfig, id string) (ReminderConfig, bool) {
+func ReminderByID(reminders []ReminderConfig, id int64) (ReminderConfig, bool) {
 	norm := NormalizeReminderID(id)
 	for _, reminder := range reminders {
 		if reminder.ID == norm {
@@ -175,11 +171,11 @@ func ReminderByID(reminders []ReminderConfig, id string) (ReminderConfig, bool) 
 }
 
 func ApplyReminderPatches(reminders []ReminderConfig, patches []ReminderPatch) []ReminderConfig {
-	updated := cloneReminderConfigs(NormalizeReminderConfigs(reminders))
+	updated := cloneReminderConfigs(reminders)
 	for _, patch := range patches {
 		updated = applyReminderPatch(updated, patch)
 	}
-	return NormalizeReminderConfigs(updated)
+	return updated
 }
 
 func (s Settings) Normalize() Settings {
@@ -206,40 +202,9 @@ func (s Settings) Normalize() Settings {
 	return s
 }
 
-func normalizeReminders(reminders []ReminderConfig) []ReminderConfig {
-	if len(reminders) == 0 {
-		return nil
-	}
-
-	result := make([]ReminderConfig, 0, len(reminders))
-	indexByID := map[string]int{}
-	for _, reminder := range reminders {
-		id := NormalizeReminderID(reminder.ID)
-		if id == "" {
-			continue
-		}
-		next := ReminderConfig{
-			ID:           id,
-			Name:         strings.TrimSpace(reminder.Name),
-			Enabled:      reminder.Enabled,
-			IntervalSec:  reminder.IntervalSec,
-			BreakSec:     reminder.BreakSec,
-			ReminderType: normalizeReminderType(reminder.ReminderType),
-		}
-
-		if idx, ok := indexByID[id]; ok {
-			result[idx] = next
-			continue
-		}
-		indexByID[id] = len(result)
-		result = append(result, next)
-	}
-	return result
-}
-
 func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []ReminderConfig {
 	id := NormalizeReminderID(patch.ID)
-	if id == "" {
+	if id <= 0 {
 		return reminders
 	}
 
@@ -255,10 +220,7 @@ func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []Remin
 	}
 
 	if patch.Name != nil {
-		name := strings.TrimSpace(*patch.Name)
-		if name != "" {
-			reminders[idx].Name = name
-		}
+		reminders[idx].Name = *patch.Name
 	}
 	if patch.Enabled != nil {
 		reminders[idx].Enabled = *patch.Enabled
@@ -270,10 +232,7 @@ func applyReminderPatch(reminders []ReminderConfig, patch ReminderPatch) []Remin
 		reminders[idx].BreakSec = *patch.BreakSec
 	}
 	if patch.ReminderType != nil {
-		reminderType := normalizeReminderType(*patch.ReminderType)
-		if reminderType != "" {
-			reminders[idx].ReminderType = reminderType
-		}
+		reminders[idx].ReminderType = *patch.ReminderType
 	}
 	return reminders
 }
@@ -324,15 +283,4 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 		}
 	}
 	return s.Normalize()
-}
-
-func normalizeReminderType(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "rest":
-		return "rest"
-	case "notify":
-		return "notify"
-	default:
-		return ""
-	}
 }

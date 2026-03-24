@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,7 +30,7 @@ type wailsDesktopController struct {
 	lastOverlaySessionStart time.Time
 	overlayFallbackNotified bool
 	lastLanguage            string
-	reminderActionOrder     []string
+	reminderActionOrder     []int64
 	reminderOrderMu         sync.RWMutex
 	lastStatusBarStatus     string
 	lastStatusBarCountdown  string
@@ -46,7 +47,7 @@ type wailsDesktopController struct {
 }
 
 type autoReminderChoice struct {
-	reason    string
+	reason    int64
 	name      string
 	remaining int
 	total     int
@@ -225,7 +226,7 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 		if actionID >= desktop.StatusBarActionPauseReminderBase && actionID < desktop.StatusBarActionResumeReminderBase {
 			row := actionID - desktop.StatusBarActionPauseReminderBase
 			if reason, ok := c.reminderReasonByRow(row); ok {
-				logx.Infof("desktop.statusbar_action action=pause_reminder row=%d reason=%s", row, reason)
+				logx.Infof("desktop.statusbar_action action=pause_reminder row=%d reason=%d", row, reason)
 				_, err := app.PauseReminder(reason)
 				c.logErr(ctx, err)
 			} else {
@@ -236,7 +237,7 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 		if actionID >= desktop.StatusBarActionResumeReminderBase {
 			row := actionID - desktop.StatusBarActionResumeReminderBase
 			if reason, ok := c.reminderReasonByRow(row); ok {
-				logx.Infof("desktop.statusbar_action action=resume_reminder row=%d reason=%s", row, reason)
+				logx.Infof("desktop.statusbar_action action=resume_reminder row=%d reason=%d", row, reason)
 				_, err := app.ResumeReminder(reason)
 				c.logErr(ctx, err)
 			} else {
@@ -364,7 +365,7 @@ func buildStatusBarTitle(state config.RuntimeState) string {
 	}
 
 	choice := selectAutoReminderChoice(state)
-	if choice.reason == "" {
+	if choice.reason <= 0 {
 		return ""
 	}
 	return formatCountdown(choice.remaining)
@@ -390,7 +391,7 @@ func buildStatusBarProgress(state config.RuntimeState) float64 {
 
 func nearestCountdownRemainingAndTotal(state config.RuntimeState) (int, int) {
 	choice := selectAutoReminderChoice(state)
-	if choice.reason == "" {
+	if choice.reason <= 0 {
 		return 0, 0
 	}
 	return choice.remaining, choice.total
@@ -447,18 +448,18 @@ func isRestRuntimeReminder(reminder config.ReminderRuntime) bool {
 	return strings.ToLower(strings.TrimSpace(reminder.ReminderType)) != "notify"
 }
 
-func buildRemindersPayload(state config.RuntimeState, language string) (string, []string) {
+func buildRemindersPayload(state config.RuntimeState, language string) (string, []int64) {
 	rows := listReminderRows(state)
 	if len(rows) == 0 {
 		return "", nil
 	}
 
 	items := make([]reminderStatusView, 0, len(rows))
-	order := make([]string, 0, len(rows))
+	order := make([]int64, 0, len(rows))
 	for _, row := range rows {
 		paused := row.paused || !state.GlobalEnabled
 		items = append(items, reminderStatusView{
-			Reason: row.choice.reason,
+			Reason: strconv.FormatInt(row.choice.reason, 10),
 			Paused: paused,
 			Title:  buildReminderTitle(row.choice, language, paused),
 			Progress: func() float64 {
@@ -514,20 +515,20 @@ func listReminderRows(state config.RuntimeState) []reminderRow {
 	return rows
 }
 
-func (c *wailsDesktopController) setReminderActionOrder(order []string) {
+func (c *wailsDesktopController) setReminderActionOrder(order []int64) {
 	c.reminderOrderMu.Lock()
 	defer c.reminderOrderMu.Unlock()
-	c.reminderActionOrder = append([]string(nil), order...)
+	c.reminderActionOrder = append([]int64(nil), order...)
 }
 
-func (c *wailsDesktopController) reminderReasonByRow(row int) (string, bool) {
+func (c *wailsDesktopController) reminderReasonByRow(row int) (int64, bool) {
 	if row < 0 {
-		return "", false
+		return 0, false
 	}
 	c.reminderOrderMu.RLock()
 	defer c.reminderOrderMu.RUnlock()
 	if row >= len(c.reminderActionOrder) {
-		return "", false
+		return 0, false
 	}
 	return c.reminderActionOrder[row], true
 }

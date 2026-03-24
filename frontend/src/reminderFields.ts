@@ -20,7 +20,7 @@ const DEFAULT_SPEC: ReminderFieldSpec = {
   breakMin: 1
 };
 
-export function reminderFieldSpecByID(id: string): ReminderFieldSpec {
+export function reminderFieldSpecByID(id: number): ReminderFieldSpec {
   void id;
   return DEFAULT_SPEC;
 }

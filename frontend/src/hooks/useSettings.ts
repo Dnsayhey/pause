@@ -72,14 +72,39 @@ function nearestOptionValue(value: number, options: readonly number[]): number {
   return nearest;
 }
 
-function reminderByID(reminders: ReminderConfig[], id: string) {
+function reminderByID(reminders: ReminderConfig[], id: number) {
   return reminders.find((reminder) => reminder.id === id);
+}
+
+function normalizeReminderName(name: string): string {
+  return name.trim();
+}
+
+function isValidReminderType(value: unknown): value is 'rest' | 'notify' {
+  return value === 'rest' || value === 'notify';
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) > 0;
+}
+
+function hasNameConflict(reminders: ReminderConfig[], name: string, excludeID?: number): boolean {
+  const expected = normalizeReminderName(name).toLowerCase();
+  if (expected === '') {
+    return false;
+  }
+  return reminders.some((reminder) => {
+    if (excludeID !== undefined && reminder.id === excludeID) {
+      return false;
+    }
+    return normalizeReminderName(reminder.name).toLowerCase() === expected;
+  });
 }
 
 export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [reminders, setReminders] = useState<ReminderConfig[]>([]);
-  const [reminderDrafts, setReminderDrafts] = useState<Record<string, ReminderDraft>>({});
+  const [reminderDrafts, setReminderDrafts] = useState<Record<number, ReminderDraft>>({});
   const [launchAtLogin, setLaunchAtLoginState] = useState(false);
 
   useEffect(() => {
@@ -145,7 +170,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   }, [refreshLaunchAtLoginState]);
 
   useEffect(() => {
-    const nextDrafts: Record<string, ReminderDraft> = {};
+    const nextDrafts: Record<number, ReminderDraft> = {};
     for (const reminder of reminders) {
       const intervalUnitSec = deriveCustomDraftUnitSec(reminder.intervalSec, 3600, 60);
       const breakUnitSec = deriveCustomDraftUnitSec(reminder.breakSec, 60, 1);
@@ -188,13 +213,43 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   );
 
   const applyReminderPatch = useCallback(
-    async (id: string, patch: Omit<ReminderPatch, 'id'>) => {
+    async (id: number, patch: Omit<ReminderPatch, 'id'>) => {
+      if (!isPositiveInt(id)) {
+        setError('reminder id is required');
+        return;
+      }
+      const nextPatch: Omit<ReminderPatch, 'id'> = { ...patch };
+      if (nextPatch.name !== undefined) {
+        const nextName = normalizeReminderName(nextPatch.name);
+        if (nextName === '') {
+          setError('reminder name is required');
+          return;
+        }
+        if (hasNameConflict(reminders, nextName, id)) {
+          setError('reminder already exists');
+          return;
+        }
+        nextPatch.name = nextName;
+      }
+      if (nextPatch.intervalSec !== undefined && !isPositiveInt(nextPatch.intervalSec)) {
+        setError('reminder intervalSec must be > 0');
+        return;
+      }
+      if (nextPatch.breakSec !== undefined && !isPositiveInt(nextPatch.breakSec)) {
+        setError('reminder breakSec must be > 0');
+        return;
+      }
+      if (nextPatch.reminderType !== undefined && !isValidReminderType(nextPatch.reminderType)) {
+        setError('reminder reminderType must be rest or notify');
+        return;
+      }
+
       setError('');
       try {
         const next = await updateReminders([
           {
             id,
-            ...patch
+            ...nextPatch
           }
         ]);
         setReminders(next);
@@ -203,15 +258,37 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
         setError(String(err));
       }
     },
-    [refreshRuntime, setError]
+    [refreshRuntime, reminders, setError]
   );
 
   const createReminder = useCallback(
     async (name: string, intervalSec: number, breakSec: number, reminderType: 'rest' | 'notify'): Promise<boolean> => {
+      const nextName = normalizeReminderName(name);
+      if (nextName === '') {
+        setError('reminder name is required');
+        return false;
+      }
+      if (hasNameConflict(reminders, nextName)) {
+        setError('reminder already exists');
+        return false;
+      }
+      if (!isPositiveInt(intervalSec)) {
+        setError('reminder intervalSec must be > 0');
+        return false;
+      }
+      if (!isPositiveInt(breakSec)) {
+        setError('reminder breakSec must be > 0');
+        return false;
+      }
+      if (!isValidReminderType(reminderType)) {
+        setError('reminder reminderType must be rest or notify');
+        return false;
+      }
+
       setError('');
       try {
         const next = await createReminderAPI({
-          name,
+          name: nextName,
           intervalSec,
           breakSec,
           enabled: true,
@@ -225,11 +302,11 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
         return false;
       }
     },
-    [refreshRuntime, setError]
+    [refreshRuntime, reminders, setError]
   );
 
   const deleteReminder = useCallback(
-    async (id: string): Promise<boolean> => {
+    async (id: number): Promise<boolean> => {
       setError('');
       try {
         const next = await deleteReminderAPI(id);
@@ -244,7 +321,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     [refreshRuntime, setError]
   );
 
-  const setReminderIntervalDraft = useCallback((id: string, value: string) => {
+  const setReminderIntervalDraft = useCallback((id: number, value: string) => {
     setReminderDrafts((prev) => ({
       ...prev,
       [id]: {
@@ -254,7 +331,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     }));
   }, []);
 
-  const setReminderBreakDraft = useCallback((id: string, value: string) => {
+  const setReminderBreakDraft = useCallback((id: number, value: string) => {
     setReminderDrafts((prev) => ({
       ...prev,
       [id]: {
@@ -265,7 +342,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   }, []);
 
   const normalizeReminderIntervalDraft = useCallback(
-    (id: string, raw: string, unitSec?: number) => {
+    (id: number, raw: string, unitSec?: number) => {
       const spec = reminderFieldSpecByID(id);
       const activeUnitSec = unitSec ?? spec.intervalUnitSec;
       const { unitMin, unitMax, minSec } = deriveUnitBounds(1, undefined, activeUnitSec, activeUnitSec);
@@ -284,7 +361,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   );
 
   const normalizeReminderBreakDraft = useCallback(
-    (id: string, raw: string, unitSec?: number) => {
+    (id: number, raw: string, unitSec?: number) => {
       const spec = reminderFieldSpecByID(id);
       const activeUnitSec = unitSec ?? spec.breakUnitSec;
       const { unitMin, unitMax, minSec } = deriveUnitBounds(1, undefined, activeUnitSec, activeUnitSec);
@@ -303,9 +380,13 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   );
 
   const commitReminderDrafts = useCallback(
-    async (id: string, intervalRaw: string, breakRaw: string, intervalUnitSec?: number, breakUnitSec?: number) => {
+    async (id: number, intervalRaw: string, breakRaw: string, intervalUnitSec?: number, breakUnitSec?: number) => {
       const spec = reminderFieldSpecByID(id);
       const current = reminderByID(reminders, id);
+      if (!current) {
+        setError('reminder id not found');
+        return;
+      }
       const activeIntervalUnitSec = intervalUnitSec ?? spec.intervalUnitSec;
       const activeBreakUnitSec = breakUnitSec ?? spec.breakUnitSec;
 
@@ -313,30 +394,18 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
       const breakBounds = deriveUnitBounds(1, undefined, activeBreakUnitSec, activeBreakUnitSec);
 
       const parsedInterval = parseInteger(intervalRaw);
-      const fallbackInterval = clampReminderDraftValue(
-        Math.round((current?.intervalSec ?? intervalBounds.minSec) / activeIntervalUnitSec),
-        intervalBounds.unitMin,
-        intervalBounds.unitMax
-      );
-      const nextInterval =
-        parsedInterval === null
-          ? fallbackInterval
-          : isReminderValueValid(parsedInterval, intervalBounds.unitMin, intervalBounds.unitMax)
-            ? parsedInterval
-            : clampReminderDraftValue(parsedInterval, intervalBounds.unitMin, intervalBounds.unitMax);
+      if (!isReminderValueValid(parsedInterval, intervalBounds.unitMin, intervalBounds.unitMax)) {
+        setError('reminder intervalSec must be > 0');
+        return;
+      }
+      const nextInterval = parsedInterval;
 
       const parsedBreak = parseInteger(breakRaw);
-      const fallbackBreak = clampReminderDraftValue(
-        Math.round((current?.breakSec ?? breakBounds.minSec) / activeBreakUnitSec),
-        breakBounds.unitMin,
-        breakBounds.unitMax
-      );
-      const nextBreak =
-        parsedBreak === null
-          ? fallbackBreak
-          : isReminderValueValid(parsedBreak, breakBounds.unitMin, breakBounds.unitMax)
-            ? parsedBreak
-            : clampReminderDraftValue(parsedBreak, breakBounds.unitMin, breakBounds.unitMax);
+      if (!isReminderValueValid(parsedBreak, breakBounds.unitMin, breakBounds.unitMax)) {
+        setError('reminder breakSec must be > 0');
+        return;
+      }
+      const nextBreak = parsedBreak;
 
       setReminderDrafts((prev) => ({
         ...prev,
@@ -349,7 +418,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
       const nextIntervalSec = Math.max(1, Math.round(nextInterval) * activeIntervalUnitSec);
       const nextBreakSec = Math.max(1, Math.round(nextBreak) * activeBreakUnitSec);
       const hasNoChange =
-        current !== undefined && current.intervalSec === nextIntervalSec && current.breakSec === nextBreakSec;
+        current.intervalSec === nextIntervalSec && current.breakSec === nextBreakSec;
 
       if (hasNoChange) {
         return;
@@ -364,7 +433,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   );
 
   const resetReminderDraftToStored = useCallback(
-    (id: string) => {
+    (id: number) => {
       const current = reminderByID(reminders, id);
       if (current) {
         const intervalUnitSec = deriveCustomDraftUnitSec(current.intervalSec, 3600, 60);

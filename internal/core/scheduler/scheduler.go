@@ -8,7 +8,7 @@ import (
 
 const mergeWindowSec = 60
 
-type ReminderType string
+type ReminderType int64
 
 type Event struct {
 	Reasons  []ReminderType
@@ -16,20 +16,20 @@ type Event struct {
 }
 
 type Scheduler struct {
-	elapsedSec map[string]int
+	elapsedSec map[int64]int
 }
 
 func New() *Scheduler {
-	return &Scheduler{elapsedSec: map[string]int{}}
+	return &Scheduler{elapsedSec: map[int64]int{}}
 }
 
 func (s *Scheduler) Reset() {
-	s.elapsedSec = map[string]int{}
+	s.elapsedSec = map[int64]int{}
 }
 
-func (s *Scheduler) ResetByID(id string) {
+func (s *Scheduler) ResetByID(id int64) {
 	norm := config.NormalizeReminderID(id)
-	if norm == "" {
+	if norm <= 0 {
 		return
 	}
 	delete(s.elapsedSec, norm)
@@ -49,7 +49,7 @@ func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []config.ReminderCo
 		s.elapsedSec[reminder.ID] += activeSec
 	}
 
-	dueIDs := map[string]struct{}{}
+	dueIDs := map[int64]struct{}{}
 	for _, reminder := range enabled {
 		if s.elapsedSec[reminder.ID] >= reminder.IntervalSec {
 			dueIDs[reminder.ID] = struct{}{}
@@ -90,7 +90,7 @@ func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []config.ReminderCo
 	return &Event{Reasons: reasons, BreakSec: breakSec}
 }
 
-func (s *Scheduler) NextInSec(reminders []config.ReminderConfig, reminderID string) int {
+func (s *Scheduler) NextInSec(reminders []config.ReminderConfig, reminderID int64) int {
 	reminder, ok := config.ReminderByID(reminders, reminderID)
 	if !ok || !reminder.Enabled {
 		return -1
@@ -102,8 +102,8 @@ func (s *Scheduler) NextInSec(reminders []config.ReminderConfig, reminderID stri
 	return remaining
 }
 
-func (s *Scheduler) NextByID(reminders []config.ReminderConfig) map[string]int {
-	next := map[string]int{}
+func (s *Scheduler) NextByID(reminders []config.ReminderConfig) map[int64]int {
+	next := map[int64]int{}
 	for _, reminder := range reminders {
 		next[reminder.ID] = s.NextInSec(reminders, reminder.ID)
 	}

@@ -11,7 +11,7 @@ func TestSessionCompletesAfterDuration(t *testing.T) {
 	m := NewManager()
 	now := time.Unix(1_700_000_000, 0)
 
-	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{"eye"}, BreakSec: 20}, true)
+	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{1}, BreakSec: 20}, true)
 	if !m.IsActive() {
 		t.Fatalf("expected active session after StartBreak")
 	}
@@ -27,12 +27,12 @@ func TestSkipRespectsCanSkip(t *testing.T) {
 	m := NewManager()
 	now := time.Unix(1_700_000_000, 0)
 
-	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{"stand"}, BreakSec: 60}, false)
+	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{2}, BreakSec: 60}, false)
 	if err := m.Skip(); err == nil {
 		t.Fatalf("expected error when skip is disabled")
 	}
 
-	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{"stand"}, BreakSec: 60}, true)
+	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{2}, BreakSec: 60}, true)
 	if err := m.Skip(); err != nil {
 		t.Fatalf("expected skip success, got %v", err)
 	}

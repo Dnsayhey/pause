@@ -5,7 +5,7 @@ import { reminderFieldSpecByID, toDraftBreakValue, toDraftIntervalValue } from '
 import type { ReminderConfig, ReminderRuntime } from '../types';
 import { ReminderCard } from '../components/ReminderCard';
 
-type ReminderDrafts = Record<string, { interval: string; break: string }>;
+type ReminderDrafts = Record<number, { interval: string; break: string }>;
 
 type RemindersPageProps = {
   locale: Locale;
@@ -14,20 +14,20 @@ type RemindersPageProps = {
   reminderDrafts: ReminderDrafts;
   createPanelRequestId: number;
   createPanelAnchor: { top: number; right: number } | null;
-  onReminderEnabledChange: (id: string, enabled: boolean) => void;
-  onReminderIntervalDraftChange: (id: string, value: string) => void;
-  onReminderIntervalDraftNormalize: (id: string, value: string, unitSec: number) => number;
-  onReminderBreakDraftChange: (id: string, value: string) => void;
-  onReminderBreakDraftNormalize: (id: string, value: string, unitSec: number) => number;
+  onReminderEnabledChange: (id: number, enabled: boolean) => void;
+  onReminderIntervalDraftChange: (id: number, value: string) => void;
+  onReminderIntervalDraftNormalize: (id: number, value: string, unitSec: number) => number;
+  onReminderBreakDraftChange: (id: number, value: string) => void;
+  onReminderBreakDraftNormalize: (id: number, value: string, unitSec: number) => number;
   onReminderDraftCommit: (
-    id: string,
+    id: number,
     intervalValue: string,
     breakValue: string,
     intervalUnitSec: number,
     breakUnitSec: number
   ) => Promise<void> | void;
-  onReminderEditCancel: (id: string) => void;
-  onReminderDelete: (id: string) => Promise<boolean>;
+  onReminderEditCancel: (id: number) => void;
+  onReminderDelete: (id: number) => Promise<boolean>;
   onCreateReminder: (
     name: string,
     intervalSec: number,
@@ -57,7 +57,7 @@ function reminderTitle(reminder: ReminderConfig, locale: Locale): string {
   if (name !== '') {
     return name;
   }
-  return reminder.id;
+  return String(reminder.id);
 }
 
 function parsePositiveInteger(value: string): number | null {
@@ -126,8 +126,8 @@ export function RemindersPage({
   onCreateReminder
 }: RemindersPageProps) {
   const lastHandledCreatePanelRequestIdRef = useRef(createPanelRequestId);
-  const [todayStatsByReminderID, setTodayStatsByReminderID] = useState<Record<string, ReminderTodayStat>>({});
-  const [editUnitsByReminderID, setEditUnitsByReminderID] = useState<Record<string, ReminderEditUnits>>({});
+  const [todayStatsByReminderID, setTodayStatsByReminderID] = useState<Record<number, ReminderTodayStat>>({});
+  const [editUnitsByReminderID, setEditUnitsByReminderID] = useState<Record<number, ReminderEditUnits>>({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createName, setCreateName] = useState('');
@@ -151,7 +151,7 @@ export function RemindersPage({
         const toSec = Math.floor(now.getTime() / 1000);
         const weekly = await getAnalyticsWeeklyStats(fromSec, toSec);
         if (cancelled) return;
-        const nextMap: Record<string, ReminderTodayStat> = {};
+        const nextMap: Record<number, ReminderTodayStat> = {};
         for (const item of weekly.reminders) {
           nextMap[item.reminderId] = {
             triggeredCount: item.triggeredCount,
@@ -181,7 +181,7 @@ export function RemindersPage({
 
   useEffect(() => {
     setEditUnitsByReminderID((prev) => {
-      const next: Record<string, ReminderEditUnits> = {};
+      const next: Record<number, ReminderEditUnits> = {};
       for (const reminder of reminders) {
         next[reminder.id] = prev[reminder.id] ?? deriveDefaultEditUnits(reminder);
       }
@@ -249,11 +249,29 @@ export function RemindersPage({
       setCreateError(t(locale, 'addReminderNameRequired'));
       return;
     }
+    const hasNameConflict = reminders.some(
+      (reminder) => reminder.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (hasNameConflict) {
+      setCreateError(t(locale, 'addReminderNameExists'));
+      return;
+    }
     const parsedInterval = parsePositiveInteger(createIntervalValue);
-    const parsedBreak = parsePositiveInteger(createBreakValue);
-    const intervalValue = parsedInterval ?? (createIntervalUnit === 'hour' ? 1 : 25);
-    const breakValue = parsedBreak ?? 1;
+    if (parsedInterval === null) {
+      setCreateError(t(locale, 'addReminderIntervalInvalid'));
+      return;
+    }
+    const intervalValue = parsedInterval;
     const intervalSec = intervalValue * (createIntervalUnit === 'hour' ? 3600 : 60);
+    let breakValue = 1;
+    if (createType === 'rest') {
+      const parsedBreak = parsePositiveInteger(createBreakValue);
+      if (parsedBreak === null) {
+        setCreateError(t(locale, 'addReminderBreakInvalid'));
+        return;
+      }
+      breakValue = parsedBreak;
+    }
     const breakSec = createType === 'notify' ? 1 : breakValue * (createBreakUnit === 'minute' ? 60 : 1);
     setCreateIntervalValue(String(intervalValue));
     setCreateBreakValue(String(breakValue));

@@ -10,12 +10,12 @@ import (
 func TestBuildBreakNotificationBodyUsesRuntimeReminderNames(t *testing.T) {
 	state := config.RuntimeState{
 		CurrentSession: &config.BreakSessionView{
-			Reasons:      []string{"eye", "stand"},
+			Reasons:      []int64{1, 2},
 			RemainingSec: 20,
 		},
 		Reminders: []config.ReminderRuntime{
-			{ID: "eye", Name: "护眼"},
-			{ID: "stand", Name: "站立"},
+			{ID: 1, Name: "护眼"},
+			{ID: 2, Name: "站立"},
 		},
 	}
 

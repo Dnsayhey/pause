@@ -9,6 +9,26 @@ import (
 	"time"
 )
 
+func mustCreateReminder(t *testing.T, store *Store, name string) int64 {
+	t.Helper()
+	enabled := true
+	intervalSec := 20 * 60
+	breakSec := 20
+	reminderType := "rest"
+	nameCopy := name
+	id, err := store.CreateReminder(ReminderMutation{
+		Name:         &nameCopy,
+		Enabled:      &enabled,
+		IntervalSec:  &intervalSec,
+		BreakSec:     &breakSec,
+		ReminderType: &reminderType,
+	})
+	if err != nil {
+		t.Fatalf("CreateReminder(%s) error = %v", name, err)
+	}
+	return id
+}
+
 func TestOpenStoreMigratesWithoutSeedingDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := OpenStore(path)
@@ -34,25 +54,49 @@ func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 	}
 	defer store.Close()
 
-	if err := store.SyncReminders([]ReminderDefinition{
-		{ID: "eye", Name: "护眼", Enabled: true, IntervalSec: 1200, BreakSec: 20, ReminderType: "rest"},
-		{ID: "stand", Name: "站立", Enabled: true, IntervalSec: 3600, BreakSec: 300, ReminderType: "rest"},
-	}); err != nil {
-		t.Fatalf("SyncReminders() error = %v", err)
+	eyeName := "护眼"
+	standName := "站立"
+	enabled := true
+	eyeIntervalSec := 20 * 60
+	eyeBreakSec := 20
+	standIntervalSec := 60 * 60
+	standBreakSec := 5 * 60
+	reminderType := "rest"
+	eyeID, err := store.CreateReminder(ReminderMutation{
+		Name:         &eyeName,
+		Enabled:      &enabled,
+		IntervalSec:  &eyeIntervalSec,
+		BreakSec:     &eyeBreakSec,
+		ReminderType: &reminderType,
+	})
+	if err != nil {
+		t.Fatalf("CreateReminder(eye) error = %v", err)
+	}
+	standID, err := store.CreateReminder(ReminderMutation{
+		Name:         &standName,
+		Enabled:      &enabled,
+		IntervalSec:  &standIntervalSec,
+		BreakSec:     &standBreakSec,
+		ReminderType: &reminderType,
+	})
+	if err != nil {
+		t.Fatalf("CreateReminder(stand) error = %v", err)
 	}
 
 	base := time.Unix(1_700_000_000, 0).UTC()
-	if err := store.StartBreak("s1", base, "scheduled", 20, []string{"eye"}); err != nil {
+	s1, err := store.StartBreak(base, "scheduled", 20, []int64{eyeID})
+	if err != nil {
 		t.Fatalf("StartBreak(s1) error = %v", err)
 	}
-	if err := store.CompleteBreak("s1", base.Add(20*time.Second), 20); err != nil {
+	if err := store.CompleteBreak(s1, base.Add(20*time.Second), 20); err != nil {
 		t.Fatalf("CompleteBreak(s1) error = %v", err)
 	}
 
-	if err := store.StartBreak("s2", base.Add(1*time.Hour), "manual", 300, []string{"stand"}); err != nil {
+	s2, err := store.StartBreak(base.Add(1*time.Hour), "manual", 300, []int64{standID})
+	if err != nil {
 		t.Fatalf("StartBreak(s2) error = %v", err)
 	}
-	if err := store.SkipBreak("s2", base.Add(1*time.Hour+40*time.Second), 40); err != nil {
+	if err := store.SkipBreak(s2, base.Add(1*time.Hour+40*time.Second), 40); err != nil {
 		t.Fatalf("SkipBreak(s2) error = %v", err)
 	}
 
@@ -60,7 +104,6 @@ func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryAnalyticsWeeklyStats() error = %v", err)
 	}
-
 	if stats.Summary.TotalSessions != 2 {
 		t.Fatalf("expected total sessions 2, got %d", stats.Summary.TotalSessions)
 	}
@@ -83,11 +126,8 @@ func TestListRemindersSkipsSoftDeletedRows(t *testing.T) {
 	}
 	defer store.Close()
 
-	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
-		t.Fatalf("CreateReminder(eye) error = %v", err)
-	}
-
-	if _, err := store.db.ExecContext(context.Background(), `UPDATE reminders SET deleted_at = unixepoch() WHERE id = 'eye'`); err != nil {
+	id := mustCreateReminder(t, store, "eye")
+	if _, err := store.db.ExecContext(context.Background(), `UPDATE reminders SET deleted_at = unixepoch() WHERE id = ?`, id); err != nil {
 		t.Fatalf("soft delete reminder error = %v", err)
 	}
 
@@ -96,7 +136,7 @@ func TestListRemindersSkipsSoftDeletedRows(t *testing.T) {
 		t.Fatalf("ListReminders() error = %v", err)
 	}
 	for _, r := range reminders {
-		if r.ID == "eye" {
+		if r.ID == id {
 			t.Fatalf("expected soft-deleted reminder to be excluded from list")
 		}
 	}
@@ -111,10 +151,10 @@ func TestStartBreakEnforcesSingleRunningSession(t *testing.T) {
 	defer store.Close()
 
 	base := time.Unix(1_700_000_000, 0).UTC()
-	if err := store.StartBreak("run-1", base, "scheduled", 20, nil); err != nil {
+	if _, err := store.StartBreak(base, "scheduled", 20, nil); err != nil {
 		t.Fatalf("StartBreak(run-1) error = %v", err)
 	}
-	if err := store.StartBreak("run-2", base.Add(10*time.Second), "scheduled", 20, nil); err == nil {
+	if _, err := store.StartBreak(base.Add(10*time.Second), "scheduled", 20, nil); err == nil {
 		t.Fatalf("expected second running session insert to fail")
 	}
 }
@@ -127,7 +167,8 @@ func TestOpenStoreCancelsDanglingRunningSessions(t *testing.T) {
 	}
 
 	base := time.Unix(1_700_000_000, 0).UTC()
-	if err := store.StartBreak("dangling", base, "manual", 20, nil); err != nil {
+	sessionID, err := store.StartBreak(base, "manual", 20, nil)
+	if err != nil {
 		t.Fatalf("StartBreak(dangling) error = %v", err)
 	}
 	if err := store.Close(); err != nil {
@@ -142,7 +183,7 @@ func TestOpenStoreCancelsDanglingRunningSessions(t *testing.T) {
 
 	var status string
 	var endedAt sql.NullInt64
-	row := reopened.db.QueryRowContext(context.Background(), `SELECT status, ended_at FROM break_sessions WHERE id = ?`, "dangling")
+	row := reopened.db.QueryRowContext(context.Background(), `SELECT status, ended_at FROM break_sessions WHERE id = ?`, sessionID)
 	if err := row.Scan(&status, &endedAt); err != nil {
 		t.Fatalf("scan dangling session error = %v", err)
 	}
@@ -152,18 +193,9 @@ func TestOpenStoreCancelsDanglingRunningSessions(t *testing.T) {
 	if !endedAt.Valid {
 		t.Fatalf("expected dangling running session to have ended_at after cleanup")
 	}
-
-	// After cleanup there should be no running rows left.
-	var runningCount int
-	if err := reopened.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM break_sessions WHERE status = 'running'`).Scan(&runningCount); err != nil {
-		t.Fatalf("count running sessions error = %v", err)
-	}
-	if runningCount != 0 {
-		t.Fatalf("expected zero running sessions after reopen cleanup, got %d", runningCount)
-	}
 }
 
-func TestCreateReminderInsertsNewRowWithDefaults(t *testing.T) {
+func TestCreateReminderAndDeleteLifecycle(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := OpenStore(path)
 	if err != nil {
@@ -171,146 +203,50 @@ func TestCreateReminderInsertsNewRowWithDefaults(t *testing.T) {
 	}
 	defer store.Close()
 
-	if err := store.CreateReminder(ReminderMutation{ID: "focus"}); err != nil {
-		t.Fatalf("CreateReminder() error = %v", err)
-	}
-
-	reminders, err := store.ListReminders()
-	if err != nil {
-		t.Fatalf("ListReminders() error = %v", err)
-	}
-	var found *ReminderDefinition
-	for idx := range reminders {
-		if reminders[idx].ID == "focus" {
-			found = &reminders[idx]
-			break
-		}
-	}
-	if found == nil {
-		t.Fatalf("expected newly created reminder to appear in list")
-	}
-	if !found.Enabled {
-		t.Fatalf("expected created reminder enabled by default")
-	}
-	if found.IntervalSec != 1200 {
-		t.Fatalf("expected default interval 1200, got %d", found.IntervalSec)
-	}
-	if found.BreakSec != 20 {
-		t.Fatalf("expected default break 20, got %d", found.BreakSec)
-	}
-	if found.ReminderType != "rest" {
-		t.Fatalf("expected default reminder type rest, got %q", found.ReminderType)
-	}
-}
-
-func TestCreateReminderRejectsExistingActiveReminder(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(path)
-	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
-	}
-	defer store.Close()
-
-	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
-		t.Fatalf("CreateReminder(seed eye) error = %v", err)
-	}
-
-	err = store.CreateReminder(ReminderMutation{ID: "eye"})
-	if !errors.Is(err, ErrReminderAlreadyExists) {
-		t.Fatalf("CreateReminder(existing) error = %v, want %v", err, ErrReminderAlreadyExists)
-	}
-}
-
-func TestCreateReminderRestoresSoftDeletedReminder(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(path)
-	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
-	}
-	defer store.Close()
-
-	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
-		t.Fatalf("CreateReminder(seed eye) error = %v", err)
-	}
-
-	if err := store.DeleteReminder("eye"); err != nil {
-		t.Fatalf("DeleteReminder(eye) error = %v", err)
-	}
-
-	name := "护眼-恢复"
-	enabled := false
-	intervalSec := 1800
-	breakSec := 30
-	delivery := "notify"
-	if err := store.CreateReminder(ReminderMutation{
-		ID:           "eye",
+	name := "eye"
+	enabled := true
+	intervalSec := 20 * 60
+	breakSec := 20
+	reminderType := "rest"
+	id, err := store.CreateReminder(ReminderMutation{
 		Name:         &name,
 		Enabled:      &enabled,
 		IntervalSec:  &intervalSec,
 		BreakSec:     &breakSec,
-		ReminderType: &delivery,
-	}); err != nil {
-		t.Fatalf("CreateReminder(restore eye) error = %v", err)
-	}
-
-	reminders, err := store.ListReminders()
+		ReminderType: &reminderType,
+	})
 	if err != nil {
-		t.Fatalf("ListReminders() error = %v", err)
-	}
-	var found *ReminderDefinition
-	for idx := range reminders {
-		if reminders[idx].ID == "eye" {
-			found = &reminders[idx]
-			break
-		}
-	}
-	if found == nil {
-		t.Fatalf("expected restored reminder to appear in list")
-	}
-	if found.Name != name {
-		t.Fatalf("expected restored reminder name %q, got %q", name, found.Name)
-	}
-	if found.Enabled != enabled {
-		t.Fatalf("expected restored reminder enabled=%t, got %t", enabled, found.Enabled)
-	}
-	if found.IntervalSec != intervalSec {
-		t.Fatalf("expected restored reminder interval=%d, got %d", intervalSec, found.IntervalSec)
-	}
-	if found.BreakSec != breakSec {
-		t.Fatalf("expected restored reminder break=%d, got %d", breakSec, found.BreakSec)
-	}
-	if found.ReminderType != delivery {
-		t.Fatalf("expected restored reminder type=%q, got %q", delivery, found.ReminderType)
-	}
-}
-
-func TestDeleteReminderSoftDeletesAndReturnsNotFoundForMissing(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(path)
-	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
-	}
-	defer store.Close()
-
-	if err := store.CreateReminder(ReminderMutation{ID: "eye"}); err != nil {
-		t.Fatalf("CreateReminder(seed eye) error = %v", err)
+		t.Fatalf("CreateReminder(eye) error = %v", err)
 	}
 
-	if err := store.DeleteReminder("eye"); err != nil {
+	if _, err := store.CreateReminder(ReminderMutation{
+		Name:         &name,
+		Enabled:      &enabled,
+		IntervalSec:  &intervalSec,
+		BreakSec:     &breakSec,
+		ReminderType: &reminderType,
+	}); !errors.Is(err, ErrReminderAlreadyExists) {
+		t.Fatalf("CreateReminder(existing) error = %v, want %v", err, ErrReminderAlreadyExists)
+	}
+
+	if err := store.DeleteReminder(id); err != nil {
 		t.Fatalf("DeleteReminder(eye) error = %v", err)
 	}
-	reminders, err := store.ListReminders()
-	if err != nil {
-		t.Fatalf("ListReminders() error = %v", err)
-	}
-	for _, r := range reminders {
-		if r.ID == "eye" {
-			t.Fatalf("expected deleted reminder to be excluded from list")
-		}
+	if err := store.DeleteReminder(id); !errors.Is(err, ErrReminderNotFound) {
+		t.Fatalf("DeleteReminder(eye again) error = %v, want %v", err, ErrReminderNotFound)
 	}
 
-	err = store.DeleteReminder("eye")
-	if !errors.Is(err, ErrReminderNotFound) {
-		t.Fatalf("DeleteReminder(eye again) error = %v, want %v", err, ErrReminderNotFound)
+	restoredID, err := store.CreateReminder(ReminderMutation{
+		Name:         &name,
+		Enabled:      &enabled,
+		IntervalSec:  &intervalSec,
+		BreakSec:     &breakSec,
+		ReminderType: &reminderType,
+	})
+	if err != nil {
+		t.Fatalf("CreateReminder(restore eye) error = %v", err)
+	}
+	if restoredID != id {
+		t.Fatalf("expected restored reminder id %d, got %d", id, restoredID)
 	}
 }

@@ -1,8 +1,9 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS reminders (
-  id             TEXT PRIMARY KEY,
-  name           TEXT NOT NULL CHECK (length(trim(name)) > 0),
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT NOT NULL COLLATE NOCASE UNIQUE
+                 CHECK (length(trim(name)) > 0),
   enabled        INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
   interval_sec   INTEGER NOT NULL CHECK (interval_sec > 0),
   break_sec      INTEGER NOT NULL CHECK (break_sec > 0),
@@ -17,7 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_reminders_enabled ON reminders(enabled);
 CREATE INDEX IF NOT EXISTS idx_reminders_deleted_at ON reminders(deleted_at);
 
 CREATE TABLE IF NOT EXISTS break_sessions (
-  id                TEXT PRIMARY KEY,
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
   trigger_source    TEXT NOT NULL
                     CHECK (trigger_source IN ('scheduled', 'manual')),
   status            TEXT NOT NULL
@@ -45,8 +46,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_break_sessions_single_running
   WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS break_session_reminders (
-  session_id              TEXT NOT NULL,
-  reminder_id             TEXT NOT NULL,
+  session_id              INTEGER NOT NULL,
+  reminder_id             INTEGER NOT NULL,
   reminder_name_snapshot  TEXT NOT NULL,
   interval_sec_snapshot   INTEGER NOT NULL CHECK (interval_sec_snapshot > 0),
   break_sec_snapshot      INTEGER NOT NULL CHECK (break_sec_snapshot > 0),
