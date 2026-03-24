@@ -16,10 +16,16 @@ type RemindersPageProps = {
   createPanelAnchor: { top: number; right: number } | null;
   onReminderEnabledChange: (id: string, enabled: boolean) => void;
   onReminderIntervalDraftChange: (id: string, value: string) => void;
-  onReminderIntervalDraftNormalize: (id: string, value: string) => number;
+  onReminderIntervalDraftNormalize: (id: string, value: string, unitSec: number) => number;
   onReminderBreakDraftChange: (id: string, value: string) => void;
-  onReminderBreakDraftNormalize: (id: string, value: string) => number;
-  onReminderDraftCommit: (id: string, intervalValue: string, breakValue: string) => Promise<void> | void;
+  onReminderBreakDraftNormalize: (id: string, value: string, unitSec: number) => number;
+  onReminderDraftCommit: (
+    id: string,
+    intervalValue: string,
+    breakValue: string,
+    intervalUnitSec: number,
+    breakUnitSec: number
+  ) => Promise<void> | void;
   onReminderEditCancel: (id: string) => void;
   onReminderDelete: (id: string) => Promise<boolean>;
   onCreateReminder: (
@@ -37,6 +43,13 @@ type ReminderTodayStat = {
 
 type IntervalUnit = 'hour' | 'minute';
 type BreakUnit = 'minute' | 'second';
+type ReminderEditUnits = {
+  intervalUnitSec: number;
+  breakUnitSec: number;
+};
+
+const INTERVAL_SWITCH_UNITS_SEC = [60, 3600] as const;
+const BREAK_SWITCH_UNITS_SEC = [60, 1] as const;
 
 function reminderTitle(reminder: ReminderConfig, locale: Locale): string {
   const id = reminder.id;
@@ -58,6 +71,61 @@ function parsePositiveInteger(value: string): number | null {
     return null;
   }
   return parsed;
+}
+
+function isCustomReminder(id: string): boolean {
+  return id !== 'eye' && id !== 'stand';
+}
+
+function unitBounds(min: number, max: number | undefined, baseUnitSec: number, activeUnitSec: number) {
+  const minSec = min * baseUnitSec;
+  const maxSec = max === undefined ? undefined : max * baseUnitSec;
+  const unitMin = Math.max(1, Math.ceil(minSec / activeUnitSec));
+  const unitMax = maxSec === undefined ? undefined : Math.max(unitMin, Math.floor(maxSec / activeUnitSec));
+  return { unitMin, unitMax };
+}
+
+function clampUnitValue(value: number, min: number, max?: number): number {
+  if (value < min) return min;
+  if (max !== undefined && value > max) return max;
+  return value;
+}
+
+function parseAndClampDraft(value: string, fallbackSec: number, unitSec: number, min: number, max?: number): number {
+  const parsed = parsePositiveInteger(value);
+  const fallback = clampUnitValue(Math.round(Math.max(1, fallbackSec) / unitSec), min, max);
+  if (parsed === null) {
+    return fallback;
+  }
+  return clampUnitValue(parsed, min, max);
+}
+
+function deriveDefaultEditUnits(reminder: ReminderConfig): ReminderEditUnits {
+  const custom = isCustomReminder(reminder.id);
+  const intervalUnitSec =
+    custom && reminder.intervalSec >= 3600 && reminder.intervalSec % 3600 === 0 ? 3600 : 60;
+  const breakUnitSec =
+    custom && reminder.breakSec >= 60 && reminder.breakSec % 60 === 0 ? 60 : 1;
+  return {
+    intervalUnitSec,
+    breakUnitSec
+  };
+}
+
+function customFriendlyBounds(
+  reminderID: string,
+  min: number,
+  max: number | undefined,
+  baseUnitSec: number,
+  activeUnitSec: number
+) {
+  if (isCustomReminder(reminderID)) {
+    return {
+      unitMin: 1,
+      unitMax: undefined as number | undefined
+    };
+  }
+  return unitBounds(min, max, baseUnitSec, activeUnitSec);
 }
 
 const createFieldInputClassName =
@@ -85,6 +153,7 @@ export function RemindersPage({
 }: RemindersPageProps) {
   const lastHandledCreatePanelRequestIdRef = useRef(createPanelRequestId);
   const [todayStatsByReminderID, setTodayStatsByReminderID] = useState<Record<string, ReminderTodayStat>>({});
+  const [editUnitsByReminderID, setEditUnitsByReminderID] = useState<Record<string, ReminderEditUnits>>({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createName, setCreateName] = useState('');
@@ -135,6 +204,16 @@ export function RemindersPage({
       }
     };
   }, []);
+
+  useEffect(() => {
+    setEditUnitsByReminderID((prev) => {
+      const next: Record<string, ReminderEditUnits> = {};
+      for (const reminder of reminders) {
+        next[reminder.id] = prev[reminder.id] ?? deriveDefaultEditUnits(reminder);
+      }
+      return next;
+    });
+  }, [reminders]);
 
   useEffect(() => {
     if (!isCreateOpen) return;
@@ -222,10 +301,44 @@ export function RemindersPage({
       <section className="mt-3 mx-auto grid w-full max-w-[760px] grid-cols-1 gap-1 px-2 sm:px-3">
         {reminders.map((reminder) => {
           const isNotificationReminder = reminder.reminderType === 'notify';
+          const isCustom = isCustomReminder(reminder.id);
           const spec = reminderFieldSpecByID(reminder.id);
+          const unitState = editUnitsByReminderID[reminder.id] ?? deriveDefaultEditUnits(reminder);
+          const intervalBounds = customFriendlyBounds(
+            reminder.id,
+            spec.intervalMin,
+            spec.intervalMax,
+            spec.intervalUnitSec,
+            unitState.intervalUnitSec
+          );
+          const breakBounds = customFriendlyBounds(
+            reminder.id,
+            spec.breakMin,
+            spec.breakMax,
+            spec.breakUnitSec,
+            unitState.breakUnitSec
+          );
           const draft = reminderDrafts[reminder.id];
-          const intervalValue = draft?.interval ?? String(toDraftIntervalValue(reminder.intervalSec, spec));
-          const breakValue = draft?.break ?? String(toDraftBreakValue(reminder.breakSec, spec));
+          const intervalRaw = draft?.interval ?? String(toDraftIntervalValue(reminder.intervalSec, spec));
+          const breakRaw = draft?.break ?? String(toDraftBreakValue(reminder.breakSec, spec));
+          const intervalValue = String(
+            parseAndClampDraft(
+              intervalRaw,
+              reminder.intervalSec,
+              unitState.intervalUnitSec,
+              intervalBounds.unitMin,
+              intervalBounds.unitMax
+            )
+          );
+          const breakValue = String(
+            parseAndClampDraft(
+              breakRaw,
+              reminder.breakSec,
+              unitState.breakUnitSec,
+              breakBounds.unitMin,
+              breakBounds.unitMax
+            )
+          );
           const todayStat = todayStatsByReminderID[reminder.id];
           const runtimeReminder = runtimeReminders.find((item) => item.id === reminder.id);
           const metaText = isNotificationReminder
@@ -253,29 +366,105 @@ export function RemindersPage({
               metaText={metaText}
               intervalLabel={t(locale, spec.intervalLabelKey)}
               intervalValue={intervalValue}
-              intervalUnitSec={spec.intervalUnitSec}
-              intervalMin={spec.intervalMin}
-              intervalMax={spec.intervalMax}
+              intervalUnitSec={unitState.intervalUnitSec}
+              intervalMin={intervalBounds.unitMin}
+              intervalMax={intervalBounds.unitMax}
+              canToggleIntervalUnit={isCustom}
+              onIntervalUnitToggle={() => {
+                const currentUnitSec = unitState.intervalUnitSec;
+                const currentIndex = INTERVAL_SWITCH_UNITS_SEC.indexOf(currentUnitSec as (typeof INTERVAL_SWITCH_UNITS_SEC)[number]);
+                const nextUnitSec =
+                  INTERVAL_SWITCH_UNITS_SEC[
+                    currentIndex >= 0 ? (currentIndex + 1) % INTERVAL_SWITCH_UNITS_SEC.length : 0
+                  ];
+                const currentValue = parseAndClampDraft(
+                  intervalValue,
+                  reminder.intervalSec,
+                  currentUnitSec,
+                  intervalBounds.unitMin,
+                  intervalBounds.unitMax
+                );
+                const currentSec = currentValue * currentUnitSec;
+                const nextBounds = customFriendlyBounds(
+                  reminder.id,
+                  spec.intervalMin,
+                  spec.intervalMax,
+                  spec.intervalUnitSec,
+                  nextUnitSec
+                );
+                const nextValue = parseAndClampDraft('', currentSec, nextUnitSec, nextBounds.unitMin, nextBounds.unitMax);
+                setEditUnitsByReminderID((prev) => ({
+                  ...prev,
+                  [reminder.id]: {
+                    ...unitState,
+                    intervalUnitSec: nextUnitSec
+                  }
+                }));
+                onReminderIntervalDraftChange(reminder.id, String(nextValue));
+              }}
               onIntervalChange={(value) => {
                 onReminderIntervalDraftChange(reminder.id, value);
               }}
               onIntervalNormalize={(value) => {
-                onReminderIntervalDraftNormalize(reminder.id, value);
+                onReminderIntervalDraftNormalize(reminder.id, value, unitState.intervalUnitSec);
               }}
               breakLabel={t(locale, spec.breakLabelKey)}
               breakValue={breakValue}
-              breakUnitSec={spec.breakUnitSec}
-              breakMin={spec.breakMin}
-              breakMax={spec.breakMax}
+              breakUnitSec={unitState.breakUnitSec}
+              breakMin={breakBounds.unitMin}
+              breakMax={breakBounds.unitMax}
+              canToggleBreakUnit={isCustom && !isNotificationReminder}
+              onBreakUnitToggle={() => {
+                const currentUnitSec = unitState.breakUnitSec;
+                const currentIndex = BREAK_SWITCH_UNITS_SEC.indexOf(currentUnitSec as (typeof BREAK_SWITCH_UNITS_SEC)[number]);
+                const nextUnitSec =
+                  BREAK_SWITCH_UNITS_SEC[currentIndex >= 0 ? (currentIndex + 1) % BREAK_SWITCH_UNITS_SEC.length : 0];
+                const currentValue = parseAndClampDraft(
+                  breakValue,
+                  reminder.breakSec,
+                  currentUnitSec,
+                  breakBounds.unitMin,
+                  breakBounds.unitMax
+                );
+                const currentSec = currentValue * currentUnitSec;
+                const nextBounds = customFriendlyBounds(
+                  reminder.id,
+                  spec.breakMin,
+                  spec.breakMax,
+                  spec.breakUnitSec,
+                  nextUnitSec
+                );
+                const nextValue = parseAndClampDraft('', currentSec, nextUnitSec, nextBounds.unitMin, nextBounds.unitMax);
+                setEditUnitsByReminderID((prev) => ({
+                  ...prev,
+                  [reminder.id]: {
+                    ...unitState,
+                    breakUnitSec: nextUnitSec
+                  }
+                }));
+                onReminderBreakDraftChange(reminder.id, String(nextValue));
+              }}
               onBreakChange={(value) => {
                 onReminderBreakDraftChange(reminder.id, value);
               }}
               onBreakNormalize={(value) => {
-                onReminderBreakDraftNormalize(reminder.id, value);
+                onReminderBreakDraftNormalize(reminder.id, value, unitState.breakUnitSec);
               }}
-              onDoneEdit={() => onReminderDraftCommit(reminder.id, intervalValue, breakValue)}
+              onDoneEdit={() =>
+                onReminderDraftCommit(
+                  reminder.id,
+                  intervalValue,
+                  breakValue,
+                  unitState.intervalUnitSec,
+                  unitState.breakUnitSec
+                )
+              }
               onCancelEdit={() => {
                 onReminderEditCancel(reminder.id);
+                setEditUnitsByReminderID((prev) => ({
+                  ...prev,
+                  [reminder.id]: deriveDefaultEditUnits(reminder)
+                }));
               }}
               onDelete={() => onReminderDelete(reminder.id).then(() => undefined)}
             />

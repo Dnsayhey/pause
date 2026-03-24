@@ -13,9 +13,7 @@ import {
   isReminderValueValid,
   reminderFieldSpecByID,
   toDraftBreakValue,
-  toDraftIntervalValue,
-  toStoredBreakSec,
-  toStoredIntervalSec
+  toDraftIntervalValue
 } from '../reminderFields';
 import type { ReminderConfig, ReminderPatch, Settings, SettingsPatch } from '../types';
 
@@ -38,6 +36,26 @@ function parseInteger(text: string): number | null {
   const value = Number.parseInt(trimmed, 10);
   if (Number.isNaN(value)) return null;
   return value;
+}
+
+function isBuiltInReminderID(id: string): boolean {
+  return id === 'eye' || id === 'stand';
+}
+
+function deriveUnitBounds(min: number, max: number | undefined, baseUnitSec: number, activeUnitSec: number) {
+  const minSec = min * baseUnitSec;
+  const maxSec = max === undefined ? undefined : max * baseUnitSec;
+  const unitMin = Math.max(1, Math.ceil(minSec / activeUnitSec));
+  const unitMax =
+    maxSec === undefined ? undefined : Math.max(unitMin, Math.floor(maxSec / activeUnitSec));
+  return { unitMin, unitMax, minSec };
+}
+
+function deriveCustomDraftUnitSec(totalSec: number, primaryUnitSec: number, secondaryUnitSec: number): number {
+  if (totalSec >= primaryUnitSec && totalSec % primaryUnitSec === 0) {
+    return primaryUnitSec;
+  }
+  return secondaryUnitSec;
 }
 
 function clampReminderDraftValue(value: number, min: number, max?: number): number {
@@ -136,6 +154,15 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     const nextDrafts: Record<string, ReminderDraft> = {};
     for (const reminder of reminders) {
       const spec = reminderFieldSpecByID(reminder.id);
+      if (!isBuiltInReminderID(reminder.id)) {
+        const intervalUnitSec = deriveCustomDraftUnitSec(reminder.intervalSec, 3600, 60);
+        const breakUnitSec = deriveCustomDraftUnitSec(reminder.breakSec, 60, 1);
+        nextDrafts[reminder.id] = {
+          interval: String(Math.max(1, Math.round(reminder.intervalSec / intervalUnitSec))),
+          break: String(Math.max(1, Math.round(reminder.breakSec / breakUnitSec)))
+        };
+        continue;
+      }
       nextDrafts[reminder.id] = {
         interval: String(toDraftIntervalValue(reminder.intervalSec, spec)),
         break: String(toDraftBreakValue(reminder.breakSec, spec))
@@ -252,12 +279,20 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   }, []);
 
   const normalizeReminderIntervalDraft = useCallback(
-    (id: string, raw: string) => {
+    (id: string, raw: string, unitSec?: number) => {
       const spec = reminderFieldSpecByID(id);
+      const activeUnitSec = unitSec ?? spec.intervalUnitSec;
+      const { unitMin, unitMax, minSec } = isBuiltInReminderID(id)
+        ? deriveUnitBounds(spec.intervalMin, spec.intervalMax, spec.intervalUnitSec, activeUnitSec)
+        : { unitMin: 1, unitMax: undefined as number | undefined, minSec: activeUnitSec };
       const parsed = parseInteger(raw);
       const current = reminderByID(reminders, id);
-      const fallback = toDraftIntervalValue(current?.intervalSec ?? spec.intervalMin * spec.intervalUnitSec, spec);
-      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, spec.intervalMin, spec.intervalMax);
+      const fallback = clampReminderDraftValue(
+        Math.round((current?.intervalSec ?? minSec) / activeUnitSec),
+        unitMin,
+        unitMax
+      );
+      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, unitMin, unitMax);
       setReminderIntervalDraft(id, String(nextValue));
       return nextValue;
     },
@@ -265,12 +300,20 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   );
 
   const normalizeReminderBreakDraft = useCallback(
-    (id: string, raw: string) => {
+    (id: string, raw: string, unitSec?: number) => {
       const spec = reminderFieldSpecByID(id);
+      const activeUnitSec = unitSec ?? spec.breakUnitSec;
+      const { unitMin, unitMax, minSec } = isBuiltInReminderID(id)
+        ? deriveUnitBounds(spec.breakMin, spec.breakMax, spec.breakUnitSec, activeUnitSec)
+        : { unitMin: 1, unitMax: undefined as number | undefined, minSec: activeUnitSec };
       const parsed = parseInteger(raw);
       const current = reminderByID(reminders, id);
-      const fallback = toDraftBreakValue(current?.breakSec ?? spec.breakMin * spec.breakUnitSec, spec);
-      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, spec.breakMin, spec.breakMax);
+      const fallback = clampReminderDraftValue(
+        Math.round((current?.breakSec ?? minSec) / activeUnitSec),
+        unitMin,
+        unitMax
+      );
+      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, unitMin, unitMax);
       setReminderBreakDraft(id, String(nextValue));
       return nextValue;
     },
@@ -278,27 +321,44 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   );
 
   const commitReminderDrafts = useCallback(
-    async (id: string, intervalRaw: string, breakRaw: string) => {
+    async (id: string, intervalRaw: string, breakRaw: string, intervalUnitSec?: number, breakUnitSec?: number) => {
       const spec = reminderFieldSpecByID(id);
       const current = reminderByID(reminders, id);
+      const activeIntervalUnitSec = intervalUnitSec ?? spec.intervalUnitSec;
+      const activeBreakUnitSec = breakUnitSec ?? spec.breakUnitSec;
+
+      const intervalBounds = isBuiltInReminderID(id)
+        ? deriveUnitBounds(spec.intervalMin, spec.intervalMax, spec.intervalUnitSec, activeIntervalUnitSec)
+        : { unitMin: 1, unitMax: undefined as number | undefined, minSec: activeIntervalUnitSec };
+      const breakBounds = isBuiltInReminderID(id)
+        ? deriveUnitBounds(spec.breakMin, spec.breakMax, spec.breakUnitSec, activeBreakUnitSec)
+        : { unitMin: 1, unitMax: undefined as number | undefined, minSec: activeBreakUnitSec };
 
       const parsedInterval = parseInteger(intervalRaw);
-      const fallbackInterval = toDraftIntervalValue(current?.intervalSec ?? spec.intervalMin * spec.intervalUnitSec, spec);
+      const fallbackInterval = clampReminderDraftValue(
+        Math.round((current?.intervalSec ?? intervalBounds.minSec) / activeIntervalUnitSec),
+        intervalBounds.unitMin,
+        intervalBounds.unitMax
+      );
       const nextInterval =
         parsedInterval === null
           ? fallbackInterval
-          : isReminderValueValid(parsedInterval, spec.intervalMin, spec.intervalMax)
+          : isReminderValueValid(parsedInterval, intervalBounds.unitMin, intervalBounds.unitMax)
             ? parsedInterval
-            : clampReminderDraftValue(parsedInterval, spec.intervalMin, spec.intervalMax);
+            : clampReminderDraftValue(parsedInterval, intervalBounds.unitMin, intervalBounds.unitMax);
 
       const parsedBreak = parseInteger(breakRaw);
-      const fallbackBreak = toDraftBreakValue(current?.breakSec ?? spec.breakMin * spec.breakUnitSec, spec);
+      const fallbackBreak = clampReminderDraftValue(
+        Math.round((current?.breakSec ?? breakBounds.minSec) / activeBreakUnitSec),
+        breakBounds.unitMin,
+        breakBounds.unitMax
+      );
       const nextBreak =
         parsedBreak === null
           ? fallbackBreak
-          : isReminderValueValid(parsedBreak, spec.breakMin, spec.breakMax)
+          : isReminderValueValid(parsedBreak, breakBounds.unitMin, breakBounds.unitMax)
             ? parsedBreak
-            : clampReminderDraftValue(parsedBreak, spec.breakMin, spec.breakMax);
+            : clampReminderDraftValue(parsedBreak, breakBounds.unitMin, breakBounds.unitMax);
 
       setReminderDrafts((prev) => ({
         ...prev,
@@ -308,8 +368,8 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
         }
       }));
 
-      const nextIntervalSec = toStoredIntervalSec(nextInterval, spec);
-      const nextBreakSec = toStoredBreakSec(nextBreak, spec);
+      const nextIntervalSec = Math.max(1, Math.round(nextInterval) * activeIntervalUnitSec);
+      const nextBreakSec = Math.max(1, Math.round(nextBreak) * activeBreakUnitSec);
       const hasNoChange =
         current !== undefined && current.intervalSec === nextIntervalSec && current.breakSec === nextBreakSec;
 
@@ -329,6 +389,18 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     (id: string) => {
       const spec = reminderFieldSpecByID(id);
       const current = reminderByID(reminders, id);
+      if (!isBuiltInReminderID(id) && current) {
+        const intervalUnitSec = deriveCustomDraftUnitSec(current.intervalSec, 3600, 60);
+        const breakUnitSec = deriveCustomDraftUnitSec(current.breakSec, 60, 1);
+        setReminderDrafts((prev) => ({
+          ...prev,
+          [id]: {
+            interval: String(Math.max(1, Math.round(current.intervalSec / intervalUnitSec))),
+            break: String(Math.max(1, Math.round(current.breakSec / breakUnitSec)))
+          }
+        }));
+        return;
+      }
       const interval = toDraftIntervalValue(current?.intervalSec ?? spec.intervalMin * spec.intervalUnitSec, spec);
       const breakValue = toDraftBreakValue(current?.breakSec ?? spec.breakMin * spec.breakUnitSec, spec);
       setReminderDrafts((prev) => ({

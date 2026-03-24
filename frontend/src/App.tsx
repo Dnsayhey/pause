@@ -326,8 +326,8 @@ export function App() {
                   onReminderIntervalDraftNormalize={normalizeReminderIntervalDraft}
                   onReminderBreakDraftChange={setReminderBreakDraft}
                   onReminderBreakDraftNormalize={normalizeReminderBreakDraft}
-                  onReminderDraftCommit={(id, intervalValue, breakValue) => {
-                    return commitReminderDrafts(id, intervalValue, breakValue);
+                  onReminderDraftCommit={(id, intervalValue, breakValue, intervalUnitSec, breakUnitSec) => {
+                    return commitReminderDrafts(id, intervalValue, breakValue, intervalUnitSec, breakUnitSec);
                   }}
                   onReminderEditCancel={(id) => {
                     resetReminderDraftToStored(id);

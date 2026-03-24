@@ -26,6 +26,8 @@ type ReminderCardProps = {
   intervalUnitSec: number;
   intervalMin: number;
   intervalMax?: number;
+  canToggleIntervalUnit?: boolean;
+  onIntervalUnitToggle?: () => void;
   onIntervalChange: (value: string) => void;
   onIntervalNormalize: (value: string) => void;
   breakLabel: string;
@@ -33,6 +35,8 @@ type ReminderCardProps = {
   breakUnitSec: number;
   breakMin: number;
   breakMax?: number;
+  canToggleBreakUnit?: boolean;
+  onBreakUnitToggle?: () => void;
   onBreakChange: (value: string) => void;
   onBreakNormalize: (value: string) => void;
   onDoneEdit: () => Promise<void> | void;
@@ -42,6 +46,9 @@ type ReminderCardProps = {
 
 const inlineNumberInputClassName =
   'number-input w-[3.8ch] min-w-[3.8ch] cursor-text appearance-none border-0 border-b border-[var(--surface-border-strong)] bg-transparent px-0 py-[1px] text-right text-[15px] leading-[1.2] font-medium text-[var(--text-primary)] caret-[var(--accent)] shadow-none outline-none transition-colors duration-150 hover:border-[var(--field-border-muted)] focus:border-[var(--accent)]';
+
+const inlineUnitToggleClassName =
+  'inline-flex items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1 py-[1px] text-[var(--text-secondary)] underline decoration-dotted underline-offset-[3px] transition-colors hover:border-[var(--surface-border)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)]';
 
 function parsePositiveInteger(value: string): number | null {
   const numeric = Number(value);
@@ -101,6 +108,8 @@ export function ReminderCard({
   intervalUnitSec,
   intervalMin,
   intervalMax,
+  canToggleIntervalUnit = false,
+  onIntervalUnitToggle,
   onIntervalChange,
   onIntervalNormalize,
   breakLabel,
@@ -108,6 +117,8 @@ export function ReminderCard({
   breakUnitSec,
   breakMin,
   breakMax,
+  canToggleBreakUnit = false,
+  onBreakUnitToggle,
   onBreakChange,
   onBreakNormalize,
   onDoneEdit,
@@ -120,6 +131,7 @@ export function ReminderCard({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const unitSwitchHint = locale === 'zh-CN' ? '点击切换单位' : 'Click to switch unit';
 
   useEffect(() => {
     if ((!isEditing && !isConfirmingDelete) || isSaving || isDeleting) return;
@@ -181,6 +193,27 @@ export function ReminderCard({
     }
   };
 
+  const renderUnitToken = (value: string, unitSec: number, canToggle: boolean, onToggle?: () => void) => {
+    const label = unitLabel(locale, unitSec, value);
+    if (!canToggle || !onToggle) {
+      return <span>{label}</span>;
+    }
+    return (
+      <button
+        type="button"
+        className={inlineUnitToggleClassName}
+        title={unitSwitchHint}
+        aria-label={`${label} · ${unitSwitchHint}`}
+        onClick={onToggle}
+      >
+        <span>{label}</span>
+        <svg aria-hidden="true" viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none">
+          <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    );
+  };
+
   return (
     <div ref={rootRef}>
       <GlassCard
@@ -225,7 +258,7 @@ export function ReminderCard({
                         onIntervalNormalize(e.currentTarget.value);
                       }}
                     />
-                    <span>{unitLabel(locale, intervalUnitSec, intervalValue)}</span>
+                    {renderUnitToken(intervalValue, intervalUnitSec, canToggleIntervalUnit, onIntervalUnitToggle)}
                     <span>提醒一次</span>
                   </>
                 ) : (
@@ -246,7 +279,7 @@ export function ReminderCard({
                         onIntervalNormalize(e.currentTarget.value);
                       }}
                     />
-                    <span>{unitLabel(locale, intervalUnitSec, intervalValue)}</span>
+                    {renderUnitToken(intervalValue, intervalUnitSec, canToggleIntervalUnit, onIntervalUnitToggle)}
                   </>
                 )
               ) : locale === 'zh-CN' ? (
@@ -267,7 +300,7 @@ export function ReminderCard({
                       onIntervalNormalize(e.currentTarget.value);
                     }}
                   />
-                  <span>{unitLabel(locale, intervalUnitSec, intervalValue)}</span>
+                  {renderUnitToken(intervalValue, intervalUnitSec, canToggleIntervalUnit, onIntervalUnitToggle)}
                   <span>休息</span>
                   <input
                     aria-label={breakLabel}
@@ -284,7 +317,7 @@ export function ReminderCard({
                       onBreakNormalize(e.currentTarget.value);
                     }}
                   />
-                  <span>{unitLabel(locale, breakUnitSec, breakValue)}</span>
+                  {renderUnitToken(breakValue, breakUnitSec, canToggleBreakUnit, onBreakUnitToggle)}
                 </>
               ) : (
                 <>
@@ -304,7 +337,7 @@ export function ReminderCard({
                       onBreakNormalize(e.currentTarget.value);
                     }}
                   />
-                  <span>{unitLabel(locale, breakUnitSec, breakValue)}</span>
+                  {renderUnitToken(breakValue, breakUnitSec, canToggleBreakUnit, onBreakUnitToggle)}
                   <span>break every</span>
                   <input
                     aria-label={intervalLabel}
@@ -321,7 +354,7 @@ export function ReminderCard({
                       onIntervalNormalize(e.currentTarget.value);
                     }}
                   />
-                  <span>{unitLabel(locale, intervalUnitSec, intervalValue)}</span>
+                  {renderUnitToken(intervalValue, intervalUnitSec, canToggleIntervalUnit, onIntervalUnitToggle)}
                 </>
               )}
             </div>
