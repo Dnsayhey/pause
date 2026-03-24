@@ -18,6 +18,8 @@ type ReminderCardProps = {
   onEnabledChange: (enabled: boolean) => void;
   editLabel: string;
   doneLabel: string;
+  cancelLabel: string;
+  deleteLabel: string;
   metaText?: string;
   intervalLabel: string;
   intervalValue: string;
@@ -35,6 +37,7 @@ type ReminderCardProps = {
   onBreakNormalize: (value: string) => void;
   onDoneEdit: () => Promise<void> | void;
   onCancelEdit: () => void;
+  onDelete: () => Promise<void> | void;
 };
 
 const inlineNumberInputClassName =
@@ -90,6 +93,8 @@ export function ReminderCard({
   onEnabledChange,
   editLabel,
   doneLabel,
+  cancelLabel,
+  deleteLabel,
   metaText,
   intervalLabel,
   intervalValue,
@@ -106,15 +111,18 @@ export function ReminderCard({
   onBreakChange,
   onBreakNormalize,
   onDoneEdit,
-  onCancelEdit
+  onCancelEdit,
+  onDelete
 }: ReminderCardProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const suppressBlurNormalizeRef = useRef(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   useEffect(() => {
-    if (!isEditing || isSaving) return;
+    if ((!isEditing && !isConfirmingDelete) || isSaving || isDeleting) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       const root = rootRef.current;
@@ -123,9 +131,14 @@ export function ReminderCard({
       if (target && root.contains(target)) {
         return;
       }
-      suppressBlurNormalizeRef.current = true;
-      onCancelEdit();
-      setIsEditing(false);
+      if (isEditing) {
+        suppressBlurNormalizeRef.current = true;
+        onCancelEdit();
+        setIsEditing(false);
+      }
+      if (isConfirmingDelete) {
+        setIsConfirmingDelete(false);
+      }
       window.setTimeout(() => {
         suppressBlurNormalizeRef.current = false;
       }, 0);
@@ -135,7 +148,7 @@ export function ReminderCard({
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown, true);
     };
-  }, [breakValue, intervalValue, isEditing, isSaving, onBreakNormalize, onIntervalNormalize]);
+  }, [isConfirmingDelete, isDeleting, isEditing, isSaving, onCancelEdit]);
 
   const handleDone = async () => {
     if (isSaving) return;
@@ -149,6 +162,22 @@ export function ReminderCard({
       setIsEditing(false);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (isDeleting || isSaving || isEditing || isConfirmingDelete) return;
+    setIsConfirmingDelete(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (isDeleting || isSaving || isEditing || !isConfirmingDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setIsDeleting(false);
+      setIsConfirmingDelete(false);
     }
   };
 
@@ -297,46 +326,126 @@ export function ReminderCard({
               )}
             </div>
           )}
-          <button
-            type="button"
-            disabled={isSaving}
-            aria-label={isEditing ? doneLabel : editLabel}
-            title={isEditing ? doneLabel : editLabel}
-            className={[
-              'mt-[1px] inline-flex h-6 w-6 flex-none items-center justify-center rounded-md border-0 bg-transparent text-[var(--text-tertiary)] transition-colors',
-              isEditing ? 'opacity-100' : 'opacity-0 group-hover/reminder:opacity-100 focus-visible:opacity-100',
-              'hover:bg-[var(--control-hover-bg)] hover:text-[var(--text-primary)] focus-visible:outline-none disabled:opacity-40'
-            ].join(' ')}
-            onClick={() => {
-              if (isEditing) {
-                void handleDone();
-                return;
-              }
-              setIsEditing(true);
-            }}
-          >
-            {isEditing ? (
+          <div className="mt-[1px] inline-flex items-center gap-1">
+            <button
+              type="button"
+              disabled={isSaving || isDeleting || isConfirmingDelete}
+              aria-label={isEditing ? doneLabel : editLabel}
+              title={isEditing ? doneLabel : editLabel}
+              className={[
+                'inline-flex h-6 w-6 flex-none items-center justify-center rounded-md border-0 bg-transparent text-[var(--text-tertiary)] transition-colors',
+                isEditing
+                  ? 'opacity-100'
+                  : isConfirmingDelete
+                    ? 'pointer-events-none opacity-0'
+                    : 'opacity-0 group-hover/reminder:opacity-100 focus-visible:opacity-100',
+                'hover:bg-[var(--control-hover-bg)] hover:text-[var(--text-primary)] focus-visible:outline-none disabled:opacity-40'
+              ].join(' ')}
+              onClick={() => {
+                if (isEditing) {
+                  void handleDone();
+                  return;
+                }
+                setIsConfirmingDelete(false);
+                setIsEditing(true);
+              }}
+            >
+              {isEditing ? (
+                <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none">
+                  <path
+                    d="M5 10.5l3.2 3.2L15 7"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : (
+                <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none">
+                  <path
+                    d="M4.5 15.5h3l7.8-7.8a1.4 1.4 0 0 0 0-2l-1-1a1.4 1.4 0 0 0-2 0L4.5 12.5v3Z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
+
+            <button
+              type="button"
+              disabled={isDeleting || isSaving || isEditing || isConfirmingDelete}
+              aria-label={deleteLabel}
+              title={deleteLabel}
+              className={[
+                'inline-flex h-6 w-6 flex-none items-center justify-center rounded-md border-0 bg-transparent text-[var(--text-tertiary)] transition-colors',
+                isEditing || isConfirmingDelete
+                  ? 'pointer-events-none opacity-0'
+                  : 'opacity-0 group-hover/reminder:opacity-100 focus-visible:opacity-100',
+                'hover:bg-[var(--control-hover-bg)] hover:text-[var(--negative-text)] focus-visible:outline-none disabled:opacity-40'
+              ].join(' ')}
+              onClick={() => {
+                void handleDelete();
+              }}
+            >
               <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none">
                 <path
-                  d="M5 10.5l3.2 3.2L15 7"
+                  d="M4.5 5.5h11M8 5.5V4.2c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v1.3M7.2 8.5v6M10 8.5v6M12.8 8.5v6M6.4 16.7h7.2c.5 0 .9-.4.9-.9l.6-10.3H4.9l.6 10.3c0 .5.4.9.9.9Z"
                   stroke="currentColor"
-                  strokeWidth="1.8"
+                  strokeWidth="1.4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </svg>
-            ) : (
-              <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none">
-                <path
-                  d="M4.5 15.5h3l7.8-7.8a1.4 1.4 0 0 0 0-2l-1-1a1.4 1.4 0 0 0-2 0L4.5 12.5v3Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
-          </button>
+            </button>
+
+            {isConfirmingDelete ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  aria-label={cancelLabel}
+                  title={cancelLabel}
+                  className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md border-0 bg-transparent text-[var(--text-tertiary)] transition-colors hover:bg-[var(--control-hover-bg)] hover:text-[var(--text-primary)] focus-visible:outline-none disabled:opacity-40"
+                  onClick={() => {
+                    setIsConfirmingDelete(false);
+                  }}
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none">
+                    <path
+                      d="M5 5l10 10M15 5L5 15"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  aria-label={deleteLabel}
+                  title={deleteLabel}
+                  className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md border-0 bg-transparent text-[var(--negative-text)] transition-colors hover:bg-[var(--control-hover-bg)] focus-visible:outline-none disabled:opacity-40"
+                  onClick={() => {
+                    void handleDeleteConfirm();
+                  }}
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none">
+                    <path
+                      d="M5 10.5l3.2 3.2L15 7"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </>
+            ) : null}
+          </div>
         </div>
         {metaText ? <p className="mt-2 m-0 text-xs leading-[1.35] text-[var(--text-tertiary)]">{metaText}</p> : null}
       </GlassCard>

@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createReminder as createReminderAPI, getLaunchAtLogin, getReminders, getSettings, setLaunchAtLogin, updateReminders, updateSettings } from '../api';
+import {
+  createReminder as createReminderAPI,
+  deleteReminder as deleteReminderAPI,
+  getLaunchAtLogin,
+  getReminders,
+  getSettings,
+  setLaunchAtLogin,
+  updateReminders,
+  updateSettings
+} from '../api';
 import {
   isReminderValueValid,
   reminderFieldSpecByID,
@@ -206,6 +215,22 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     [refreshRuntime, setError]
   );
 
+  const deleteReminder = useCallback(
+    async (id: string): Promise<boolean> => {
+      setError('');
+      try {
+        const next = await deleteReminderAPI(id);
+        setReminders(next);
+        await refreshRuntime();
+        return true;
+      } catch (err) {
+        setError(String(err));
+        return false;
+      }
+    },
+    [refreshRuntime, setError]
+  );
+
   const setReminderIntervalDraft = useCallback((id: string, value: string) => {
     setReminderDrafts((prev) => ({
       ...prev,
@@ -337,6 +362,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     applyPatch,
     applyReminderPatch,
     createReminder,
+    deleteReminder,
     setReminderIntervalDraft,
     setReminderBreakDraft,
     normalizeReminderIntervalDraft,

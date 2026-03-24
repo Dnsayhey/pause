@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { closeWindow } from './api';
 import { resolveLocale, t } from './i18n';
 import { HeroHeader } from './components/HeroHeader';
@@ -23,6 +23,7 @@ function detectPlatformClass(): string {
 }
 
 export function App() {
+  const location = useLocation();
   const platformClass = detectPlatformClass();
   const isWindows = platformClass === 'win';
   const dragBarHeightClass = isWindows ? 'h-8' : 'h-7';
@@ -33,6 +34,9 @@ export function App() {
   const [error, setError] = useState('');
   const [isWindowsCloseHovered, setIsWindowsCloseHovered] = useState(false);
   const [isWindowsClosePressed, setIsWindowsClosePressed] = useState(false);
+  const [createPanelRequestId, setCreatePanelRequestId] = useState(0);
+  const [createPanelAnchor, setCreatePanelAnchor] = useState<{ top: number; right: number } | null>(null);
+  const addReminderButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const hasAssignedInitialFocusRef = useRef(false);
 
@@ -48,6 +52,8 @@ export function App() {
     applyLaunchAtLogin,
     applyPatch,
     applyReminderPatch,
+    createReminder,
+    deleteReminder,
     setReminderIntervalDraft,
     setReminderBreakDraft,
     normalizeReminderIntervalDraft,
@@ -186,6 +192,7 @@ export function App() {
   }
 
   const locale = resolveLocale(runtime.effectiveLanguage);
+  const isRemindersRoute = location.pathname === '/reminders' || location.pathname === '/';
 
   return (
     <div className="h-full select-none overflow-hidden">
@@ -229,43 +236,72 @@ export function App() {
             locale={locale}
             titleRef={titleRef}
             actions={
-              <div className="inline-flex rounded-full border border-[var(--seg-border)] bg-[var(--seg-bg)] p-1 shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
-                <NavLink
-                  to="/reminders"
-                  className={({ isActive }) =>
-                    `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
-                      isActive
-                        ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
-                        : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
-                    }`
-                  }
-                >
-                  {t(locale, 'navReminders')}
-                </NavLink>
-                <NavLink
-                  to="/analytics"
-                  className={({ isActive }) =>
-                    `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
-                      isActive
-                        ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
-                        : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
-                    }`
-                  }
-                >
-                  {t(locale, 'navAnalytics')}
-                </NavLink>
-                <NavLink
-                  to="/settings"
-                  className={({ isActive }) =>
-                    `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
-                      isActive
-                        ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
-                        : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
-                    }`
-                  }
-                >
-                  {t(locale, 'navSettings')}
-                </NavLink>
+              <div className="flex items-center gap-2">
+                {isRemindersRoute ? (
+                  <button
+                    ref={addReminderButtonRef}
+                    type="button"
+                    aria-label={t(locale, 'addReminder')}
+                    title={t(locale, 'addReminder')}
+                    onClick={() => {
+                      const btn = addReminderButtonRef.current;
+                      if (btn) {
+                        const rect = btn.getBoundingClientRect();
+                        setCreatePanelAnchor({
+                          top: Math.round(rect.bottom + 8),
+                          right: Math.max(12, Math.round(window.innerWidth - rect.right))
+                        });
+                      } else {
+                        setCreatePanelAnchor(null);
+                      }
+                      setCreatePanelRequestId((prev) => prev + 1);
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--seg-border)] bg-[var(--seg-bg)] text-[var(--text-primary)] transition-colors hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)]"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-3.5 w-3.5">
+                      <path d="M10 5v10M5 10h10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                ) : null}
+
+                <div className="inline-flex rounded-full border border-[var(--seg-border)] bg-[var(--seg-bg)] p-1 shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
+                  <NavLink
+                    to="/reminders"
+                    className={({ isActive }) =>
+                      `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
+                        isActive
+                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                          : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
+                      }`
+                    }
+                  >
+                    {t(locale, 'navReminders')}
+                  </NavLink>
+                  <NavLink
+                    to="/analytics"
+                    className={({ isActive }) =>
+                      `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
+                        isActive
+                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                          : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
+                      }`
+                    }
+                  >
+                    {t(locale, 'navAnalytics')}
+                  </NavLink>
+                  <NavLink
+                    to="/settings"
+                    className={({ isActive }) =>
+                      `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
+                        isActive
+                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                          : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
+                      }`
+                    }
+                  >
+                    {t(locale, 'navSettings')}
+                  </NavLink>
+                </div>
               </div>
             }
           />
@@ -281,6 +317,8 @@ export function App() {
                   reminders={reminders}
                   runtimeReminders={runtime.reminders}
                   reminderDrafts={reminderDrafts}
+                  createPanelRequestId={createPanelRequestId}
+                  createPanelAnchor={createPanelAnchor}
                   onReminderEnabledChange={(id, enabled) => {
                     void applyReminderPatch(id, { enabled });
                   }}
@@ -294,6 +332,10 @@ export function App() {
                   onReminderEditCancel={(id) => {
                     resetReminderDraftToStored(id);
                   }}
+                  onCreateReminder={(name, intervalSec, breakSec, reminderType) =>
+                    createReminder(name, intervalSec, breakSec, reminderType)
+                  }
+                  onReminderDelete={(id) => deleteReminder(id)}
                 />
               }
             />

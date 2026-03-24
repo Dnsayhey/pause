@@ -15,6 +15,8 @@ type ScrollMetrics = {
 };
 
 const MIN_THUMB_HEIGHT = 28;
+// Keep this in sync with `.custom-scroll-area__track` top/bottom in styles.css.
+const TRACK_VERTICAL_INSET = 7;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -41,8 +43,9 @@ export function CustomScrollArea({ className = '', children }: CustomScrollAreaP
 
     const { clientHeight, scrollHeight, scrollTop } = viewport;
     const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+    const trackHeight = Math.max(0, clientHeight - TRACK_VERTICAL_INSET * 2);
 
-    if (maxScrollTop <= 0 || clientHeight <= 0) {
+    if (maxScrollTop <= 0 || clientHeight <= 0 || trackHeight <= 0) {
       const nextMetrics: ScrollMetrics = {
         scrollable: false,
         thumbHeight: 0,
@@ -55,8 +58,8 @@ export function CustomScrollArea({ className = '', children }: CustomScrollAreaP
       return;
     }
 
-    const thumbHeight = clamp((clientHeight / scrollHeight) * clientHeight, MIN_THUMB_HEIGHT, clientHeight);
-    const maxThumbTop = Math.max(0, clientHeight - thumbHeight);
+    const thumbHeight = clamp((clientHeight / scrollHeight) * trackHeight, MIN_THUMB_HEIGHT, trackHeight);
+    const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
     const thumbTop = maxScrollTop > 0 ? (scrollTop / maxScrollTop) * maxThumbTop : 0;
     const nextMetrics: ScrollMetrics = {
       scrollable: true,

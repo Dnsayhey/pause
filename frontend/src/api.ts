@@ -18,6 +18,7 @@ type Backend = {
   UpdateSettings: (patch: SettingsPatch) => Promise<Settings>;
   GetReminders: () => Promise<ReminderConfig[]>;
   CreateReminder: (input: ReminderCreateInput) => Promise<ReminderConfig[]>;
+  DeleteReminder: (reminderID: string) => Promise<ReminderConfig[]>;
   UpdateReminders: (patches: ReminderPatch[]) => Promise<ReminderConfig[]>;
   GetLaunchAtLogin: () => Promise<boolean>;
   SetLaunchAtLogin: (enabled: boolean) => Promise<boolean>;
@@ -65,6 +66,10 @@ export async function getReminders(): Promise<ReminderConfig[]> {
 
 export async function createReminder(input: ReminderCreateInput): Promise<ReminderConfig[]> {
   return requireBackend().CreateReminder(input);
+}
+
+export async function deleteReminder(reminderID: string): Promise<ReminderConfig[]> {
+  return requireBackend().DeleteReminder(reminderID);
 }
 
 export async function updateReminders(patches: ReminderPatch[]): Promise<ReminderConfig[]> {

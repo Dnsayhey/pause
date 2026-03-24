@@ -13,6 +13,13 @@
   --surface-border: #e5e7eb;
   --surface-border-strong: #d1d5db;
   --surface-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  --dialog-field-bg: #ffffff;
+  --dialog-field-text: #111827;
+  --dialog-field-border: #d1d5db;
+  --dialog-field-focus-border: #9ca3af;
+  --dialog-subtle-btn-bg: #ffffff;
+  --dialog-subtle-btn-text: rgba(17, 24, 39, 0.72);
+  --dialog-scrim: rgba(0, 0, 0, 0.14);
   --control-bg: #f8fafc;
   --control-border: #dde3ea;
   --control-text: #1f2937;
@@ -52,10 +59,10 @@
   --chart-series-1: #64748b;
   --chart-series-2: #c97352;
   --chart-series-3: #2f7a66;
-  --scrollbar-track: rgba(100, 116, 139, 0.12);
-  --scrollbar-thumb: rgba(100, 116, 139, 0.42);
-  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.62);
-  --scrollbar-thumb-active: rgba(100, 116, 139, 0.74);
+  --scrollbar-track: rgba(100, 116, 139, 0.04);
+  --scrollbar-thumb: rgba(100, 116, 139, 0.18);
+  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.27);
+  --scrollbar-thumb-active: rgba(100, 116, 139, 0.38);
   --select-arrow-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23475569' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --select-arrow-image-minimal:
@@ -75,6 +82,13 @@ body[data-theme='dark'] {
   --surface-border: #2b3340;
   --surface-border-strong: #364052;
   --surface-shadow: 0 12px 30px rgba(0, 0, 0, 0.36);
+  --dialog-field-bg: #1f2732;
+  --dialog-field-text: #e5ebf2;
+  --dialog-field-border: #3b4658;
+  --dialog-field-focus-border: #556177;
+  --dialog-subtle-btn-bg: #0f1115;
+  --dialog-subtle-btn-text: rgba(229, 231, 235, 0.72);
+  --dialog-scrim: rgba(0, 0, 0, 0.5);
   --control-bg: #1f2732;
   --control-border: #313b48;
   --control-text: #e5ebf2;
@@ -114,10 +128,10 @@ body[data-theme='dark'] {
   --chart-series-1: #8a9ab3;
   --chart-series-2: #d18a67;
   --chart-series-3: #63b39a;
-  --scrollbar-track: rgba(255, 255, 255, 0.1);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.34);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.5);
-  --scrollbar-thumb-active: rgba(255, 255, 255, 0.62);
+  --scrollbar-track: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb: rgba(30, 41, 59, 0.66);
+  --scrollbar-thumb-hover: rgba(30, 41, 59, 0.76);
+  --scrollbar-thumb-active: rgba(30, 41, 59, 0.86);
   --select-arrow-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23d8ece4' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --select-arrow-image-minimal:
@@ -168,17 +182,17 @@ body {
 
 .custom-scroll-area__track {
   position: absolute;
-  top: 6px;
-  right: 1px;
-  bottom: 6px;
-  width: 10px;
+  top: 7px;
+  right: 2px;
+  bottom: 7px;
+  width: 8px;
   border-radius: 999px;
 }
 
 .custom-scroll-area__thumb {
   position: absolute;
   left: 2px;
-  width: 6px;
+  width: 4px;
   border-radius: 999px;
   background: var(--scrollbar-thumb);
   transition: background-color 120ms ease-out;
