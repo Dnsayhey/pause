@@ -259,15 +259,19 @@ func (a *App) SendBreakFallbackNotification(state config.RuntimeState) {
 		logx.Warnf("overlay.fallback_notification_skipped reason=no_notifier")
 		return
 	}
-	if err := a.notifier.ShowReminder("Time to rest", buildBreakNotificationBody(state)); err != nil {
-		logx.Warnf("overlay.fallback_notification_err err=%v", err)
-		return
-	}
 	reasons := "none"
 	if state.CurrentSession != nil {
 		reasons = joinReasons(state.CurrentSession.Reasons)
 	}
-	logx.Warnf("overlay.fallback_notification_sent reasons=%s", reasons)
+	body := buildBreakNotificationBody(state)
+	notifier := a.notifier
+	go func(reasonKey string, n platform.Notifier, message string) {
+		if err := n.ShowReminder("Time to rest", message); err != nil {
+			logx.Warnf("overlay.fallback_notification_err err=%v", err)
+			return
+		}
+		logx.Infof("overlay.fallback_notification_sent reasons=%s", reasonKey)
+	}(reasons, notifier, body)
 }
 
 func buildBreakNotificationBody(state config.RuntimeState) string {

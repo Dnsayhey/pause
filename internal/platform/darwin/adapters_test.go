@@ -3,7 +3,6 @@
 package darwin
 
 import (
-	"strings"
 	"testing"
 
 	"pause/internal/meta"
@@ -15,19 +14,6 @@ func TestIdleSecondsFromNanoseconds(t *testing.T) {
 	}
 	if got := idleSecondsFromNanoseconds(301_999_999_999); got != 301 {
 		t.Fatalf("expected 301, got %d", got)
-	}
-}
-
-func TestApplescriptQuote(t *testing.T) {
-	got := applescriptQuote(`hello "pause" \\ world`)
-	if !strings.HasPrefix(got, "\"") || !strings.HasSuffix(got, "\"") {
-		t.Fatalf("expected quoted applescript string, got %q", got)
-	}
-	if !strings.Contains(got, `\"pause\"`) {
-		t.Fatalf("expected embedded quotes escaped, got %q", got)
-	}
-	if !strings.Contains(got, `\\\\`) {
-		t.Fatalf("expected backslashes escaped, got %q", got)
 	}
 }
 

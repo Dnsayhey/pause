@@ -938,11 +938,15 @@ func (e *Engine) notifyRemindersLocked(reminderIDs []string, language string) {
 	if language == config.UILanguageZhCN {
 		title = "提醒"
 	}
-	if err := e.notifier.ShowReminder(title, body); err != nil {
-		logx.Warnf("reminder.notification_err reminders=%s err=%v", strings.Join(reminderIDs, "+"), err)
-		return
-	}
-	logx.Infof("reminder.notification_sent reminders=%s", strings.Join(reminderIDs, "+"))
+	notifier := e.notifier
+	reminderKey := strings.Join(reminderIDs, "+")
+	go func(n platform.Notifier, t string, b string, key string) {
+		if err := n.ShowReminder(t, b); err != nil {
+			logx.Warnf("reminder.notification_err reminders=%s err=%v", key, err)
+			return
+		}
+		logx.Infof("reminder.notification_sent reminders=%s", key)
+	}(notifier, title, body, reminderKey)
 }
 
 func cloneReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {

@@ -102,14 +102,15 @@ func idleSecondsFromNanoseconds(ns uint64) int {
 }
 
 func (darwinNotifier) ShowReminder(title, body string) error {
-	script := fmt.Sprintf("display notification %s with title %s", applescriptQuote(body), applescriptQuote(title))
-	return exec.Command("osascript", "-e", script).Run()
-}
-
-func applescriptQuote(value string) string {
-	escaped := strings.ReplaceAll(value, "\\", "\\\\")
-	escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
-	return "\"" + escaped + "\""
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "Pause"
+	}
+	body = strings.TrimSpace(body)
+	if body == "" {
+		body = "Break started"
+	}
+	return showDarwinUserNotification(title, body)
 }
 
 func (darwinSoundPlayer) PlayBreakEnd(sound config.SoundSettings) error {
