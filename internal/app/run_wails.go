@@ -43,11 +43,11 @@ func RunWails(configPath string, assets fs.FS) error {
 	InstallProcessSignalQuit(desktopApp)
 
 	return wails.Run(&options.App{
-		Title:       "Pause",
-		Width:       820,
-		Height:      520,
-		MinWidth:    820,
-		MinHeight:   520,
+		Title:     "Pause",
+		Width:     820,
+		Height:    532,
+		MinWidth:  820,
+		MinHeight: 532,
 		// Keep native title bars on macOS/Linux, but use frameless window on Windows.
 		Frameless:   runtime.GOOS == "windows",
 		StartHidden: true,

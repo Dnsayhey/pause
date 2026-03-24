@@ -73,7 +73,7 @@
 
 body[data-theme='dark'] {
   color-scheme: dark;
-  --app-bg: #0f1115;
+  --app-bg: #121212;
   --text-primary: #e5e7eb;
   --text-secondary: rgba(229, 231, 235, 0.78);
   --text-tertiary: rgba(229, 231, 235, 0.6);
