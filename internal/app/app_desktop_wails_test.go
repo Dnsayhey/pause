@@ -72,3 +72,34 @@ func TestBuildCountdownLabel_Paused(t *testing.T) {
 		t.Fatalf("buildCountdownLabel() paused = %q, want %q", got, want)
 	}
 }
+
+func TestBuildCountdownLabel_OnlyRestTypeReminders(t *testing.T) {
+	state := config.RuntimeState{
+		GlobalEnabled: true,
+		Reminders: []config.ReminderRuntime{
+			{ID: "notify-1", Name: "通知提醒", ReminderType: "notify", Enabled: true, NextInSec: 60, IntervalSec: 600},
+			{ID: "rest-1", Name: "喝水", ReminderType: "rest", Enabled: true, NextInSec: 120, IntervalSec: 1200},
+		},
+	}
+
+	got := buildCountdownLabel(state, config.UILanguageZhCN)
+	want := "喝水 - 02:00"
+	if got != want {
+		t.Fatalf("buildCountdownLabel() = %q, want %q", got, want)
+	}
+}
+
+func TestSelectAutoReminderChoice_SkipsNotifyReminder(t *testing.T) {
+	state := config.RuntimeState{
+		GlobalEnabled: true,
+		Reminders: []config.ReminderRuntime{
+			{ID: "notify-1", ReminderType: "notify", Enabled: true, NextInSec: 10, IntervalSec: 600},
+			{ID: "rest-1", ReminderType: "rest", Enabled: true, NextInSec: 20, IntervalSec: 1200},
+		},
+	}
+
+	choice := selectAutoReminderChoice(state)
+	if choice.reason != "rest-1" {
+		t.Fatalf("selectAutoReminderChoice() reason = %q, want %q", choice.reason, "rest-1")
+	}
+}

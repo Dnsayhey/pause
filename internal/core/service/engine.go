@@ -508,12 +508,14 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings config.Settings) con
 		paused := e.pausedReminder[reminder.ID]
 		nextIn := e.scheduler.NextInSec(effectiveReminders, reminder.ID)
 		reminders = append(reminders, config.ReminderRuntime{
-			ID:          reminder.ID,
-			Enabled:     reminder.Enabled,
-			Paused:      paused,
-			NextInSec:   nextIn,
-			IntervalSec: reminder.IntervalSec,
-			BreakSec:    reminder.BreakSec,
+			ID:           reminder.ID,
+			Name:         reminder.Name,
+			ReminderType: reminder.ReminderType,
+			Enabled:      reminder.Enabled,
+			Paused:       paused,
+			NextInSec:    nextIn,
+			IntervalSec:  reminder.IntervalSec,
+			BreakSec:     reminder.BreakSec,
 		})
 	}
 	reasons := nextReasons(reminders, e.reminders)

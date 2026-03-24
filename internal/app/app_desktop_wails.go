@@ -47,6 +47,7 @@ type wailsDesktopController struct {
 
 type autoReminderChoice struct {
 	reason    string
+	name      string
 	remaining int
 	total     int
 }
@@ -406,11 +407,12 @@ func selectAutoReminderChoice(state config.RuntimeState) autoReminderChoice {
 func listAutoReminderChoices(state config.RuntimeState) []autoReminderChoice {
 	choices := make([]autoReminderChoice, 0, len(state.Reminders))
 	for _, reminder := range state.Reminders {
-		if !reminder.Enabled || reminder.Paused || reminder.NextInSec < 0 {
+		if !reminder.Enabled || reminder.Paused || reminder.NextInSec < 0 || !isRestRuntimeReminder(reminder) {
 			continue
 		}
 		choices = append(choices, autoReminderChoice{
 			reason:    reminder.ID,
+			name:      strings.TrimSpace(reminder.Name),
 			remaining: reminder.NextInSec,
 			total:     reminder.IntervalSec,
 		})
@@ -425,15 +427,30 @@ func listAutoReminderChoices(state config.RuntimeState) []autoReminderChoice {
 }
 
 func buildReminderTitle(choice autoReminderChoice, language string, paused bool) string {
-	reasonText := localizeReminderReason(choice.reason, language)
+	reasonText := reminderDisplayName(choice, language)
 	if paused {
 		if language == config.UILanguageZhCN {
 			return fmt.Sprintf("%s - 已暂停", reasonText)
 		}
-		return fmt.Sprintf("%s - Paused", titleCaseASCII(reasonText))
+		if strings.TrimSpace(choice.name) == "" {
+			return fmt.Sprintf("%s - Paused", titleCaseASCII(reasonText))
+		}
+		return fmt.Sprintf("%s - Paused", reasonText)
 	}
 	countdownText := formatCountdown(choice.remaining)
 	return fmt.Sprintf("%s - %s", reasonText, countdownText)
+}
+
+func reminderDisplayName(choice autoReminderChoice, language string) string {
+	name := strings.TrimSpace(choice.name)
+	if name != "" {
+		return name
+	}
+	return localizeReminderReason(choice.reason, language)
+}
+
+func isRestRuntimeReminder(reminder config.ReminderRuntime) bool {
+	return strings.ToLower(strings.TrimSpace(reminder.ReminderType)) != "notify"
 }
 
 func buildRemindersPayload(state config.RuntimeState, language string) (string, []string) {
@@ -475,12 +492,13 @@ type reminderRow struct {
 func listReminderRows(state config.RuntimeState) []reminderRow {
 	rows := make([]reminderRow, 0, len(state.Reminders))
 	for _, reminder := range state.Reminders {
-		if !reminder.Enabled {
+		if !reminder.Enabled || !isRestRuntimeReminder(reminder) {
 			continue
 		}
 		rows = append(rows, reminderRow{
 			choice: autoReminderChoice{
 				reason:    reminder.ID,
+				name:      strings.TrimSpace(reminder.Name),
 				remaining: maxInt(reminder.NextInSec, 0),
 				total:     reminder.IntervalSec,
 			},

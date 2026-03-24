@@ -98,12 +98,14 @@ type SettingsPatch struct {
 }
 
 type ReminderRuntime struct {
-	ID          string `json:"id"`
-	Enabled     bool   `json:"enabled"`
-	Paused      bool   `json:"paused"`
-	NextInSec   int    `json:"nextInSec"`
-	IntervalSec int    `json:"intervalSec"`
-	BreakSec    int    `json:"breakSec"`
+	ID           string `json:"id"`
+	Name         string `json:"name,omitempty"`
+	ReminderType string `json:"reminderType,omitempty"`
+	Enabled      bool   `json:"enabled"`
+	Paused       bool   `json:"paused"`
+	NextInSec    int    `json:"nextInSec"`
+	IntervalSec  int    `json:"intervalSec"`
+	BreakSec     int    `json:"breakSec"`
 }
 
 type RuntimeState struct {
