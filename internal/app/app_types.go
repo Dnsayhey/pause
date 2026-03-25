@@ -6,7 +6,6 @@ import (
 
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
-	"pause/internal/core/history"
 	"pause/internal/core/service"
 	"pause/internal/core/settings"
 	"pause/internal/platform"
@@ -15,13 +14,17 @@ import (
 type App struct {
 	ctx           context.Context
 	engine        *service.Engine
-	history       *history.HistoryStore
+	history       historyCloser
 	reminders     reminderService
 	analytics     analyticsService
 	settingsSvc   settingsService
 	notifier      platform.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
+}
+
+type historyCloser interface {
+	Close() error
 }
 
 type reminderService interface {
