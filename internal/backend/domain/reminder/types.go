@@ -25,7 +25,3 @@ type CreateInput struct {
 	Enabled      *bool   `json:"enabled,omitempty"`
 	ReminderType *string `json:"reminderType,omitempty"`
 }
-
-type ReminderConfig = Reminder
-type ReminderPatch = Patch
-type ReminderCreateInput = CreateInput

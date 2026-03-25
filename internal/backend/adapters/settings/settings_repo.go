@@ -6,64 +6,92 @@ import (
 
 	settingsdomain "pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
-	runtimeengine "pause/internal/backend/runtime/engine"
 )
 
-var errEngineUnavailable = errors.New("engine unavailable")
+var (
+	errSettingsStoreUnavailable = errors.New("settings store unavailable")
+)
+
+type SettingsStore interface {
+	WasCreated() bool
+	Get() settingsdomain.Settings
+	Update(patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error)
+}
+
+type noopStartupManager struct{}
+
+func (noopStartupManager) SetLaunchAtLogin(bool) error { return nil }
+func (noopStartupManager) GetLaunchAtLogin() (bool, error) {
+	return false, nil
+}
 
 type SettingsRepository struct {
-	engine *runtimeengine.Engine
+	store          SettingsStore
+	startupManager ports.StartupManager
 }
 
 var _ ports.SettingsRepository = (*SettingsRepository)(nil)
 
-func NewSettingsRepository(engine *runtimeengine.Engine) *SettingsRepository {
-	return &SettingsRepository{engine: engine}
+func NewSettingsRepository(store SettingsStore, startupManager ports.StartupManager) *SettingsRepository {
+	if startupManager == nil {
+		startupManager = noopStartupManager{}
+	}
+	return &SettingsRepository{
+		store:          store,
+		startupManager: startupManager,
+	}
 }
 
 func (r *SettingsRepository) GetSettings(ctx context.Context) settingsdomain.Settings {
 	_ = ctx
-	if err := r.ensureEngine(); err != nil {
+	if err := r.ensureStore(); err != nil {
 		return settingsdomain.Settings{}
 	}
-	return r.engine.GetSettings()
+	return r.store.Get()
 }
 
 func (r *SettingsRepository) UpdateSettings(ctx context.Context, patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error) {
 	_ = ctx
-	if err := r.ensureEngine(); err != nil {
+	if err := r.ensureStore(); err != nil {
 		return settingsdomain.Settings{}, err
 	}
-	return r.engine.UpdateSettings(patch)
+	return r.store.Update(patch)
 }
 
 func (r *SettingsRepository) SyncPlatformSettings(ctx context.Context) error {
 	_ = ctx
-	if err := r.ensureEngine(); err != nil {
+	if err := r.ensureStore(); err != nil {
 		return err
 	}
-	return r.engine.SyncPlatformSettings()
+
+	if !r.store.WasCreated() {
+		return nil
+	}
+	return r.startupManager.SetLaunchAtLogin(true)
 }
 
 func (r *SettingsRepository) GetLaunchAtLogin(ctx context.Context) (bool, error) {
 	_ = ctx
-	if err := r.ensureEngine(); err != nil {
+	if err := r.ensureStore(); err != nil {
 		return false, err
 	}
-	return r.engine.GetLaunchAtLogin()
+	return r.startupManager.GetLaunchAtLogin()
 }
 
 func (r *SettingsRepository) SetLaunchAtLogin(ctx context.Context, enabled bool) (bool, error) {
 	_ = ctx
-	if err := r.ensureEngine(); err != nil {
+	if err := r.ensureStore(); err != nil {
 		return false, err
 	}
-	return r.engine.SetLaunchAtLogin(enabled)
+	if err := r.startupManager.SetLaunchAtLogin(enabled); err != nil {
+		return false, err
+	}
+	return r.startupManager.GetLaunchAtLogin()
 }
 
-func (r *SettingsRepository) ensureEngine() error {
-	if r == nil || r.engine == nil {
-		return errEngineUnavailable
+func (r *SettingsRepository) ensureStore() error {
+	if r == nil || r.store == nil {
+		return errSettingsStoreUnavailable
 	}
 	return nil
 }

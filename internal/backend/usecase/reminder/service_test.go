@@ -11,10 +11,16 @@ import (
 type reminderRepoStub struct {
 	createdInputs []reminderdomain.CreateInput
 	createErrBy   map[string]error
+	listItems     []reminderdomain.Reminder
 }
 
 func (s *reminderRepoStub) ListReminders(_ context.Context) ([]reminderdomain.Reminder, error) {
-	return nil, nil
+	if len(s.listItems) == 0 {
+		return nil, nil
+	}
+	cloned := make([]reminderdomain.Reminder, 0, len(s.listItems))
+	cloned = append(cloned, s.listItems...)
+	return cloned, nil
 }
 
 func (s *reminderRepoStub) CreateReminder(_ context.Context, input reminderdomain.CreateInput) (int64, error) {
@@ -30,6 +36,19 @@ func (s *reminderRepoStub) UpdateReminder(_ context.Context, _ reminderdomain.Pa
 }
 
 func (s *reminderRepoStub) DeleteReminder(_ context.Context, _ int64) error {
+	return nil
+}
+
+type reminderRuntimeSinkStub struct {
+	calls     int
+	snapshots [][]reminderdomain.Reminder
+}
+
+func (s *reminderRuntimeSinkStub) ApplyReminderSnapshot(_ context.Context, reminders []reminderdomain.Reminder) error {
+	s.calls++
+	cloned := make([]reminderdomain.Reminder, 0, len(reminders))
+	cloned = append(cloned, reminders...)
+	s.snapshots = append(s.snapshots, cloned)
 	return nil
 }
 
@@ -99,5 +118,60 @@ func TestEnsureDefaultsFailsOnUnexpectedError(t *testing.T) {
 	})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected error %v, got %v", wantErr, err)
+	}
+}
+
+func TestCreateAppliesRuntimeSnapshot(t *testing.T) {
+	restType := "rest"
+	repo := &reminderRepoStub{
+		listItems: []reminderdomain.Reminder{
+			{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 1200, BreakSec: 20, ReminderType: "rest"},
+		},
+	}
+	sink := &reminderRuntimeSinkStub{}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	svc.SetRuntimeSink(sink)
+
+	_, err = svc.Create(context.Background(), reminderdomain.CreateInput{
+		Name:         "Eye",
+		IntervalSec:  1200,
+		BreakSec:     20,
+		ReminderType: &restType,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if sink.calls != 1 {
+		t.Fatalf("expected sink calls=1, got %d", sink.calls)
+	}
+	if len(sink.snapshots[0]) != 1 || sink.snapshots[0][0].ID != 1 {
+		t.Fatalf("expected snapshot with reminder id=1, got %+v", sink.snapshots[0])
+	}
+}
+
+func TestEnsureDefaultsTriggersSync(t *testing.T) {
+	restType := "rest"
+	repo := &reminderRepoStub{
+		listItems: []reminderdomain.Reminder{
+			{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 1200, BreakSec: 20, ReminderType: "rest"},
+		},
+	}
+	sink := &reminderRuntimeSinkStub{}
+	svc, err := NewService(repo)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	svc.SetRuntimeSink(sink)
+
+	if err := svc.EnsureDefaults(context.Background(), []reminderdomain.CreateInput{
+		{Name: "Eye", IntervalSec: 1200, BreakSec: 20, ReminderType: &restType},
+	}); err != nil {
+		t.Fatalf("EnsureDefaults() error = %v", err)
+	}
+	if sink.calls != 1 {
+		t.Fatalf("expected sink calls=1 after ensure defaults, got %d", sink.calls)
 	}
 }

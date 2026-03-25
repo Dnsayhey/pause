@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"pause/internal/backend/domain/reminder"
 	"pause/internal/backend/domain/settings"
 	service "pause/internal/backend/runtime/engine"
 	"pause/internal/backend/runtime/state"
@@ -59,8 +58,4 @@ func (a *runtimeEngineAdapter) StartBreakNow(now time.Time) (state.RuntimeState,
 
 func (a *runtimeEngineAdapter) StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error) {
 	return a.engine.StartBreakNowForReason(reason, now)
-}
-
-func (a *runtimeEngineAdapter) SetReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
-	return a.engine.SetReminderConfigs(reminders)
 }

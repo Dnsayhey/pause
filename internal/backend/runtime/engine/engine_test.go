@@ -29,12 +29,6 @@ type fakeLockStateProvider struct {
 
 func (f *fakeLockStateProvider) IsScreenLocked() bool { return f.locked }
 
-type fakeStartupManager struct {
-	lastValue bool
-	calls     int
-	current   bool
-}
-
 type fakeHistoryRecorder struct {
 	records []historyRecordCall
 }
@@ -47,17 +41,6 @@ type historyRecordCall struct {
 	actualBreakSec  int
 	skipped         bool
 	reminderIDs     []int64
-}
-
-func (f *fakeStartupManager) SetLaunchAtLogin(enabled bool) error {
-	f.lastValue = enabled
-	f.calls++
-	f.current = enabled
-	return nil
-}
-
-func (f *fakeStartupManager) GetLaunchAtLogin() (bool, error) {
-	return f.current, nil
 }
 
 func (f *fakeHistoryRecorder) RecordBreak(_ context.Context, startedAt time.Time, endedAt time.Time, source string, plannedBreakSec int, actualBreakSec int, skipped bool, reminderIDs []int64) error {
@@ -74,14 +57,14 @@ func (f *fakeHistoryRecorder) RecordBreak(_ context.Context, startedAt time.Time
 	return nil
 }
 
-func newTestEngine(t *testing.T, idle *fakeIdleProvider, startup *fakeStartupManager) *Engine {
+func newTestEngine(t *testing.T, idle *fakeIdleProvider) *Engine {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "settings.json")
 	store, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	engine := NewEngine(store, idle, nil, nil, startup, nil)
+	engine := NewEngine(store, idle, nil, nil, nil)
 	seedDefaultReminders(engine)
 	return engine
 }
@@ -90,14 +73,14 @@ func seedDefaultReminders(engine *Engine) {
 	if engine == nil {
 		return
 	}
-	engine.SetReminderConfigs([]reminder.ReminderConfig{
+	engine.SetReminderConfigs([]reminder.Reminder{
 		{ID: testReminderIDEye, Name: "Eye", Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
 		{ID: testReminderIDStand, Name: "Stand", Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
 	})
 }
 
-func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) reminder.ReminderPatch {
-	return reminder.ReminderPatch{
+func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) reminder.Patch {
+	return reminder.Patch{
 		ID:          id,
 		Enabled:     enabled,
 		IntervalSec: intervalSec,
@@ -105,7 +88,7 @@ func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) rem
 	}
 }
 
-func setReminderPatches(t *testing.T, engine *Engine, patches ...reminder.ReminderPatch) {
+func setReminderPatches(t *testing.T, engine *Engine, patches ...reminder.Patch) {
 	t.Helper()
 	if engine == nil {
 		t.Fatalf("engine is nil")
@@ -165,7 +148,7 @@ func requireReminderRuntime(t *testing.T, runtimeState state.RuntimeState, id in
 
 func TestIdlePauseModeBoundary(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	standEnabled := false
 	eyeInterval := 10
@@ -211,7 +194,7 @@ func TestIdlePauseModePausesImmediatelyWhenScreenLocked(t *testing.T) {
 		t.Fatalf("NewStore() error = %v", err)
 	}
 
-	engine := NewEngine(store, idle, lockState, nil, &fakeStartupManager{}, nil)
+	engine := NewEngine(store, idle, lockState, nil, nil)
 	seedDefaultReminders(engine)
 
 	standEnabled := false
@@ -247,7 +230,7 @@ func TestIdlePauseModePausesImmediatelyWhenScreenLocked(t *testing.T) {
 
 func TestRealTimeModeIgnoresIdle(t *testing.T) {
 	idle := &fakeIdleProvider{idleSec: 10_000}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	mode := settings.TimerModeRealTime
 	eyeInterval := 10
@@ -277,7 +260,7 @@ func TestRealTimeModeIgnoresIdle(t *testing.T) {
 
 func TestPauseAndResumeToggleGlobalEnabled(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	eyeInterval := 5
 	standEnabled := false
@@ -316,7 +299,7 @@ func TestPauseAndResumeToggleGlobalEnabled(t *testing.T) {
 
 func TestStandSettingChangeDoesNotResetEyeCountdown(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	eyeInterval := 120
 	standInterval := 3600
@@ -353,7 +336,7 @@ func TestStandSettingChangeDoesNotResetEyeCountdown(t *testing.T) {
 
 func TestUpdateSettingsAffectsSkipImmediately(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	eyeInterval := 1
 	standEnabled := false
@@ -384,7 +367,7 @@ func TestUpdateSettingsAffectsSkipImmediately(t *testing.T) {
 
 func TestSkipCurrentBreakEmergencyBypassesSkipSetting(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	eyeInterval := 1
 	standEnabled := false
@@ -423,7 +406,7 @@ func TestSkipCurrentBreakEmergencyBypassesSkipSetting(t *testing.T) {
 
 func TestSkipCurrentBreakRejectsInvalidMode(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	eyeInterval := 1
 	standEnabled := false
@@ -443,7 +426,7 @@ func TestSkipCurrentBreakRejectsInvalidMode(t *testing.T) {
 
 func TestStartBreakNow(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	standEnabled := false
 	eyeInterval := 1200
@@ -474,7 +457,7 @@ func TestStartBreakNow(t *testing.T) {
 
 func TestStartBreakNowWhileGlobalDisabled(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	standEnabled := false
 	eyeInterval := 1200
@@ -497,7 +480,7 @@ func TestStartBreakNowWhileGlobalDisabled(t *testing.T) {
 
 func TestStartBreakNowForReason_ResetsOnlySelectedReminder(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	eyeInterval := 1200
 	eyeBreak := 20
@@ -532,7 +515,7 @@ func TestStartBreakNowForReason_ResetsOnlySelectedReminder(t *testing.T) {
 
 func TestPauseReminder_AffectsOnlySelectedReminder(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 	setReminderPatches(t, engine,
 		reminderPatch(testReminderIDEye, nil, nil, nil),
 		reminderPatch(testReminderIDStand, nil, nil, nil),
@@ -573,14 +556,13 @@ func TestPauseReminder_AffectsOnlySelectedReminder(t *testing.T) {
 
 func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	startup := &fakeStartupManager{}
 	history := &fakeHistoryRecorder{}
 	path := filepath.Join(t.TempDir(), "settings.json")
 	store, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	engine := NewEngine(store, idle, nil, nil, startup, history)
+	engine := NewEngine(store, idle, nil, nil, history)
 	seedDefaultReminders(engine)
 
 	standEnabled := false
@@ -624,14 +606,13 @@ func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 
 func TestHistoryRecorder_SkipBreak(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	startup := &fakeStartupManager{}
 	history := &fakeHistoryRecorder{}
 	path := filepath.Join(t.TempDir(), "settings.json")
 	store, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
-	engine := NewEngine(store, idle, nil, nil, startup, history)
+	engine := NewEngine(store, idle, nil, nil, history)
 	seedDefaultReminders(engine)
 
 	standEnabled := false
@@ -662,27 +643,9 @@ func TestHistoryRecorder_SkipBreak(t *testing.T) {
 	}
 }
 
-func TestSetLaunchAtLoginSync(t *testing.T) {
-	idle := &fakeIdleProvider{}
-	startup := &fakeStartupManager{}
-	engine := newTestEngine(t, idle, startup)
-
-	actual, err := engine.SetLaunchAtLogin(true)
-	if err != nil {
-		t.Fatalf("SetLaunchAtLogin() error = %v", err)
-	}
-	if !actual {
-		t.Fatalf("expected launch-at-login state to be true")
-	}
-
-	if startup.calls != 1 || !startup.lastValue {
-		t.Fatalf("expected startup manager to be called with true")
-	}
-}
-
 func TestSetReminderConfigsAllowsEmptySnapshot(t *testing.T) {
 	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
+	engine := newTestEngine(t, idle)
 
 	base := time.Unix(1_700_000_000, 0)
 	engine.SetReminderConfigs(nil)
@@ -696,64 +659,5 @@ func TestSetReminderConfigsAllowsEmptySnapshot(t *testing.T) {
 	}
 	if _, err := engine.StartBreakNow(base.Add(time.Second)); err == nil {
 		t.Fatalf("expected StartBreakNow to fail when reminders snapshot is empty")
-	}
-}
-
-func TestSyncPlatformSettingsBootstrapsOnFirstRun(t *testing.T) {
-	idle := &fakeIdleProvider{}
-	startup := &fakeStartupManager{}
-	engine := newTestEngine(t, idle, startup)
-
-	startup.calls = 0
-	if err := engine.SyncPlatformSettings(); err != nil {
-		t.Fatalf("SyncPlatformSettings() error = %v", err)
-	}
-	if startup.calls != 1 || !startup.lastValue {
-		t.Fatalf("expected first-run startup sync call with true")
-	}
-}
-
-func TestSyncPlatformSettingsDisablesWhenPersistedFalse(t *testing.T) {
-	idle := &fakeIdleProvider{}
-	startup := &fakeStartupManager{}
-	engine := newTestEngine(t, idle, startup)
-
-	startup.calls = 0
-	if err := engine.SyncPlatformSettings(); err != nil {
-		t.Fatalf("SyncPlatformSettings() error = %v", err)
-	}
-	if startup.calls != 1 || !startup.lastValue {
-		t.Fatalf("expected startup manager sync call with true")
-	}
-}
-
-func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
-	idle := &fakeIdleProvider{}
-	startup := &fakeStartupManager{}
-	path := filepath.Join(t.TempDir(), "settings.json")
-
-	store1, err := settingsjson.OpenStore(path)
-	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
-	}
-	engine1 := NewEngine(store1, idle, nil, nil, startup, nil)
-	if err := engine1.SyncPlatformSettings(); err != nil {
-		t.Fatalf("first SyncPlatformSettings() error = %v", err)
-	}
-	if startup.calls == 0 {
-		t.Fatalf("expected first run to attempt launch-at-login setup")
-	}
-
-	startup.calls = 0
-	store2, err := settingsjson.OpenStore(path)
-	if err != nil {
-		t.Fatalf("NewStore(reopen) error = %v", err)
-	}
-	engine2 := NewEngine(store2, idle, nil, nil, startup, nil)
-	if err := engine2.SyncPlatformSettings(); err != nil {
-		t.Fatalf("second SyncPlatformSettings() error = %v", err)
-	}
-	if startup.calls != 0 {
-		t.Fatalf("expected existing config startup to read system state without re-applying")
 	}
 }

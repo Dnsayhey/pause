@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"pause/internal/backend/ports"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/logx"
-	"pause/internal/platform"
 )
 
 func (a *App) SendBreakFallbackNotification(state state.RuntimeState) {
@@ -21,7 +21,7 @@ func (a *App) SendBreakFallbackNotification(state state.RuntimeState) {
 	}
 	body := buildBreakNotificationBody(state)
 	notifier := a.notifier
-	go func(reasonKey string, n platform.Notifier, message string) {
+	go func(reasonKey string, n ports.Notifier, message string) {
 		if err := n.ShowReminder("Time to rest", message); err != nil {
 			logx.Warnf("overlay.fallback_notification_err err=%v", err)
 			return

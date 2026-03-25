@@ -1,34 +1,16 @@
 package api
 
-import "pause/internal/backend/domain/settings"
+import (
+	settingsdomain "pause/internal/backend/domain/settings"
+	"pause/internal/backend/ports"
+)
 
 type Adapters struct {
-	IdleProvider      IdleProvider
-	LockStateProvider LockStateProvider
-	Notifier          Notifier
-	SoundPlayer       SoundPlayer
-	StartupManager    StartupManager
-}
-
-type IdleProvider interface {
-	CurrentIdleSeconds() int
-}
-
-type LockStateProvider interface {
-	IsScreenLocked() bool
-}
-
-type Notifier interface {
-	ShowReminder(title, body string) error
-}
-
-type SoundPlayer interface {
-	PlayBreakEnd(sound settings.SoundSettings) error
-}
-
-type StartupManager interface {
-	SetLaunchAtLogin(enabled bool) error
-	GetLaunchAtLogin() (bool, error)
+	IdleProvider      ports.IdleProvider
+	LockStateProvider ports.LockStateProvider
+	Notifier          ports.Notifier
+	SoundPlayer       ports.SoundPlayer
+	StartupManager    ports.StartupManager
 }
 
 type NoopIdleProvider struct{}
@@ -45,7 +27,7 @@ func (NoopNotifier) ShowReminder(_, _ string) error { return nil }
 
 type NoopSoundPlayer struct{}
 
-func (NoopSoundPlayer) PlayBreakEnd(_ settings.SoundSettings) error { return nil }
+func (NoopSoundPlayer) PlayBreakEnd(_ settingsdomain.SoundSettings) error { return nil }
 
 type NoopStartupManager struct{}
 

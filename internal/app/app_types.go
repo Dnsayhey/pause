@@ -8,8 +8,8 @@ import (
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
 	"pause/internal/backend/domain/settings"
+	"pause/internal/backend/ports"
 	"pause/internal/backend/runtime/state"
-	"pause/internal/platform"
 )
 
 type App struct {
@@ -19,7 +19,7 @@ type App struct {
 	reminders     reminderService
 	analytics     analyticsService
 	settingsSvc   settingsService
-	notifier      platform.Notifier
+	notifier      ports.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
 }
@@ -35,7 +35,6 @@ type engineRuntime interface {
 	SkipCurrentBreak(now time.Time, mode skipMode) (state.RuntimeState, error)
 	StartBreakNow(now time.Time) (state.RuntimeState, error)
 	StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error)
-	SetReminderConfigs(reminders []reminderdomain.ReminderConfig) []reminderdomain.ReminderConfig
 }
 
 type skipMode string

@@ -4,27 +4,29 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	analyticsdomain "pause/internal/backend/domain/analytics"
 )
 
-func (s *Store) QueryAnalyticsWeeklyStats(from time.Time, to time.Time) (AnalyticsWeeklyStats, error) {
+func (s *Store) QueryAnalyticsWeeklyStats(from time.Time, to time.Time) (analyticsdomain.WeeklyStats, error) {
 	if s == nil || s.db == nil {
-		return AnalyticsWeeklyStats{}, errors.New("history store is not initialized")
+		return analyticsdomain.WeeklyStats{}, errors.New("history store is not initialized")
 	}
 	startUnix, endUnix, err := normalizeAnalyticsRange(from, to)
 	if err != nil {
-		return AnalyticsWeeklyStats{}, err
+		return analyticsdomain.WeeklyStats{}, err
 	}
 
 	reminders, err := s.queryReminderAggregatesByRange(startUnix, endUnix)
 	if err != nil {
-		return AnalyticsWeeklyStats{}, err
+		return analyticsdomain.WeeklyStats{}, err
 	}
 	summary, err := s.querySummaryAggregateByRange(startUnix, endUnix)
 	if err != nil {
-		return AnalyticsWeeklyStats{}, err
+		return analyticsdomain.WeeklyStats{}, err
 	}
 
-	return AnalyticsWeeklyStats{
+	return analyticsdomain.WeeklyStats{
 		FromSec:   startUnix,
 		ToSec:     endUnix,
 		Reminders: reminders,
@@ -32,21 +34,21 @@ func (s *Store) QueryAnalyticsWeeklyStats(from time.Time, to time.Time) (Analyti
 	}, nil
 }
 
-func (s *Store) QueryAnalyticsSummary(from time.Time, to time.Time) (AnalyticsSummary, error) {
+func (s *Store) QueryAnalyticsSummary(from time.Time, to time.Time) (analyticsdomain.Summary, error) {
 	if s == nil || s.db == nil {
-		return AnalyticsSummary{}, errors.New("history store is not initialized")
+		return analyticsdomain.Summary{}, errors.New("history store is not initialized")
 	}
 	startUnix, endUnix, err := normalizeAnalyticsRange(from, to)
 	if err != nil {
-		return AnalyticsSummary{}, err
+		return analyticsdomain.Summary{}, err
 	}
 
 	summary, err := s.querySummaryAggregateByRange(startUnix, endUnix)
 	if err != nil {
-		return AnalyticsSummary{}, err
+		return analyticsdomain.Summary{}, err
 	}
 
-	return AnalyticsSummary{
+	return analyticsdomain.Summary{
 		FromSec:             startUnix,
 		ToSec:               endUnix,
 		TotalSessions:       summary.TotalSessions,
@@ -60,13 +62,13 @@ func (s *Store) QueryAnalyticsSummary(from time.Time, to time.Time) (AnalyticsSu
 	}, nil
 }
 
-func (s *Store) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (AnalyticsTrend, error) {
+func (s *Store) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (analyticsdomain.Trend, error) {
 	if s == nil || s.db == nil {
-		return AnalyticsTrend{}, errors.New("history store is not initialized")
+		return analyticsdomain.Trend{}, errors.New("history store is not initialized")
 	}
 	startUnix, endUnix, err := normalizeAnalyticsRange(from, to)
 	if err != nil {
-		return AnalyticsTrend{}, err
+		return analyticsdomain.Trend{}, err
 	}
 
 	rows, err := s.db.QueryContext(
@@ -98,18 +100,18 @@ func (s *Store) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (Analytic
 		endUnix,
 	)
 	if err != nil {
-		return AnalyticsTrend{}, err
+		return analyticsdomain.Trend{}, err
 	}
 	defer rows.Close()
 
-	result := AnalyticsTrend{
+	result := analyticsdomain.Trend{
 		FromSec: startUnix,
 		ToSec:   endUnix,
-		Points:  []AnalyticsTrendPoint{},
+		Points:  []analyticsdomain.TrendPoint{},
 	}
 
 	for rows.Next() {
-		row := AnalyticsTrendPoint{}
+		row := analyticsdomain.TrendPoint{}
 		if err := rows.Scan(
 			&row.Day,
 			&row.TotalSessions,
@@ -119,39 +121,39 @@ func (s *Store) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (Analytic
 			&row.TotalActualBreakSec,
 			&row.AvgActualBreakSec,
 		); err != nil {
-			return AnalyticsTrend{}, err
+			return analyticsdomain.Trend{}, err
 		}
 		row.CompletionRate = ratio(row.TotalCompleted, row.TotalSessions)
 		row.SkipRate = ratio(row.TotalSkipped, row.TotalSessions)
 		result.Points = append(result.Points, row)
 	}
 	if err := rows.Err(); err != nil {
-		return AnalyticsTrend{}, err
+		return analyticsdomain.Trend{}, err
 	}
 	return result, nil
 }
 
-func (s *Store) QueryAnalyticsBreakTypeDistribution(from time.Time, to time.Time) (AnalyticsBreakTypeDistribution, error) {
+func (s *Store) QueryAnalyticsBreakTypeDistribution(from time.Time, to time.Time) (analyticsdomain.BreakTypeDistribution, error) {
 	if s == nil || s.db == nil {
-		return AnalyticsBreakTypeDistribution{}, errors.New("history store is not initialized")
+		return analyticsdomain.BreakTypeDistribution{}, errors.New("history store is not initialized")
 	}
 	startUnix, endUnix, err := normalizeAnalyticsRange(from, to)
 	if err != nil {
-		return AnalyticsBreakTypeDistribution{}, err
+		return analyticsdomain.BreakTypeDistribution{}, err
 	}
 
 	aggregates, err := s.queryReminderAggregatesByRange(startUnix, endUnix)
 	if err != nil {
-		return AnalyticsBreakTypeDistribution{}, err
+		return analyticsdomain.BreakTypeDistribution{}, err
 	}
 
-	result := AnalyticsBreakTypeDistribution{
+	result := analyticsdomain.BreakTypeDistribution{
 		FromSec: startUnix,
 		ToSec:   endUnix,
-		Items:   []AnalyticsBreakTypeDistributionItem{},
+		Items:   []analyticsdomain.BreakTypeDistributionItem{},
 	}
 	for _, row := range aggregates {
-		item := AnalyticsBreakTypeDistributionItem{
+		item := analyticsdomain.BreakTypeDistributionItem{
 			ReminderID:      row.ReminderID,
 			ReminderName:    row.ReminderName,
 			TriggeredCount:  row.TriggeredCount,
@@ -172,7 +174,7 @@ func (s *Store) QueryAnalyticsBreakTypeDistribution(from time.Time, to time.Time
 	return result, nil
 }
 
-func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) ([]AnalyticsReminderStat, error) {
+func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) ([]analyticsdomain.ReminderStat, error) {
 	rows, err := s.db.QueryContext(
 		context.Background(),
 		`WITH sessions_in_range AS (
@@ -247,9 +249,9 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 	}
 	defer rows.Close()
 
-	result := []AnalyticsReminderStat{}
+	result := []analyticsdomain.ReminderStat{}
 	for rows.Next() {
-		row := AnalyticsReminderStat{}
+		row := analyticsdomain.ReminderStat{}
 		var enabledInt int
 		if err := rows.Scan(
 			&row.ReminderID,
@@ -274,8 +276,8 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 	return result, nil
 }
 
-func (s *Store) querySummaryAggregateByRange(startUnix int64, endUnix int64) (AnalyticsSummaryStats, error) {
-	summary := AnalyticsSummaryStats{}
+func (s *Store) querySummaryAggregateByRange(startUnix int64, endUnix int64) (analyticsdomain.SummaryStats, error) {
+	summary := analyticsdomain.SummaryStats{}
 	err := s.db.QueryRowContext(
 		context.Background(),
 		`WITH overlay_sessions AS (
@@ -309,7 +311,7 @@ func (s *Store) querySummaryAggregateByRange(startUnix int64, endUnix int64) (An
 		&summary.AvgActualBreakSec,
 	)
 	if err != nil {
-		return AnalyticsSummaryStats{}, err
+		return analyticsdomain.SummaryStats{}, err
 	}
 	return summary, nil
 }

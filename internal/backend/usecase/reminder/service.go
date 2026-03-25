@@ -11,6 +11,7 @@ import (
 
 type Service struct {
 	repo ports.ReminderRepository
+	sink ports.ReminderRuntimeSink
 }
 
 func NewService(repo ports.ReminderRepository) (*Service, error) {
@@ -18,6 +19,21 @@ func NewService(repo ports.ReminderRepository) (*Service, error) {
 		return nil, errors.New("reminder repository is required")
 	}
 	return &Service{repo: repo}, nil
+}
+
+func (s *Service) SetRuntimeSink(sink ports.ReminderRuntimeSink) {
+	if s == nil {
+		return
+	}
+	s.sink = sink
+}
+
+func (s *Service) Sync(ctx context.Context) error {
+	reminders, err := s.List(ctx)
+	if err != nil {
+		return err
+	}
+	return s.applyRuntimeSnapshot(ctx, reminders)
 }
 
 func (s *Service) List(ctx context.Context) ([]reminderdomain.Reminder, error) {
@@ -42,7 +58,14 @@ func (s *Service) Create(ctx context.Context, input reminderdomain.CreateInput) 
 	if _, err := s.repo.CreateReminder(normalizeContext(ctx), normalized); err != nil {
 		return nil, err
 	}
-	return s.List(ctx)
+	reminders, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.applyRuntimeSnapshot(ctx, reminders); err != nil {
+		return nil, err
+	}
+	return reminders, nil
 }
 
 func (s *Service) EnsureDefaults(ctx context.Context, inputs []reminderdomain.CreateInput) error {
@@ -62,14 +85,21 @@ func (s *Service) EnsureDefaults(ctx context.Context, inputs []reminderdomain.Cr
 			return err
 		}
 	}
-	return nil
+	return s.Sync(ctx)
 }
 
 func (s *Service) Update(ctx context.Context, patch reminderdomain.Patch) ([]reminderdomain.Reminder, error) {
 	if err := s.repo.UpdateReminder(normalizeContext(ctx), patch); err != nil {
 		return nil, err
 	}
-	return s.List(ctx)
+	reminders, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.applyRuntimeSnapshot(ctx, reminders); err != nil {
+		return nil, err
+	}
+	return reminders, nil
 }
 
 func (s *Service) Delete(ctx context.Context, reminderID int64) ([]reminderdomain.Reminder, error) {
@@ -79,7 +109,14 @@ func (s *Service) Delete(ctx context.Context, reminderID int64) ([]reminderdomai
 	if err := s.repo.DeleteReminder(normalizeContext(ctx), reminderID); err != nil {
 		return nil, err
 	}
-	return s.List(ctx)
+	reminders, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.applyRuntimeSnapshot(ctx, reminders); err != nil {
+		return nil, err
+	}
+	return reminders, nil
 }
 
 func normalizeContext(ctx context.Context) context.Context {
@@ -113,4 +150,11 @@ func normalizeReminders(reminders []reminderdomain.Reminder) []reminderdomain.Re
 	cloned := make([]reminderdomain.Reminder, 0, len(result))
 	cloned = append(cloned, result...)
 	return cloned
+}
+
+func (s *Service) applyRuntimeSnapshot(ctx context.Context, reminders []reminderdomain.Reminder) error {
+	if s == nil || s.sink == nil {
+		return nil
+	}
+	return s.sink.ApplyReminderSnapshot(normalizeContext(ctx), reminders)
 }

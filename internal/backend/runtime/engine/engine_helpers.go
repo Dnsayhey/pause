@@ -12,7 +12,7 @@ import (
 	"pause/internal/backend/runtime/state"
 )
 
-func buildImmediateBreakEvent(reminders []reminder.ReminderConfig, nextByID map[int64]int, forcedReason int64) *scheduler.Event {
+func buildImmediateBreakEvent(reminders []reminder.Reminder, nextByID map[int64]int, forcedReason int64) *scheduler.Event {
 	reasonKey := normalizeReminderID(forcedReason)
 	if reasonKey <= 0 {
 		reasonKey = selectImmediateReason(nextByID)
@@ -37,23 +37,23 @@ func normalizeReminderID(id int64) int64 {
 	return id
 }
 
-func cloneReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
+func cloneReminderConfigs(reminders []reminder.Reminder) []reminder.Reminder {
 	if len(reminders) == 0 {
 		return nil
 	}
-	cloned := make([]reminder.ReminderConfig, 0, len(reminders))
+	cloned := make([]reminder.Reminder, 0, len(reminders))
 	cloned = append(cloned, reminders...)
 	return cloned
 }
 
-func findReminderByID(reminders []reminder.ReminderConfig, id int64) (reminder.ReminderConfig, bool) {
+func findReminderByID(reminders []reminder.Reminder, id int64) (reminder.Reminder, bool) {
 	norm := normalizeReminderID(id)
 	for _, cfg := range reminders {
 		if cfg.ID == norm {
 			return cfg, true
 		}
 	}
-	return reminder.ReminderConfig{}, false
+	return reminder.Reminder{}, false
 }
 
 func selectImmediateReason(nextByID map[int64]int) int64 {
@@ -117,7 +117,7 @@ func marshalPatchForLog(patch settings.SettingsPatch) string {
 	return string(raw)
 }
 
-func nextReasons(reminders []state.ReminderRuntime, defs []reminder.ReminderConfig) []int64 {
+func nextReasons(reminders []state.ReminderRuntime, defs []reminder.Reminder) []int64 {
 	restReminderIDs := map[int64]struct{}{}
 	for _, def := range defs {
 		if !isRestReminderType(def.ReminderType) {
@@ -162,12 +162,12 @@ func isRestReminderType(reminderType string) bool {
 	return strings.ToLower(strings.TrimSpace(reminderType)) != "notify"
 }
 
-func splitReminderEventByType(evt *scheduler.Event, reminders []reminder.ReminderConfig) (*scheduler.Event, []int64) {
+func splitReminderEventByType(evt *scheduler.Event, reminders []reminder.Reminder) (*scheduler.Event, []int64) {
 	if evt == nil || len(evt.Reasons) == 0 {
 		return nil, nil
 	}
 
-	byID := make(map[int64]reminder.ReminderConfig, len(reminders))
+	byID := make(map[int64]reminder.Reminder, len(reminders))
 	for _, reminder := range reminders {
 		byID[reminder.ID] = reminder
 	}

@@ -2,8 +2,11 @@
 
 package platform
 
-import "pause/internal/platform/windows"
+import (
+	"pause/internal/platform/api"
+	"pause/internal/platform/windows"
+)
 
-func NewAdapters(appID string) Adapters {
+func NewAdapters(appID string) api.Adapters {
 	return windows.NewAdapters(appID)
 }

@@ -12,3 +12,7 @@ type ReminderRepository interface {
 	UpdateReminder(ctx context.Context, patch reminderdomain.Patch) error
 	DeleteReminder(ctx context.Context, reminderID int64) error
 }
+
+type ReminderRuntimeSink interface {
+	ApplyReminderSnapshot(ctx context.Context, reminders []reminderdomain.Reminder) error
+}

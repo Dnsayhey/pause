@@ -29,14 +29,6 @@ func NewApp(configPath string) (*App, error) {
 			return nil, err
 		}
 	}
-	defs, err := runtime.ReminderService.List(context.Background())
-	if err != nil {
-		_ = runtime.Close()
-		return nil, err
-	}
-	engineReminders := reminderDefsToConfig(defs)
-	runtime.Engine.SetReminderConfigs(engineReminders)
-	logx.Infof("app.reminders_synced source=usecase count=%d", len(engineReminders))
 
 	logx.Infof(
 		"app.init bundle_id=%s config_path=%s history_path=%s config_created=%t",

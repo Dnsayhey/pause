@@ -9,7 +9,7 @@ import (
 	"pause/internal/logx"
 )
 
-func (a *App) GetReminders() ([]reminderdomain.ReminderConfig, error) {
+func (a *App) GetReminders() ([]reminderdomain.Reminder, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
@@ -20,7 +20,7 @@ func (a *App) GetReminders() ([]reminderdomain.ReminderConfig, error) {
 	return reminderDefsToConfig(defs), nil
 }
 
-func (a *App) UpdateReminder(patch reminderdomain.ReminderPatch) ([]reminderdomain.ReminderConfig, error) {
+func (a *App) UpdateReminder(patch reminderdomain.Patch) ([]reminderdomain.Reminder, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
@@ -38,12 +38,11 @@ func (a *App) UpdateReminder(patch reminderdomain.ReminderPatch) ([]reminderdoma
 		return nil, err
 	}
 	reminders := reminderDefsToConfig(defs)
-	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminder_updated id=%d count=%d", patch.ID, len(reminders))
 	return reminders, nil
 }
 
-func (a *App) CreateReminder(input reminderdomain.ReminderCreateInput) ([]reminderdomain.ReminderConfig, error) {
+func (a *App) CreateReminder(input reminderdomain.CreateInput) ([]reminderdomain.Reminder, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
@@ -61,7 +60,6 @@ func (a *App) CreateReminder(input reminderdomain.ReminderCreateInput) ([]remind
 		return nil, err
 	}
 	reminders := reminderDefsToConfig(defs)
-	a.engine.SetReminderConfigs(reminders)
 	createdID := int64(0)
 	if len(reminders) > 0 {
 		createdID = reminders[len(reminders)-1].ID
@@ -70,7 +68,7 @@ func (a *App) CreateReminder(input reminderdomain.ReminderCreateInput) ([]remind
 	return reminders, nil
 }
 
-func (a *App) DeleteReminder(reminderID int64) ([]reminderdomain.ReminderConfig, error) {
+func (a *App) DeleteReminder(reminderID int64) ([]reminderdomain.Reminder, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
@@ -82,19 +80,18 @@ func (a *App) DeleteReminder(reminderID int64) ([]reminderdomain.ReminderConfig,
 		return nil, err
 	}
 	reminders := reminderDefsToConfig(defs)
-	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminder_deleted id=%d count=%d", id, len(reminders))
 	return reminders, nil
 }
 
-func reminderDefsToConfig(defs []reminderdomain.Reminder) []reminderdomain.ReminderConfig {
-	result := make([]reminderdomain.ReminderConfig, 0, len(defs))
+func reminderDefsToConfig(defs []reminderdomain.Reminder) []reminderdomain.Reminder {
+	result := make([]reminderdomain.Reminder, 0, len(defs))
 	for _, def := range defs {
 		id := def.ID
 		if id <= 0 {
 			continue
 		}
-		result = append(result, reminderdomain.ReminderConfig{
+		result = append(result, reminderdomain.Reminder{
 			ID:           id,
 			Name:         strings.TrimSpace(def.Name),
 			Enabled:      def.Enabled,
@@ -106,11 +103,11 @@ func reminderDefsToConfig(defs []reminderdomain.Reminder) []reminderdomain.Remin
 	return cloneReminderConfigs(result)
 }
 
-func cloneReminderConfigs(reminders []reminderdomain.ReminderConfig) []reminderdomain.ReminderConfig {
+func cloneReminderConfigs(reminders []reminderdomain.Reminder) []reminderdomain.Reminder {
 	if len(reminders) == 0 {
 		return nil
 	}
-	cloned := make([]reminderdomain.ReminderConfig, 0, len(reminders))
+	cloned := make([]reminderdomain.Reminder, 0, len(reminders))
 	cloned = append(cloned, reminders...)
 	return cloned
 }

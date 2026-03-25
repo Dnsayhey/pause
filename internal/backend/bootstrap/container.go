@@ -4,12 +4,9 @@ import (
 	"errors"
 
 	historyadapter "pause/internal/backend/adapters/history"
-	settingsadapter "pause/internal/backend/adapters/settings"
-	runtimeengine "pause/internal/backend/runtime/engine"
 	historydb "pause/internal/backend/storage/historydb"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
-	settingsusecase "pause/internal/backend/usecase/settings"
 )
 
 type Container struct {
@@ -35,12 +32,4 @@ func NewContainer(historyStore *historydb.Store) (*Container, error) {
 		ReminderService:  reminderService,
 		AnalyticsService: analyticsService,
 	}, nil
-}
-
-func NewSettingsService(engine *runtimeengine.Engine) (*settingsusecase.Service, error) {
-	if engine == nil {
-		return nil, errors.New("engine unavailable")
-	}
-	settingsRepo := settingsadapter.NewSettingsRepository(engine)
-	return settingsusecase.NewService(settingsRepo)
 }

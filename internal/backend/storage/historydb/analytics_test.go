@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	analyticsdomain "pause/internal/backend/domain/analytics"
 )
 
 type analyticsFixture struct {
@@ -100,7 +102,7 @@ func TestQueryAnalyticsBreakTypeDistribution(t *testing.T) {
 		t.Fatalf("expected total triggered 2, got %d", distribution.TotalTriggered)
 	}
 
-	byID := map[int64]AnalyticsBreakTypeDistributionItem{}
+	byID := map[int64]analyticsdomain.BreakTypeDistributionItem{}
 	for _, item := range distribution.Items {
 		byID[item.ReminderID] = item
 	}

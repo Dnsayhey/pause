@@ -11,8 +11,8 @@ const (
 	testReminderIDStand int64 = 2
 )
 
-func defaultReminderFixtures() []reminder.ReminderConfig {
-	return []reminder.ReminderConfig{
+func defaultReminderFixtures() []reminder.Reminder {
+	return []reminder.Reminder{
 		{ID: testReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
 		{ID: testReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
 	}
@@ -42,7 +42,7 @@ func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 
 func TestMergeConflictWithinWindow(t *testing.T) {
 	s := New()
-	reminders := []reminder.ReminderConfig{
+	reminders := []reminder.Reminder{
 		{ID: testReminderIDEye, Enabled: true, IntervalSec: 1200, BreakSec: 20},
 		{ID: testReminderIDStand, Enabled: true, IntervalSec: 1230, BreakSec: 300},
 	}

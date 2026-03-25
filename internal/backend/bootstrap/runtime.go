@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	historyadapter "pause/internal/backend/adapters/history"
+	settingsadapter "pause/internal/backend/adapters/settings"
+	"pause/internal/backend/ports"
 	service "pause/internal/backend/runtime/engine"
 	"pause/internal/backend/storage/historydb"
 	"pause/internal/backend/storage/settingsjson"
@@ -24,7 +26,7 @@ type Runtime struct {
 	ReminderService  *reminderusecase.Service
 	AnalyticsService *analyticsusecase.Service
 	SettingsService  *settingsusecase.Service
-	Notifier         platform.Notifier
+	Notifier         ports.Notifier
 }
 
 func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
@@ -55,12 +57,17 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		adapters.IdleProvider,
 		adapters.LockStateProvider,
 		adapters.SoundPlayer,
-		adapters.StartupManager,
 		breakRecorder,
 	)
 	engine.SetNotifier(adapters.Notifier)
+	container.ReminderService.SetRuntimeSink(engine)
+	if err := container.ReminderService.Sync(context.Background()); err != nil {
+		_ = historyStore.Close()
+		return nil, err
+	}
 
-	settingsService, err := NewSettingsService(engine)
+	settingsRepo := settingsadapter.NewSettingsRepository(store, adapters.StartupManager)
+	settingsService, err := settingsusecase.NewService(settingsRepo)
 	if err != nil {
 		_ = historyStore.Close()
 		return nil, err

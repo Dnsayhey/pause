@@ -4,7 +4,7 @@ package platform
 
 import "pause/internal/platform/api"
 
-func NewAdapters(_ string) Adapters {
+func NewAdapters(_ string) api.Adapters {
 	return api.Adapters{
 		IdleProvider:      api.NoopIdleProvider{},
 		LockStateProvider: api.NoopLockStateProvider{},
