@@ -9,9 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	engineadapter "pause/internal/backend/adapters/engine"
 	"pause/internal/backend/bootstrap"
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
+	settingsusecase "pause/internal/backend/usecase/settings"
 	"pause/internal/core/history"
 	"pause/internal/core/reminder"
 	"pause/internal/core/service"
@@ -29,6 +31,7 @@ type App struct {
 	history       *history.HistoryStore
 	reminders     reminderService
 	analytics     analyticsService
+	settingsSvc   settingsService
 	notifier      platform.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
@@ -46,6 +49,14 @@ type analyticsService interface {
 	GetSummary(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.Summary, error)
 	GetTrendByDay(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.Trend, error)
 	GetBreakTypeDistribution(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.BreakTypeDistribution, error)
+}
+
+type settingsService interface {
+	Get(ctx context.Context) settings.Settings
+	Update(ctx context.Context, patch settings.SettingsPatch) (settings.Settings, error)
+	SyncPlatformSettings(ctx context.Context) error
+	GetLaunchAtLogin(ctx context.Context) (bool, error)
+	SetLaunchAtLogin(ctx context.Context, enabled bool) (bool, error)
 }
 
 type desktopController interface {
@@ -101,6 +112,12 @@ func NewApp(configPath string) (*App, error) {
 	engineReminders := reminderDefsToConfig(defs)
 	engine.SetReminderConfigs(engineReminders)
 	logx.Infof("app.reminders_synced source=usecase count=%d", len(engineReminders))
+	settingsRepo := engineadapter.NewSettingsRepository(engine)
+	settingsSvc, err := settingsusecase.NewService(settingsRepo)
+	if err != nil {
+		_ = historyStore.Close()
+		return nil, err
+	}
 
 	logx.Infof(
 		"app.init bundle_id=%s config_path=%s history_path=%s config_created=%t",
@@ -111,19 +128,26 @@ func NewApp(configPath string) (*App, error) {
 	)
 
 	return &App{
-		engine:    engine,
-		history:   historyStore,
-		reminders: container.ReminderService,
-		analytics: container.AnalyticsService,
-		notifier:  adapters.Notifier,
-		desktop:   newDesktopController(),
+		engine:      engine,
+		history:     historyStore,
+		reminders:   container.ReminderService,
+		analytics:   container.AnalyticsService,
+		settingsSvc: settingsSvc,
+		notifier:    adapters.Notifier,
+		desktop:     newDesktopController(),
 	}, nil
 }
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	if err := a.engine.SyncPlatformSettings(); err != nil {
-		logx.Warnf("app.startup sync_platform_settings_err=%v", err)
+	if a.settingsSvc != nil {
+		if err := a.settingsSvc.SyncPlatformSettings(appContextOrBackground(ctx)); err != nil {
+			logx.Warnf("app.startup sync_platform_settings_err=%v", err)
+		}
+	} else if a.engine != nil {
+		if err := a.engine.SyncPlatformSettings(); err != nil {
+			logx.Warnf("app.startup sync_platform_settings_err=%v", err)
+		}
 	}
 	a.engine.Start(ctx)
 	if a.desktop != nil {
@@ -133,11 +157,35 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func (a *App) GetSettings() settings.Settings {
-	return a.engine.GetSettings()
+	if a == nil {
+		return settings.DefaultSettings()
+	}
+	if a.settingsSvc != nil {
+		return a.settingsSvc.Get(appContextOrBackground(a.ctx))
+	}
+	if a.engine != nil {
+		return a.engine.GetSettings()
+	}
+	return settings.DefaultSettings()
 }
 
 func (a *App) UpdateSettings(patch settings.SettingsPatch) (settings.Settings, error) {
-	nextSettings, err := a.engine.UpdateSettings(patch)
+	if a == nil {
+		return settings.Settings{}, errors.New("app unavailable")
+	}
+	if a.settingsSvc == nil {
+		if a.engine == nil {
+			return settings.Settings{}, errors.New("settings service unavailable")
+		}
+		nextSettings, err := a.engine.UpdateSettings(patch)
+		if err != nil {
+			logx.Warnf("app.update_settings_err err=%v", err)
+			return settings.Settings{}, err
+		}
+		return nextSettings, nil
+	}
+
+	nextSettings, err := a.settingsSvc.Update(appContextOrBackground(a.ctx), patch)
 	if err != nil {
 		logx.Warnf("app.update_settings_err err=%v", err)
 		return settings.Settings{}, err
@@ -298,10 +346,28 @@ func (a *App) StartBreakNowForReason(reminderID int64) (state.RuntimeState, erro
 }
 
 func (a *App) GetLaunchAtLogin() (bool, error) {
+	if a == nil {
+		return false, errors.New("app unavailable")
+	}
+	if a.settingsSvc != nil {
+		return a.settingsSvc.GetLaunchAtLogin(appContextOrBackground(a.ctx))
+	}
+	if a.engine == nil {
+		return false, errors.New("settings service unavailable")
+	}
 	return a.engine.GetLaunchAtLogin()
 }
 
 func (a *App) SetLaunchAtLogin(enabled bool) (bool, error) {
+	if a == nil {
+		return false, errors.New("app unavailable")
+	}
+	if a.settingsSvc != nil {
+		return a.settingsSvc.SetLaunchAtLogin(appContextOrBackground(a.ctx), enabled)
+	}
+	if a.engine == nil {
+		return false, errors.New("settings service unavailable")
+	}
 	return a.engine.SetLaunchAtLogin(enabled)
 }
 
