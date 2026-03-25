@@ -17,7 +17,7 @@ type Container struct {
 	AnalyticsService *analyticsusecase.Service
 }
 
-func NewContainer(historyStore *corehistory.HistoryStore) (*Container, error) {
+func NewContainer(historyStore *corehistory.Store) (*Container, error) {
 	if historyStore == nil {
 		return nil, errors.New("history store unavailable")
 	}

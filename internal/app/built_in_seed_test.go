@@ -117,17 +117,17 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 	requireReminderByName(t, items, "喝水")
 }
 
-func openHistoryStoreForSeedTest(t *testing.T) *history.HistoryStore {
+func openHistoryStoreForSeedTest(t *testing.T) *history.Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenHistoryStore(context.Background(), path)
+	store, err := history.OpenStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	return store
 }
 
-func openReminderServiceForSeedTest(t *testing.T, store *history.HistoryStore) reminderService {
+func openReminderServiceForSeedTest(t *testing.T, store *history.Store) reminderService {
 	t.Helper()
 	container, err := bootstrap.NewContainer(store)
 	if err != nil {

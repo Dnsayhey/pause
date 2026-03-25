@@ -28,7 +28,7 @@ func TestNewRuntimeBuildsAllWiring(t *testing.T) {
 	if runtime.SettingsStore == nil {
 		t.Fatalf("expected settings store to be initialized")
 	}
-	if runtime.HistoryStore == nil {
+	if runtime.History == nil {
 		t.Fatalf("expected history store to be initialized")
 	}
 	if runtime.Engine == nil {

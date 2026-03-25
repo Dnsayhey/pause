@@ -35,7 +35,7 @@ var (
 //go:embed schema.sql
 var schemaSQL string
 
-type HistoryStore struct {
+type Store struct {
 	db *sql.DB
 }
 
@@ -56,7 +56,7 @@ type ReminderPatch struct {
 	ReminderType *string
 }
 
-func OpenHistoryStore(ctx context.Context, path string) (*HistoryStore, error) {
+func OpenStore(ctx context.Context, path string) (*Store, error) {
 	if ctx == nil {
 		return nil, errContextRequired
 	}
@@ -78,7 +78,7 @@ func OpenHistoryStore(ctx context.Context, path string) (*HistoryStore, error) {
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0)
 
-	store := &HistoryStore{db: db}
+	store := &Store{db: db}
 	if err := store.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -86,14 +86,14 @@ func OpenHistoryStore(ctx context.Context, path string) (*HistoryStore, error) {
 	return store, nil
 }
 
-func (s *HistoryStore) Close() error {
+func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
 	return s.db.Close()
 }
 
-func (s *HistoryStore) migrate(ctx context.Context) error {
+func (s *Store) migrate(ctx context.Context) error {
 	if err := ensureStore(ctx, s); err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func validateReminderName(name string) error {
 	return nil
 }
 
-func ensureStore(ctx context.Context, s *HistoryStore) error {
+func ensureStore(ctx context.Context, s *Store) error {
 	if ctx == nil {
 		return errContextRequired
 	}
@@ -186,7 +186,7 @@ func applyReminderPatch(current Reminder, patch ReminderPatch) (Reminder, error)
 	return current, nil
 }
 
-func (s *HistoryStore) ListReminders(ctx context.Context) ([]Reminder, error) {
+func (s *Store) ListReminders(ctx context.Context) ([]Reminder, error) {
 	if err := ensureStore(ctx, s); err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func (s *HistoryStore) ListReminders(ctx context.Context) ([]Reminder, error) {
 	return result, nil
 }
 
-func (s *HistoryStore) UpdateReminder(ctx context.Context, reminderID int64, patch ReminderPatch) error {
+func (s *Store) UpdateReminder(ctx context.Context, reminderID int64, patch ReminderPatch) error {
 	if err := ensureStore(ctx, s); err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func (s *HistoryStore) UpdateReminder(ctx context.Context, reminderID int64, pat
 	return tx.Commit()
 }
 
-func (s *HistoryStore) CreateReminder(ctx context.Context, reminder Reminder) (int64, error) {
+func (s *Store) CreateReminder(ctx context.Context, reminder Reminder) (int64, error) {
 	if err := ensureStore(ctx, s); err != nil {
 		return 0, err
 	}
@@ -388,7 +388,7 @@ func (s *HistoryStore) CreateReminder(ctx context.Context, reminder Reminder) (i
 	return insertedID, nil
 }
 
-func (s *HistoryStore) DeleteReminder(ctx context.Context, reminderID int64) error {
+func (s *Store) DeleteReminder(ctx context.Context, reminderID int64) error {
 	if err := ensureStore(ctx, s); err != nil {
 		return err
 	}
@@ -438,7 +438,7 @@ func dedupeReminderIDs(reminderIDs []int64) []int64 {
 	return result
 }
 
-func (s *HistoryStore) RecordBreak(
+func (s *Store) RecordBreak(
 	ctx context.Context,
 	startedAt time.Time,
 	endedAt time.Time,

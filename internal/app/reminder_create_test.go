@@ -22,7 +22,7 @@ func newTestAppWithHistory(t *testing.T) *App {
 	}
 
 	historyPath := filepath.Join(t.TempDir(), "history.db")
-	historyStore, err := history.OpenHistoryStore(context.Background(), historyPath)
+	historyStore, err := history.OpenStore(context.Background(), historyPath)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func (s *HistoryStore) QueryAnalyticsWeeklyStats(from time.Time, to time.Time) (AnalyticsWeeklyStats, error) {
+func (s *Store) QueryAnalyticsWeeklyStats(from time.Time, to time.Time) (AnalyticsWeeklyStats, error) {
 	if s == nil || s.db == nil {
 		return AnalyticsWeeklyStats{}, errors.New("history store is not initialized")
 	}
@@ -32,7 +32,7 @@ func (s *HistoryStore) QueryAnalyticsWeeklyStats(from time.Time, to time.Time) (
 	}, nil
 }
 
-func (s *HistoryStore) QueryAnalyticsSummary(from time.Time, to time.Time) (AnalyticsSummary, error) {
+func (s *Store) QueryAnalyticsSummary(from time.Time, to time.Time) (AnalyticsSummary, error) {
 	if s == nil || s.db == nil {
 		return AnalyticsSummary{}, errors.New("history store is not initialized")
 	}
@@ -60,7 +60,7 @@ func (s *HistoryStore) QueryAnalyticsSummary(from time.Time, to time.Time) (Anal
 	}, nil
 }
 
-func (s *HistoryStore) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (AnalyticsTrend, error) {
+func (s *Store) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (AnalyticsTrend, error) {
 	if s == nil || s.db == nil {
 		return AnalyticsTrend{}, errors.New("history store is not initialized")
 	}
@@ -131,7 +131,7 @@ func (s *HistoryStore) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (A
 	return result, nil
 }
 
-func (s *HistoryStore) QueryAnalyticsBreakTypeDistribution(from time.Time, to time.Time) (AnalyticsBreakTypeDistribution, error) {
+func (s *Store) QueryAnalyticsBreakTypeDistribution(from time.Time, to time.Time) (AnalyticsBreakTypeDistribution, error) {
 	if s == nil || s.db == nil {
 		return AnalyticsBreakTypeDistribution{}, errors.New("history store is not initialized")
 	}
@@ -172,7 +172,7 @@ func (s *HistoryStore) QueryAnalyticsBreakTypeDistribution(from time.Time, to ti
 	return result, nil
 }
 
-func (s *HistoryStore) queryReminderAggregatesByRange(startUnix int64, endUnix int64) ([]AnalyticsReminderStat, error) {
+func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) ([]AnalyticsReminderStat, error) {
 	rows, err := s.db.QueryContext(
 		context.Background(),
 		`WITH sessions_in_range AS (
@@ -274,7 +274,7 @@ func (s *HistoryStore) queryReminderAggregatesByRange(startUnix int64, endUnix i
 	return result, nil
 }
 
-func (s *HistoryStore) querySummaryAggregateByRange(startUnix int64, endUnix int64) (AnalyticsSummaryStats, error) {
+func (s *Store) querySummaryAggregateByRange(startUnix int64, endUnix int64) (AnalyticsSummaryStats, error) {
 	summary := AnalyticsSummaryStats{}
 	err := s.db.QueryRowContext(
 		context.Background(),

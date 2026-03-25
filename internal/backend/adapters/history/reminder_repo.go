@@ -12,12 +12,12 @@ import (
 var errHistoryStoreUnavailable = errors.New("history store unavailable")
 
 type ReminderRepository struct {
-	store *corehistory.HistoryStore
+	store *corehistory.Store
 }
 
 var _ ports.ReminderRepository = (*ReminderRepository)(nil)
 
-func NewReminderRepository(store *corehistory.HistoryStore) *ReminderRepository {
+func NewReminderRepository(store *corehistory.Store) *ReminderRepository {
 	return &ReminderRepository{store: store}
 }
 

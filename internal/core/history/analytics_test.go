@@ -14,12 +14,12 @@ type analyticsFixture struct {
 	to      time.Time
 }
 
-func prepareAnalyticsFixture(t *testing.T) (*HistoryStore, analyticsFixture) {
+func prepareAnalyticsFixture(t *testing.T) (*Store, analyticsFixture) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenHistoryStore(context.Background(), path)
+	store, err := OpenStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenHistoryStore() error = %v", err)
+		t.Fatalf("OpenStore() error = %v", err)
 	}
 
 	eyeID, err := store.CreateReminder(context.Background(), Reminder{

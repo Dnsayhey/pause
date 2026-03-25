@@ -18,7 +18,7 @@ import (
 
 type Runtime struct {
 	SettingsStore    *settings.SettingsStore
-	HistoryStore     *history.HistoryStore
+	History          *history.Store
 	HistoryPath      string
 	Engine           *service.Engine
 	ReminderService  *reminderusecase.Service
@@ -38,7 +38,7 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		return nil, err
 	}
 	historyPath := defaultHistoryPath(cleanPath)
-	historyStore, err := history.OpenHistoryStore(context.Background(), historyPath)
+	historyStore, err := history.OpenStore(context.Background(), historyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 
 	return &Runtime{
 		SettingsStore:    store,
-		HistoryStore:     historyStore,
+		History:          historyStore,
 		HistoryPath:      historyPath,
 		Engine:           engine,
 		ReminderService:  container.ReminderService,
@@ -79,10 +79,10 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 }
 
 func (r *Runtime) Close() error {
-	if r == nil || r.HistoryStore == nil {
+	if r == nil || r.History == nil {
 		return nil
 	}
-	return r.HistoryStore.Close()
+	return r.History.Close()
 }
 
 func defaultHistoryPath(configPath string) string {

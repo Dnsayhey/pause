@@ -10,12 +10,12 @@ import (
 )
 
 type AnalyticsRepository struct {
-	store *corehistory.HistoryStore
+	store *corehistory.Store
 }
 
 var _ ports.AnalyticsRepository = (*AnalyticsRepository)(nil)
 
-func NewAnalyticsRepository(store *corehistory.HistoryStore) *AnalyticsRepository {
+func NewAnalyticsRepository(store *corehistory.Store) *AnalyticsRepository {
 	return &AnalyticsRepository{store: store}
 }
 
