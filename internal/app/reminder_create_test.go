@@ -7,137 +7,95 @@ import (
 
 	"pause/internal/core/config"
 	"pause/internal/core/history"
+	"pause/internal/core/service"
 )
 
-func TestNormalizeReminderCreateInput(t *testing.T) {
-	notify := "notify"
-	valid, err := normalizeReminderCreateInput(config.ReminderCreateInput{
+func newTestAppWithHistory(t *testing.T) *App {
+	t.Helper()
+
+	configPath := filepath.Join(t.TempDir(), "settings.json")
+	store, err := config.NewStore(configPath)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	historyPath := filepath.Join(t.TempDir(), "history.db")
+	historyStore, err := history.OpenStore(context.Background(), historyPath)
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	t.Cleanup(func() { _ = historyStore.Close() })
+
+	engine := service.NewEngine(store, nil, nil, nil, nil, historyStore)
+	defs, err := historyStore.ListReminders(context.Background())
+	if err != nil {
+		t.Fatalf("ListReminders() error = %v", err)
+	}
+	engine.SetReminderConfigs(historyDefsToConfig(defs))
+
+	return &App{
+		ctx:     context.Background(),
+		engine:  engine,
+		history: historyStore,
+	}
+}
+
+func TestAppCreateReminderRejectsMissingType(t *testing.T) {
+	app := newTestAppWithHistory(t)
+
+	_, err := app.CreateReminder(config.ReminderCreateInput{
+		Name:        "Focus",
+		IntervalSec: 1500,
+		BreakSec:    30,
+	})
+	if err == nil {
+		t.Fatalf("expected missing reminder type to fail")
+	}
+}
+
+func TestAppReminderCRUDLifecycle(t *testing.T) {
+	app := newTestAppWithHistory(t)
+
+	restType := "rest"
+	created, err := app.CreateReminder(config.ReminderCreateInput{
 		Name:         "Focus",
 		IntervalSec:  1500,
 		BreakSec:     30,
-		ReminderType: &notify,
+		ReminderType: &restType,
 	})
 	if err != nil {
-		t.Fatalf("normalizeReminderCreateInput(valid) error = %v", err)
+		t.Fatalf("CreateReminder() error = %v", err)
 	}
-	if valid.Name != "Focus" {
-		t.Fatalf("expected name Focus, got %q", valid.Name)
+	if len(created) != 1 {
+		t.Fatalf("expected 1 reminder after create, got %d", len(created))
 	}
-	if valid.ReminderType == nil || *valid.ReminderType != "notify" {
-		t.Fatalf("expected reminder type notify, got %#v", valid.ReminderType)
-	}
-
-	if _, err := normalizeReminderCreateInput(config.ReminderCreateInput{IntervalSec: 1, BreakSec: 1}); err == nil {
-		t.Fatalf("expected missing name to fail")
-	}
-	if _, err := normalizeReminderCreateInput(config.ReminderCreateInput{Name: "x", IntervalSec: 0, BreakSec: 1}); err == nil {
-		t.Fatalf("expected non-positive interval to fail")
-	}
-	if _, err := normalizeReminderCreateInput(config.ReminderCreateInput{Name: "x", IntervalSec: 1, BreakSec: 0}); err == nil {
-		t.Fatalf("expected non-positive break to fail")
-	}
-	if _, err := normalizeReminderCreateInput(config.ReminderCreateInput{Name: "x", IntervalSec: 1, BreakSec: 1}); err == nil {
-		t.Fatalf("expected missing reminder type to fail")
-	}
-	if _, err := normalizeReminderCreateInput(config.ReminderCreateInput{Name: " x ", IntervalSec: 1, BreakSec: 1, ReminderType: &notify}); err == nil {
-		t.Fatalf("expected name with leading/trailing spaces to fail")
-	}
-	invalidType := "Notify"
-	if _, err := normalizeReminderCreateInput(config.ReminderCreateInput{Name: "x", IntervalSec: 1, BreakSec: 1, ReminderType: &invalidType}); err == nil {
-		t.Fatalf("expected invalid reminder type case to fail")
-	}
-}
-
-func TestCreateReminderInHistoryUsesAutoIncrementID(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(context.Background(), path)
-	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
-	}
-	defer store.Close()
-
-	reminderType := "rest"
-	inputA := config.ReminderCreateInput{Name: "Focus Time A", IntervalSec: 1500, BreakSec: 30, ReminderType: &reminderType}
-	inputB := config.ReminderCreateInput{Name: "Focus Time B", IntervalSec: 1200, BreakSec: 20, ReminderType: &reminderType}
-
-	id1, err := createReminderInHistory(context.Background(), store, inputA)
-	if err != nil {
-		t.Fatalf("createReminderInHistory(first) error = %v", err)
-	}
-	if id1 <= 0 {
-		t.Fatalf("expected first id > 0, got %d", id1)
+	id := created[0].ID
+	if id <= 0 {
+		t.Fatalf("expected created reminder id > 0, got %d", id)
 	}
 
-	id2, err := createReminderInHistory(context.Background(), store, inputB)
-	if err != nil {
-		t.Fatalf("createReminderInHistory(second) error = %v", err)
-	}
-	if id2 <= id1 {
-		t.Fatalf("expected second id to increase, got first=%d second=%d", id1, id2)
-	}
-}
-
-func TestApplyReminderPatchToHistoryRejectsUnknownReminderID(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(context.Background(), path)
-	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
-	}
-	defer store.Close()
-
-	name := "eye"
-	enabled := true
-	intervalSec := 20 * 60
-	breakSec := 20
-	reminderType := "rest"
-	if _, err := store.CreateReminder(context.Background(), history.Reminder{
-		Name:         name,
-		Enabled:      enabled,
-		IntervalSec:  intervalSec,
-		BreakSec:     breakSec,
-		ReminderType: reminderType,
-	}); err != nil {
-		t.Fatalf("CreateReminder(eye) error = %v", err)
-	}
-
-	patch := config.ReminderPatch{ID: 999999, Enabled: &enabled}
-	if err := applyReminderUpdateToHistory(context.Background(), store, patch); err == nil {
-		t.Fatalf("expected unknown reminder id patch to fail")
-	}
-}
-
-func TestApplyReminderPatchToHistoryRejectsInvalidPatchValues(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(context.Background(), path)
-	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
-	}
-	defer store.Close()
-
-	name := "eye"
-	enabled := true
-	intervalSec := 20 * 60
-	breakSec := 20
-	reminderType := "rest"
-	id, err := store.CreateReminder(context.Background(), history.Reminder{
-		Name:         name,
-		Enabled:      enabled,
-		IntervalSec:  intervalSec,
-		BreakSec:     breakSec,
-		ReminderType: reminderType,
+	newName := "Deep Focus"
+	enabled := false
+	updated, err := app.UpdateReminder(config.ReminderPatch{
+		ID:      id,
+		Name:    &newName,
+		Enabled: &enabled,
 	})
 	if err != nil {
-		t.Fatalf("CreateReminder(eye) error = %v", err)
+		t.Fatalf("UpdateReminder() error = %v", err)
+	}
+	if len(updated) != 1 {
+		t.Fatalf("expected 1 reminder after update, got %d", len(updated))
+	}
+	if updated[0].Name != newName || updated[0].Enabled != enabled {
+		t.Fatalf("expected updated reminder values, got name=%q enabled=%t", updated[0].Name, updated[0].Enabled)
 	}
 
-	zero := 0
-	invalidType := "x"
-	patch := config.ReminderPatch{ID: id, IntervalSec: &zero}
-	if err := applyReminderUpdateToHistory(context.Background(), store, patch); err == nil {
-		t.Fatalf("expected invalid interval patch to fail")
+	afterDelete, err := app.DeleteReminder(id)
+	if err != nil {
+		t.Fatalf("DeleteReminder() error = %v", err)
 	}
-	patch = config.ReminderPatch{ID: id, ReminderType: &invalidType}
-	if err := applyReminderUpdateToHistory(context.Background(), store, patch); err == nil {
-		t.Fatalf("expected invalid reminder type patch to fail")
+	if len(afterDelete) != 0 {
+		t.Fatalf("expected 0 reminders after delete, got %d", len(afterDelete))
 	}
 }

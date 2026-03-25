@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"pause/internal/core/config"
-	"pause/internal/core/reminder"
 	"pause/internal/core/scheduler"
 	"pause/internal/core/session"
 	"pause/internal/logx"
@@ -88,7 +86,7 @@ func NewEngine(
 
 	return &Engine{
 		store:          store,
-		reminders:      reminder.CloneConfigs(nil),
+		reminders:      cloneReminderConfigs(nil),
 		scheduler:      scheduler.New(),
 		session:        session.NewManager(),
 		history:        history,
@@ -305,28 +303,12 @@ func (e *Engine) SetReminderConfigs(reminders []config.ReminderConfig) []config.
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	next := reminder.CloneConfigs(reminders)
-	prev := reminder.CloneConfigs(e.reminders)
-	e.reminders = reminder.CloneConfigs(next)
+	next := cloneReminderConfigs(reminders)
+	prev := cloneReminderConfigs(e.reminders)
+	e.reminders = cloneReminderConfigs(next)
 	e.applyReminderConfigPatchLocked(prev, next)
 	logx.Infof("reminders.synced count=%d", len(e.reminders))
-	return reminder.CloneConfigs(e.reminders)
-}
-
-func (e *Engine) UpdateReminderConfigs(patches []config.ReminderPatch) ([]config.ReminderConfig, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if err := validateReminderPatchesForUpdate(e.reminders, patches); err != nil {
-		return nil, err
-	}
-
-	next := reminder.ApplyPatches(e.reminders, patches)
-	prev := reminder.CloneConfigs(e.reminders)
-	e.reminders = reminder.CloneConfigs(next)
-	e.applyReminderConfigPatchLocked(prev, next)
-	logx.Infof("reminders.updated patches=%s count=%d", marshalReminderPatchesForLog(patches), len(e.reminders))
-	return reminder.CloneConfigs(e.reminders), nil
+	return cloneReminderConfigs(e.reminders)
 }
 
 func (e *Engine) GetLaunchAtLogin() (bool, error) {
@@ -408,7 +390,7 @@ func (e *Engine) PauseReminder(reminderID int64, now time.Time) (config.RuntimeS
 	if key <= 0 {
 		return config.RuntimeState{}, errors.New("invalid reminder reason")
 	}
-	if _, ok := reminder.FindByID(e.reminders, key); !ok {
+	if _, ok := findReminderByID(e.reminders, key); !ok {
 		return config.RuntimeState{}, errors.New("unknown reminder reason")
 	}
 	wasPaused := e.pausedReminder[key]
@@ -732,7 +714,7 @@ func buildImmediateBreakEvent(reminders []config.ReminderConfig, nextByID map[in
 	if reasonKey <= 0 {
 		return nil
 	}
-	cfg, ok := reminder.FindByID(reminders, reasonKey)
+	cfg, ok := findReminderByID(reminders, reasonKey)
 	if !ok || !cfg.Enabled || cfg.BreakSec <= 0 || !isRestReminderType(cfg.ReminderType) {
 		return nil
 	}
@@ -743,7 +725,29 @@ func buildImmediateBreakEvent(reminders []config.ReminderConfig, nextByID map[in
 }
 
 func normalizeReminderID(id int64) int64 {
-	return reminder.NormalizeID(id)
+	if id <= 0 {
+		return 0
+	}
+	return id
+}
+
+func cloneReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {
+	if len(reminders) == 0 {
+		return nil
+	}
+	cloned := make([]config.ReminderConfig, 0, len(reminders))
+	cloned = append(cloned, reminders...)
+	return cloned
+}
+
+func findReminderByID(reminders []config.ReminderConfig, id int64) (config.ReminderConfig, bool) {
+	norm := normalizeReminderID(id)
+	for _, cfg := range reminders {
+		if cfg.ID == norm {
+			return cfg, true
+		}
+	}
+	return config.ReminderConfig{}, false
 }
 
 func selectImmediateReason(nextByID map[int64]int) int64 {
@@ -805,56 +809,6 @@ func marshalPatchForLog(patch config.SettingsPatch) string {
 		return "{}"
 	}
 	return string(raw)
-}
-
-func marshalReminderPatchesForLog(patches []config.ReminderPatch) string {
-	raw, err := json.Marshal(patches)
-	if err != nil {
-		return "[]"
-	}
-	return string(raw)
-}
-
-func validateReminderPatchesForUpdate(reminders []config.ReminderConfig, patches []config.ReminderPatch) error {
-	if len(patches) == 0 {
-		return nil
-	}
-
-	knownIDs := make(map[int64]struct{}, len(reminders))
-	for _, cfg := range reminders {
-		id := reminder.NormalizeID(cfg.ID)
-		if id <= 0 {
-			continue
-		}
-		knownIDs[id] = struct{}{}
-	}
-
-	for _, patch := range patches {
-		id := reminder.NormalizeID(patch.ID)
-		if id <= 0 {
-			return errors.New("reminder id is required")
-		}
-		if _, ok := knownIDs[id]; !ok {
-			return fmt.Errorf("reminder id %d not found", id)
-		}
-		if patch.Name != nil && strings.TrimSpace(*patch.Name) == "" {
-			return errors.New("reminder name is required")
-		}
-		if patch.IntervalSec != nil && *patch.IntervalSec <= 0 {
-			return errors.New("reminder intervalSec must be > 0")
-		}
-		if patch.BreakSec != nil && *patch.BreakSec <= 0 {
-			return errors.New("reminder breakSec must be > 0")
-		}
-		if patch.ReminderType != nil {
-			switch strings.ToLower(strings.TrimSpace(*patch.ReminderType)) {
-			case "rest", "notify":
-			default:
-				return errors.New("reminder reminderType must be rest or notify")
-			}
-		}
-	}
-	return nil
 }
 
 func nextReasons(reminders []config.ReminderRuntime, defs []config.ReminderConfig) []int64 {

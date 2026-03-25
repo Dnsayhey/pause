@@ -104,9 +104,49 @@ func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) con
 
 func setReminderPatches(t *testing.T, engine *Engine, patches ...config.ReminderPatch) {
 	t.Helper()
-	if _, err := engine.UpdateReminderConfigs(patches); err != nil {
-		t.Fatalf("UpdateReminderConfigs() error = %v", err)
+	if engine == nil {
+		t.Fatalf("engine is nil")
 	}
+
+	engine.mu.Lock()
+	next := cloneReminderConfigs(engine.reminders)
+	engine.mu.Unlock()
+
+	for _, patch := range patches {
+		id := normalizeReminderID(patch.ID)
+		if id <= 0 {
+			t.Fatalf("invalid reminder id: %d", patch.ID)
+		}
+
+		idx := -1
+		for i := range next {
+			if next[i].ID == id {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			t.Fatalf("unknown reminder id: %d", patch.ID)
+		}
+
+		if patch.Name != nil {
+			next[idx].Name = *patch.Name
+		}
+		if patch.Enabled != nil {
+			next[idx].Enabled = *patch.Enabled
+		}
+		if patch.IntervalSec != nil {
+			next[idx].IntervalSec = *patch.IntervalSec
+		}
+		if patch.BreakSec != nil {
+			next[idx].BreakSec = *patch.BreakSec
+		}
+		if patch.ReminderType != nil {
+			next[idx].ReminderType = *patch.ReminderType
+		}
+	}
+
+	engine.SetReminderConfigs(next)
 }
 
 func requireReminderRuntime(t *testing.T, state config.RuntimeState, id int64) config.ReminderRuntime {
@@ -653,32 +693,6 @@ func TestSetReminderConfigsAllowsEmptySnapshot(t *testing.T) {
 	}
 	if _, err := engine.StartBreakNow(base.Add(time.Second)); err == nil {
 		t.Fatalf("expected StartBreakNow to fail when reminders snapshot is empty")
-	}
-}
-
-func TestUpdateReminderConfigsRejectsUnknownReminderID(t *testing.T) {
-	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
-
-	enabled := true
-	_, err := engine.UpdateReminderConfigs([]config.ReminderPatch{
-		{ID: -1, Enabled: &enabled},
-	})
-	if err == nil {
-		t.Fatalf("expected unknown reminder id patch to fail")
-	}
-}
-
-func TestUpdateReminderConfigsRejectsInvalidInterval(t *testing.T) {
-	idle := &fakeIdleProvider{}
-	engine := newTestEngine(t, idle, &fakeStartupManager{})
-
-	interval := 0
-	_, err := engine.UpdateReminderConfigs([]config.ReminderPatch{
-		{ID: testReminderIDEye, IntervalSec: &interval},
-	})
-	if err == nil {
-		t.Fatalf("expected invalid interval patch to fail")
 	}
 }
 

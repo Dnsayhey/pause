@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"pause/internal/core/config"
-	"pause/internal/core/reminder"
 )
 
 const mergeWindowSec = 60
@@ -29,7 +28,7 @@ func (s *Scheduler) Reset() {
 }
 
 func (s *Scheduler) ResetByID(id int64) {
-	norm := reminder.NormalizeID(id)
+	norm := normalizeReminderID(id)
 	if norm <= 0 {
 		return
 	}
@@ -92,7 +91,7 @@ func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []config.ReminderCo
 }
 
 func (s *Scheduler) NextInSec(reminders []config.ReminderConfig, reminderID int64) int {
-	cfg, ok := reminder.FindByID(reminders, reminderID)
+	cfg, ok := findReminderByID(reminders, reminderID)
 	if !ok || !cfg.Enabled {
 		return -1
 	}
@@ -120,4 +119,21 @@ func enabledReminders(reminders []config.ReminderConfig) []config.ReminderConfig
 		result = append(result, reminder)
 	}
 	return result
+}
+
+func normalizeReminderID(id int64) int64 {
+	if id <= 0 {
+		return 0
+	}
+	return id
+}
+
+func findReminderByID(reminders []config.ReminderConfig, id int64) (config.ReminderConfig, bool) {
+	norm := normalizeReminderID(id)
+	for _, reminder := range reminders {
+		if reminder.ID == norm {
+			return reminder, true
+		}
+	}
+	return config.ReminderConfig{}, false
 }

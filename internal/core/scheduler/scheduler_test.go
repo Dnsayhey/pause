@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"pause/internal/core/config"
-	"pause/internal/core/reminder"
 )
 
 const (
@@ -22,7 +21,7 @@ func defaultReminderFixtures() []config.ReminderConfig {
 func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 	s := New()
 	reminders := defaultReminderFixtures()
-	eye, _ := reminder.FindByID(reminders, testReminderIDEye)
+	eye, _ := findReminderByID(reminders, testReminderIDEye)
 
 	evt := s.OnActiveSeconds(eye.IntervalSec-1, reminders)
 	if evt != nil {
@@ -47,7 +46,7 @@ func TestMergeConflictWithinWindow(t *testing.T) {
 		{ID: testReminderIDEye, Enabled: true, IntervalSec: 1200, BreakSec: 20},
 		{ID: testReminderIDStand, Enabled: true, IntervalSec: 1230, BreakSec: 300},
 	}
-	stand, _ := reminder.FindByID(reminders, testReminderIDStand)
+	stand, _ := findReminderByID(reminders, testReminderIDStand)
 
 	evt := s.OnActiveSeconds(1200, reminders)
 	if evt == nil {
@@ -64,8 +63,8 @@ func TestMergeConflictWithinWindow(t *testing.T) {
 func TestNextCountdown(t *testing.T) {
 	s := New()
 	reminders := defaultReminderFixtures()
-	eye, _ := reminder.FindByID(reminders, testReminderIDEye)
-	stand, _ := reminder.FindByID(reminders, testReminderIDStand)
+	eye, _ := findReminderByID(reminders, testReminderIDEye)
+	stand, _ := findReminderByID(reminders, testReminderIDStand)
 
 	s.OnActiveSeconds(100, reminders)
 	if got := s.NextInSec(reminders, testReminderIDEye); got != eye.IntervalSec-100 {

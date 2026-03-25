@@ -11,7 +11,6 @@ import (
 
 	"pause/internal/core/config"
 	"pause/internal/core/history"
-	"pause/internal/core/reminder"
 	"pause/internal/core/service"
 	"pause/internal/logx"
 	"pause/internal/meta"
@@ -68,10 +67,14 @@ func NewApp(configPath string) (*App, error) {
 		historyStore,
 	)
 	engine.SetNotifier(adapters.Notifier)
-	if err := syncEngineRemindersFromHistory(context.Background(), engine, historyStore); err != nil {
+	defs, err := historyStore.ListReminders(context.Background())
+	if err != nil {
 		_ = historyStore.Close()
 		return nil, err
 	}
+	engineReminders := historyDefsToConfig(defs)
+	engine.SetReminderConfigs(engineReminders)
+	logx.Infof("app.reminders_synced source=history count=%d", len(engineReminders))
 
 	logx.Infof(
 		"app.init bundle_id=%s config_path=%s history_path=%s config_created=%t",
@@ -130,15 +133,24 @@ func (a *App) UpdateReminder(patch config.ReminderPatch) ([]config.ReminderConfi
 		return nil, errors.New("history store unavailable")
 	}
 	ctx := appContextOrBackground(a.ctx)
-	if err := applyReminderUpdateToHistory(ctx, a.history, patch); err != nil {
-		logx.Warnf("app.update_reminder_err stage=history_apply patch_id=%d err=%v", patch.ID, err)
+	mutation := history.ReminderPatch{
+		Name:         patch.Name,
+		Enabled:      patch.Enabled,
+		IntervalSec:  patch.IntervalSec,
+		BreakSec:     patch.BreakSec,
+		ReminderType: patch.ReminderType,
+	}
+	if err := a.history.UpdateReminder(ctx, patch.ID, mutation); err != nil {
+		logx.Warnf("app.update_reminder_err stage=history_update patch_id=%d err=%v", patch.ID, err)
 		return nil, err
 	}
-	reminders, err := reloadAndSyncReminders(ctx, a.engine, a.history)
+	defs, err := a.history.ListReminders(ctx)
 	if err != nil {
 		logx.Warnf("app.update_reminder_err stage=history_reload patch_id=%d err=%v", patch.ID, err)
 		return nil, err
 	}
+	reminders := historyDefsToConfig(defs)
+	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminder_updated id=%d count=%d", patch.ID, len(reminders))
 	return reminders, nil
 }
@@ -147,23 +159,33 @@ func (a *App) CreateReminder(input config.ReminderCreateInput) ([]config.Reminde
 	if a == nil || a.history == nil {
 		return nil, errors.New("history store unavailable")
 	}
-
-	normalized, err := normalizeReminderCreateInput(input)
-	if err != nil {
-		return nil, err
+	if input.ReminderType == nil {
+		return nil, errors.New("reminder reminderType is required")
 	}
 
 	ctx := appContextOrBackground(a.ctx)
-	id, err := createReminderInHistory(ctx, a.history, normalized)
+	enabled := true
+	if input.Enabled != nil {
+		enabled = *input.Enabled
+	}
+	id, err := a.history.CreateReminder(ctx, history.Reminder{
+		Name:         input.Name,
+		Enabled:      enabled,
+		IntervalSec:  input.IntervalSec,
+		BreakSec:     input.BreakSec,
+		ReminderType: *input.ReminderType,
+	})
 	if err != nil {
 		logx.Warnf("app.create_reminder_err stage=history_create id=%d err=%v", id, err)
 		return nil, err
 	}
-	reminders, err := reloadAndSyncReminders(ctx, a.engine, a.history)
+	defs, err := a.history.ListReminders(ctx)
 	if err != nil {
 		logx.Warnf("app.create_reminder_err stage=history_reload id=%d err=%v", id, err)
 		return nil, err
 	}
+	reminders := historyDefsToConfig(defs)
+	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminder_created id=%d count=%d", id, len(reminders))
 	return reminders, nil
 }
@@ -177,15 +199,17 @@ func (a *App) DeleteReminder(reminderID int64) ([]config.ReminderConfig, error) 
 		return nil, errors.New("reminder id is required")
 	}
 	ctx := appContextOrBackground(a.ctx)
-	if err := deleteReminderInHistory(ctx, a.history, id); err != nil {
+	if err := a.history.DeleteReminder(ctx, id); err != nil {
 		logx.Warnf("app.delete_reminder_err stage=history_delete id=%d err=%v", id, err)
 		return nil, err
 	}
-	reminders, err := reloadAndSyncReminders(ctx, a.engine, a.history)
+	defs, err := a.history.ListReminders(ctx)
 	if err != nil {
 		logx.Warnf("app.delete_reminder_err stage=history_reload id=%d err=%v", id, err)
 		return nil, err
 	}
+	reminders := historyDefsToConfig(defs)
+	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminder_deleted id=%d count=%d", id, len(reminders))
 	return reminders, nil
 }
@@ -368,152 +392,16 @@ func historyDefsToConfig(defs []history.Reminder) []config.ReminderConfig {
 			ReminderType: strings.TrimSpace(def.ReminderType),
 		})
 	}
-	return reminder.CloneConfigs(result)
+	return cloneReminderConfigs(result)
 }
 
-func loadReminderConfigsFromHistory(ctx context.Context, store *history.Store) ([]config.ReminderConfig, error) {
-	if store == nil {
-		return nil, nil
-	}
-	defs, err := store.ListReminders(appContextOrBackground(ctx))
-	if err != nil {
-		return nil, err
-	}
-	return historyDefsToConfig(defs), nil
-}
-
-func syncEngineRemindersFromHistory(ctx context.Context, engine *service.Engine, store *history.Store) error {
-	reminders, err := reloadAndSyncReminders(ctx, engine, store)
-	if err != nil {
-		return err
-	}
-	logx.Infof("app.reminders_synced source=history count=%d", len(reminders))
-	return nil
-}
-
-func reloadAndSyncReminders(ctx context.Context, engine *service.Engine, store *history.Store) ([]config.ReminderConfig, error) {
-	if engine == nil || store == nil {
-		return nil, nil
-	}
-	reminders, err := loadReminderConfigsFromHistory(ctx, store)
-	if err != nil {
-		return nil, err
-	}
-	engine.SetReminderConfigs(reminders)
-	return reminders, nil
-}
-
-func applyReminderUpdateToHistory(ctx context.Context, store *history.Store, patch config.ReminderPatch) error {
-	if store == nil {
+func cloneReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {
+	if len(reminders) == 0 {
 		return nil
 	}
-
-	id := patch.ID
-	if id <= 0 {
-		return errors.New("reminder id is required")
-	}
-
-	mutation := history.ReminderPatch{}
-	if patch.Name != nil {
-		if err := validateReminderNameInput(*patch.Name); err != nil {
-			return err
-		}
-		name := *patch.Name
-		if name == "" {
-			return errors.New("reminder name is required")
-		}
-		mutation.Name = &name
-	}
-	if patch.Enabled != nil {
-		mutation.Enabled = patch.Enabled
-	}
-	if patch.IntervalSec != nil {
-		if *patch.IntervalSec <= 0 {
-			return errors.New("reminder intervalSec must be > 0")
-		}
-		intervalSec := *patch.IntervalSec
-		mutation.IntervalSec = &intervalSec
-	}
-	if patch.BreakSec != nil {
-		if *patch.BreakSec <= 0 {
-			return errors.New("reminder breakSec must be > 0")
-		}
-		breakSec := *patch.BreakSec
-		mutation.BreakSec = &breakSec
-	}
-	if patch.ReminderType != nil {
-		if err := validateReminderTypeInput(*patch.ReminderType); err != nil {
-			return err
-		}
-		reminderType := *patch.ReminderType
-		mutation.ReminderType = &reminderType
-	}
-	return store.UpdateReminder(appContextOrBackground(ctx), id, mutation)
-}
-
-func normalizeReminderCreateInput(input config.ReminderCreateInput) (config.ReminderCreateInput, error) {
-	if err := validateReminderNameInput(input.Name); err != nil {
-		return config.ReminderCreateInput{}, err
-	}
-	if input.IntervalSec <= 0 {
-		return config.ReminderCreateInput{}, errors.New("reminder intervalSec must be > 0")
-	}
-	if input.BreakSec <= 0 {
-		return config.ReminderCreateInput{}, errors.New("reminder breakSec must be > 0")
-	}
-	if input.ReminderType == nil {
-		return config.ReminderCreateInput{}, errors.New("reminder reminderType is required")
-	}
-	if err := validateReminderTypeInput(*input.ReminderType); err != nil {
-		return config.ReminderCreateInput{}, err
-	}
-	return input, nil
-}
-
-func validateReminderNameInput(name string) error {
-	if strings.TrimSpace(name) == "" {
-		return errors.New("reminder name is required")
-	}
-	if name != strings.TrimSpace(name) {
-		return errors.New("reminder name cannot have leading or trailing spaces")
-	}
-	return nil
-}
-
-func validateReminderTypeInput(value string) error {
-	if value != "rest" && value != "notify" {
-		return errors.New("reminder reminderType must be rest or notify")
-	}
-	return nil
-}
-
-func createReminderInHistory(ctx context.Context, store *history.Store, input config.ReminderCreateInput) (int64, error) {
-	if store == nil {
-		return 0, nil
-	}
-
-	name := input.Name
-	enabled := true
-	if input.Enabled != nil {
-		enabled = *input.Enabled
-	}
-	intervalSec := input.IntervalSec
-	breakSec := input.BreakSec
-
-	return store.CreateReminder(appContextOrBackground(ctx), history.Reminder{
-		Name:         name,
-		Enabled:      enabled,
-		IntervalSec:  intervalSec,
-		BreakSec:     breakSec,
-		ReminderType: *input.ReminderType,
-	})
-}
-
-func deleteReminderInHistory(ctx context.Context, store *history.Store, reminderID int64) error {
-	if store == nil {
-		return nil
-	}
-	return store.DeleteReminder(appContextOrBackground(ctx), reminderID)
+	cloned := make([]config.ReminderConfig, 0, len(reminders))
+	cloned = append(cloned, reminders...)
+	return cloned
 }
 
 func ensureBuiltInRemindersForFirstInstall(ctx context.Context, store *history.Store, language string) error {
