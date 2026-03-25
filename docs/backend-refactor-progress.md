@@ -10,8 +10,8 @@
 
 - 分支：`codex/reminder-edit-unit-toggle`
 - 工作区：代码工作区稳定，本次为文档同步更新
-- 最近一次提交：`7e79da5`
-- 当前重构总体进度：约 `90%`（阶段 A/B/C/D 完成，阶段 E 深化中）
+- 最近一次提交：`fa8ae46`
+- 当前重构总体进度：约 `91%`（阶段 A/B/C/D 完成，阶段 E 深化中）
 
 ## 2. 已完成里程碑（按时间倒序）
 
@@ -21,11 +21,15 @@
 - 删除无实际价值的空别名端口：`ports/analytics_query_repo.go`。
 - 将 `runtime/engine/engine.go` 的纯辅助函数拆分到 `engine_helpers.go`，`engine.go` 从 993 行降到 777 行。
 
-2. `5bd01e9` `refactor(backend): route engine io dependencies through ports`
+2. `fa8ae46` `refactor(ports): consolidate runtime dependency ports into single file`
+- 将 runtime 依赖端口从多个小文件合并为 `ports/runtime_dependencies.go`。
+- 保持端口边界不变，同时减少目录碎片与认知跳转成本。
+
+3. `5bd01e9` `refactor(backend): route engine io dependencies through ports`
 - 新增并补齐运行时 IO 端口：`break/idle/lock/notifier/sound/startup/clock`。
 - `runtime/engine` 由直接依赖 `platform` 接口改为依赖 `backend/ports`。
 
-3. `4a8b4ef` `refactor(runtime): move scheduler session state into backend runtime layer`
+4. `4a8b4ef` `refactor(runtime): move scheduler session state into backend runtime layer`
 - 将 `scheduler/session/state` 从 `internal/core` 迁移到 `internal/backend/runtime`。
 - app 与 engine 引用路径同步切换，行为保持不变。
 
