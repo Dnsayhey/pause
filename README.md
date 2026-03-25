@@ -2,6 +2,11 @@
 
 Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当前 macOS 与 Windows 主流程已基本对齐，Linux 提供适配层并持续补齐原生体验。
 
+## 后端重构跟踪
+
+- 重构计划：`docs/backend-refactor-plan.md`
+- 进度日志：`docs/backend-refactor-progress.md`
+
 ## 当前能力
 
 ### 提醒与会话
