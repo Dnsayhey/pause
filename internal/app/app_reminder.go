@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	reminderdomain "pause/internal/backend/domain/reminder"
-	"pause/internal/core/history"
 	"pause/internal/core/reminder"
 	"pause/internal/logx"
 )
@@ -117,8 +116,8 @@ func cloneReminderConfigs(reminders []reminder.ReminderConfig) []reminder.Remind
 	return cloned
 }
 
-func ensureBuiltInRemindersForFirstInstall(ctx context.Context, store *history.HistoryStore, language string) error {
-	if store == nil {
+func ensureBuiltInRemindersForFirstInstall(ctx context.Context, reminders reminderService, language string) error {
+	if reminders == nil {
 		return nil
 	}
 
@@ -134,32 +133,32 @@ func ensureBuiltInRemindersForFirstInstall(ctx context.Context, store *history.H
 	standBreakSec := 5 * 60
 	waterIntervalSec := 45 * 60
 	waterBreakSec := 1
-	reminders := []history.Reminder{
+	seedReminders := []reminderdomain.CreateInput{
 		{
 			Name:         eyeName,
-			Enabled:      eyeEnabled,
 			IntervalSec:  eyeIntervalSec,
 			BreakSec:     eyeBreakSec,
-			ReminderType: restType,
+			Enabled:      &eyeEnabled,
+			ReminderType: &restType,
 		},
 		{
 			Name:         standName,
-			Enabled:      standEnabled,
 			IntervalSec:  standIntervalSec,
 			BreakSec:     standBreakSec,
-			ReminderType: restType,
+			Enabled:      &standEnabled,
+			ReminderType: &restType,
 		},
 		{
 			Name:         waterName,
-			Enabled:      waterEnabled,
 			IntervalSec:  waterIntervalSec,
 			BreakSec:     waterBreakSec,
-			ReminderType: notifyType,
+			Enabled:      &waterEnabled,
+			ReminderType: &notifyType,
 		},
 	}
 
-	for _, reminder := range reminders {
-		if _, err := store.CreateReminder(appContextOrBackground(ctx), reminder); err != nil && !errors.Is(err, history.ErrReminderAlreadyExists) {
+	for _, reminder := range seedReminders {
+		if _, err := reminders.Create(appContextOrBackground(ctx), reminder); err != nil && !errors.Is(err, reminderdomain.ErrAlreadyExists) {
 			return err
 		}
 	}

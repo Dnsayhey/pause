@@ -57,13 +57,20 @@ func (r *ReminderRepository) CreateReminder(ctx context.Context, input reminderd
 		reminderType = *input.ReminderType
 	}
 
-	return r.store.CreateReminder(ctx, corehistory.Reminder{
+	id, err := r.store.CreateReminder(ctx, corehistory.Reminder{
 		Name:         input.Name,
 		Enabled:      enabled,
 		IntervalSec:  input.IntervalSec,
 		BreakSec:     input.BreakSec,
 		ReminderType: reminderType,
 	})
+	if err != nil {
+		if errors.Is(err, corehistory.ErrReminderAlreadyExists) {
+			return 0, reminderdomain.ErrAlreadyExists
+		}
+		return 0, err
+	}
+	return id, nil
 }
 
 func (r *ReminderRepository) UpdateReminder(ctx context.Context, patch reminderdomain.Patch) error {
@@ -71,20 +78,34 @@ func (r *ReminderRepository) UpdateReminder(ctx context.Context, patch reminderd
 		return err
 	}
 
-	return r.store.UpdateReminder(ctx, patch.ID, corehistory.ReminderPatch{
+	err := r.store.UpdateReminder(ctx, patch.ID, corehistory.ReminderPatch{
 		Name:         patch.Name,
 		Enabled:      patch.Enabled,
 		IntervalSec:  patch.IntervalSec,
 		BreakSec:     patch.BreakSec,
 		ReminderType: patch.ReminderType,
 	})
+	if err != nil {
+		if errors.Is(err, corehistory.ErrReminderNotFound) {
+			return reminderdomain.ErrNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *ReminderRepository) DeleteReminder(ctx context.Context, reminderID int64) error {
 	if err := r.ensureStore(); err != nil {
 		return err
 	}
-	return r.store.DeleteReminder(ctx, reminderID)
+	err := r.store.DeleteReminder(ctx, reminderID)
+	if err != nil {
+		if errors.Is(err, corehistory.ErrReminderNotFound) {
+			return reminderdomain.ErrNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *ReminderRepository) ensureStore() error {

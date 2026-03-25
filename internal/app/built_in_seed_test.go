@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"pause/internal/backend/bootstrap"
 	"pause/internal/core/history"
 	"pause/internal/core/settings"
 )
@@ -12,17 +13,18 @@ import (
 func TestEnsureBuiltInRemindersForFirstInstallSeedsZhNames(t *testing.T) {
 	store := openHistoryStoreForSeedTest(t)
 	defer store.Close()
+	reminders := openReminderServiceForSeedTest(t, store)
 
-	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, settings.UILanguageZhCN); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), reminders, settings.UILanguageZhCN); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
-	reminders, err := store.ListReminders(context.Background())
+	items, err := store.ListReminders(context.Background())
 	if err != nil {
 		t.Fatalf("ListReminders() error = %v", err)
 	}
 
-	eye := requireReminderByName(t, reminders, "护眼")
+	eye := requireReminderByName(t, items, "护眼")
 	if !eye.Enabled {
 		t.Fatalf("expected eye enabled=true by default")
 	}
@@ -33,7 +35,7 @@ func TestEnsureBuiltInRemindersForFirstInstallSeedsZhNames(t *testing.T) {
 		t.Fatalf("expected eye type rest, got %q", eye.ReminderType)
 	}
 
-	stand := requireReminderByName(t, reminders, "站立")
+	stand := requireReminderByName(t, items, "站立")
 	if stand.Enabled {
 		t.Fatalf("expected stand enabled=false by default")
 	}
@@ -44,7 +46,7 @@ func TestEnsureBuiltInRemindersForFirstInstallSeedsZhNames(t *testing.T) {
 		t.Fatalf("expected stand type rest, got %q", stand.ReminderType)
 	}
 
-	water := requireReminderByName(t, reminders, "喝水")
+	water := requireReminderByName(t, items, "喝水")
 	if water.Enabled {
 		t.Fatalf("expected water enabled=false by default")
 	}
@@ -59,24 +61,26 @@ func TestEnsureBuiltInRemindersForFirstInstallSeedsZhNames(t *testing.T) {
 func TestEnsureBuiltInRemindersForFirstInstallSeedsEnglishNames(t *testing.T) {
 	store := openHistoryStoreForSeedTest(t)
 	defer store.Close()
+	reminders := openReminderServiceForSeedTest(t, store)
 
-	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, settings.UILanguageEnUS); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), reminders, settings.UILanguageEnUS); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
-	reminders, err := store.ListReminders(context.Background())
+	items, err := store.ListReminders(context.Background())
 	if err != nil {
 		t.Fatalf("ListReminders() error = %v", err)
 	}
 
-	requireReminderByName(t, reminders, "Eye")
-	requireReminderByName(t, reminders, "Stand")
-	requireReminderByName(t, reminders, "Hydrate")
+	requireReminderByName(t, items, "Eye")
+	requireReminderByName(t, items, "Stand")
+	requireReminderByName(t, items, "Hydrate")
 }
 
 func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *testing.T) {
 	store := openHistoryStoreForSeedTest(t)
 	defer store.Close()
+	reminders := openReminderServiceForSeedTest(t, store)
 
 	customName := "护眼"
 	enabled := false
@@ -93,15 +97,15 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 		t.Fatalf("CreateReminder(eye) error = %v", err)
 	}
 
-	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, settings.UILanguageZhCN); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), reminders, settings.UILanguageZhCN); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
-	reminders, err := store.ListReminders(context.Background())
+	items, err := store.ListReminders(context.Background())
 	if err != nil {
 		t.Fatalf("ListReminders() error = %v", err)
 	}
-	eye := requireReminderByName(t, reminders, "护眼")
+	eye := requireReminderByName(t, items, "护眼")
 	if eye.Enabled {
 		t.Fatalf("expected existing eye enabled=false to remain unchanged")
 	}
@@ -109,8 +113,8 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 		t.Fatalf("expected existing eye values unchanged, got interval=%d break=%d", eye.IntervalSec, eye.BreakSec)
 	}
 
-	requireReminderByName(t, reminders, "站立")
-	requireReminderByName(t, reminders, "喝水")
+	requireReminderByName(t, items, "站立")
+	requireReminderByName(t, items, "喝水")
 }
 
 func openHistoryStoreForSeedTest(t *testing.T) *history.HistoryStore {
@@ -121,6 +125,15 @@ func openHistoryStoreForSeedTest(t *testing.T) *history.HistoryStore {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	return store
+}
+
+func openReminderServiceForSeedTest(t *testing.T, store *history.HistoryStore) reminderService {
+	t.Helper()
+	container, err := bootstrap.NewContainer(store)
+	if err != nil {
+		t.Fatalf("NewContainer() error = %v", err)
+	}
+	return container.ReminderService
 }
 
 func requireReminderByName(t *testing.T, reminders []history.Reminder, name string) history.Reminder {

@@ -75,17 +75,17 @@ func NewApp(configPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	if store.WasCreated() {
-		language := resolveEffectiveLanguage(store.Get().UI.Language)
-		if err := ensureBuiltInRemindersForFirstInstall(context.Background(), historyStore, language); err != nil {
-			_ = historyStore.Close()
-			return nil, err
-		}
-	}
 	container, err := bootstrap.NewContainer(historyStore)
 	if err != nil {
 		_ = historyStore.Close()
 		return nil, err
+	}
+	if store.WasCreated() {
+		language := resolveEffectiveLanguage(store.Get().UI.Language)
+		if err := ensureBuiltInRemindersForFirstInstall(context.Background(), container.ReminderService, language); err != nil {
+			_ = historyStore.Close()
+			return nil, err
+		}
 	}
 
 	adapters := platform.NewAdapters(meta.EffectiveAppBundleID())
