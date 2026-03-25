@@ -3,7 +3,6 @@ package history
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -86,31 +85,6 @@ type AnalyticsBreakTypeDistribution struct {
 	ToSec          int64                                `json:"toSec"`
 	TotalTriggered int                                  `json:"totalTriggered"`
 	Items          []AnalyticsBreakTypeDistributionItem `json:"items"`
-}
-
-type AnalyticsHeatmapMetric string
-
-const (
-	AnalyticsHeatmapMetricSkipRate       AnalyticsHeatmapMetric = "skip_rate"
-	AnalyticsHeatmapMetricCompletionRate AnalyticsHeatmapMetric = "completion_rate"
-	AnalyticsHeatmapMetricTriggeredCount AnalyticsHeatmapMetric = "triggered_count"
-)
-
-type AnalyticsHeatmapCell struct {
-	Day            string  `json:"day"`
-	Hour           int     `json:"hour"`
-	TriggeredCount int     `json:"triggeredCount"`
-	CompletedCount int     `json:"completedCount"`
-	SkippedCount   int     `json:"skippedCount"`
-	CanceledCount  int     `json:"canceledCount"`
-	Value          float64 `json:"value"`
-}
-
-type AnalyticsHourlyHeatmap struct {
-	FromSec int64                  `json:"fromSec"`
-	ToSec   int64                  `json:"toSec"`
-	Metric  AnalyticsHeatmapMetric `json:"metric"`
-	Cells   []AnalyticsHeatmapCell `json:"cells"`
 }
 
 func (s *Store) QueryAnalyticsWeeklyStats(from time.Time, to time.Time) (AnalyticsWeeklyStats, error) {
@@ -279,88 +253,6 @@ func (s *Store) QueryAnalyticsBreakTypeDistribution(from time.Time, to time.Time
 	return result, nil
 }
 
-func (s *Store) QueryAnalyticsHourlyHeatmap(from time.Time, to time.Time, metric AnalyticsHeatmapMetric) (AnalyticsHourlyHeatmap, error) {
-	if s == nil || s.db == nil {
-		return AnalyticsHourlyHeatmap{}, errors.New("history store is not initialized")
-	}
-	startUnix, endUnix, err := normalizeAnalyticsRange(from, to)
-	if err != nil {
-		return AnalyticsHourlyHeatmap{}, err
-	}
-	normalizedMetric, err := normalizeAnalyticsHeatmapMetric(metric)
-	if err != nil {
-		return AnalyticsHourlyHeatmap{}, err
-	}
-
-	rows, err := s.db.QueryContext(
-		context.Background(),
-		`WITH overlay_sessions AS (
-		   SELECT DISTINCT session_id
-		   FROM break_session_reminders
-		   WHERE reminder_type_snapshot = 'rest'
-		 ),
-		 sessions AS (
-		   SELECT bs.started_at, bs.status
-		   FROM break_sessions bs
-		   INNER JOIN overlay_sessions os ON os.session_id = bs.id
-		   WHERE bs.started_at >= ?
-		     AND bs.started_at < ?
-		 )
-		 SELECT
-		   strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime') AS day,
-		   CAST(strftime('%H', started_at, 'unixepoch', 'localtime') AS INTEGER) AS hour,
-		   COUNT(*) AS triggered_count,
-		   COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_count,
-		   COALESCE(SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END), 0) AS skipped_count,
-		   COALESCE(SUM(CASE WHEN status = 'canceled' THEN 1 ELSE 0 END), 0) AS canceled_count
-		 FROM sessions
-		 GROUP BY day, hour
-		 ORDER BY day ASC, hour ASC`,
-		startUnix,
-		endUnix,
-	)
-	if err != nil {
-		return AnalyticsHourlyHeatmap{}, err
-	}
-	defer rows.Close()
-
-	result := AnalyticsHourlyHeatmap{
-		FromSec: startUnix,
-		ToSec:   endUnix,
-		Metric:  normalizedMetric,
-		Cells:   []AnalyticsHeatmapCell{},
-	}
-
-	for rows.Next() {
-		cell := AnalyticsHeatmapCell{}
-		if err := rows.Scan(
-			&cell.Day,
-			&cell.Hour,
-			&cell.TriggeredCount,
-			&cell.CompletedCount,
-			&cell.SkippedCount,
-			&cell.CanceledCount,
-		); err != nil {
-			return AnalyticsHourlyHeatmap{}, err
-		}
-		switch normalizedMetric {
-		case AnalyticsHeatmapMetricCompletionRate:
-			cell.Value = ratio(cell.CompletedCount, cell.TriggeredCount)
-		case AnalyticsHeatmapMetricSkipRate:
-			cell.Value = ratio(cell.SkippedCount, cell.TriggeredCount)
-		case AnalyticsHeatmapMetricTriggeredCount:
-			cell.Value = float64(cell.TriggeredCount)
-		default:
-			return AnalyticsHourlyHeatmap{}, fmt.Errorf("unsupported metric: %s", normalizedMetric)
-		}
-		result.Cells = append(result.Cells, cell)
-	}
-	if err := rows.Err(); err != nil {
-		return AnalyticsHourlyHeatmap{}, err
-	}
-	return result, nil
-}
-
 func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) ([]AnalyticsReminderStat, error) {
 	rows, err := s.db.QueryContext(
 		context.Background(),
@@ -517,15 +409,4 @@ func ratio(numerator int, denominator int) float64 {
 		return 0
 	}
 	return float64(numerator) / float64(denominator)
-}
-
-func normalizeAnalyticsHeatmapMetric(metric AnalyticsHeatmapMetric) (AnalyticsHeatmapMetric, error) {
-	switch metric {
-	case "":
-		return AnalyticsHeatmapMetricSkipRate, nil
-	case AnalyticsHeatmapMetricSkipRate, AnalyticsHeatmapMetricCompletionRate, AnalyticsHeatmapMetricTriggeredCount:
-		return metric, nil
-	default:
-		return "", errors.New("invalid heatmap metric")
-	}
 }

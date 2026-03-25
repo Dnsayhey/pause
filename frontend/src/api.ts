@@ -1,7 +1,5 @@
 import type {
   AnalyticsBreakTypeDistribution,
-  AnalyticsHeatmapMetric,
-  AnalyticsHourlyHeatmap,
   AnalyticsSummary,
   AnalyticsTrend,
   AnalyticsWeeklyStats,
@@ -27,7 +25,6 @@ type Backend = {
   GetAnalyticsSummary: (fromSec: number, toSec: number) => Promise<AnalyticsSummary>;
   GetAnalyticsTrendByDay: (fromSec: number, toSec: number) => Promise<AnalyticsTrend>;
   GetAnalyticsBreakTypeDistribution: (fromSec: number, toSec: number) => Promise<AnalyticsBreakTypeDistribution>;
-  GetAnalyticsHourlyHeatmap: (fromSec: number, toSec: number, metric: string) => Promise<AnalyticsHourlyHeatmap>;
   Pause: () => Promise<RuntimeState>;
   Resume: () => Promise<RuntimeState>;
   SkipCurrentBreak: () => Promise<RuntimeState>;
@@ -102,14 +99,6 @@ export async function getAnalyticsTrendByDay(fromSec: number, toSec: number): Pr
 
 export async function getAnalyticsBreakTypeDistribution(fromSec: number, toSec: number): Promise<AnalyticsBreakTypeDistribution> {
   return requireBackend().GetAnalyticsBreakTypeDistribution(fromSec, toSec);
-}
-
-export async function getAnalyticsHourlyHeatmap(
-  fromSec: number,
-  toSec: number,
-  metric: AnalyticsHeatmapMetric = 'skip_rate'
-): Promise<AnalyticsHourlyHeatmap> {
-  return requireBackend().GetAnalyticsHourlyHeatmap(fromSec, toSec, metric);
 }
 
 export async function skipCurrentBreak(): Promise<RuntimeState> {

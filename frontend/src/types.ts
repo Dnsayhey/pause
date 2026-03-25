@@ -162,22 +162,3 @@ export type AnalyticsBreakTypeDistribution = {
   totalTriggered: number;
   items: AnalyticsBreakTypeDistributionItem[];
 };
-
-export type AnalyticsHeatmapMetric = 'skip_rate' | 'completion_rate' | 'triggered_count';
-
-export type AnalyticsHeatmapCell = {
-  day: string;
-  hour: number;
-  triggeredCount: number;
-  completedCount: number;
-  skippedCount: number;
-  canceledCount: number;
-  value: number;
-};
-
-export type AnalyticsHourlyHeatmap = {
-  fromSec: number;
-  toSec: number;
-  metric: AnalyticsHeatmapMetric;
-  cells: AnalyticsHeatmapCell[];
-};

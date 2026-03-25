@@ -509,17 +509,6 @@ func (a *App) GetAnalyticsBreakTypeDistribution(fromSec int64, toSec int64) (his
 	return a.history.QueryAnalyticsBreakTypeDistribution(from, to)
 }
 
-func (a *App) GetAnalyticsHourlyHeatmap(fromSec int64, toSec int64, metric string) (history.AnalyticsHourlyHeatmap, error) {
-	if a == nil || a.history == nil {
-		return history.AnalyticsHourlyHeatmap{}, errors.New("history store unavailable")
-	}
-	from, to, err := resolveAnalyticsRange(fromSec, toSec)
-	if err != nil {
-		return history.AnalyticsHourlyHeatmap{}, err
-	}
-	return a.history.QueryAnalyticsHourlyHeatmap(from, to, history.AnalyticsHeatmapMetric(strings.TrimSpace(metric)))
-}
-
 func resolveAnalyticsRange(fromSec int64, toSec int64) (time.Time, time.Time, error) {
 	if fromSec == 0 && toSec == 0 {
 		start, end := currentWeekRange(time.Now())

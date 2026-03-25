@@ -111,12 +111,3 @@ func TestQueryAnalyticsBreakTypeDistribution(t *testing.T) {
 		t.Fatalf("expected stand reminder distribution item")
 	}
 }
-
-func TestQueryAnalyticsHourlyHeatmapRejectsInvalidMetric(t *testing.T) {
-	store, fixture := prepareAnalyticsFixture(t)
-	defer store.Close()
-
-	if _, err := store.QueryAnalyticsHourlyHeatmap(fixture.from, fixture.to, AnalyticsHeatmapMetric("bad_metric")); err == nil {
-		t.Fatalf("expected invalid metric to fail")
-	}
-}
