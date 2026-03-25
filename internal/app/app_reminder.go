@@ -157,10 +157,5 @@ func ensureBuiltInRemindersForFirstInstall(ctx context.Context, reminders remind
 		},
 	}
 
-	for _, reminder := range seedReminders {
-		if _, err := reminders.Create(appContextOrBackground(ctx), reminder); err != nil && !errors.Is(err, reminderdomain.ErrAlreadyExists) {
-			return err
-		}
-	}
-	return nil
+	return reminders.EnsureDefaults(appContextOrBackground(ctx), seedReminders)
 }

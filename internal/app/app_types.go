@@ -29,6 +29,7 @@ type historyCloser interface {
 
 type reminderService interface {
 	List(ctx context.Context) ([]reminderdomain.Reminder, error)
+	EnsureDefaults(ctx context.Context, inputs []reminderdomain.CreateInput) error
 	Create(ctx context.Context, input reminderdomain.CreateInput) ([]reminderdomain.Reminder, error)
 	Update(ctx context.Context, patch reminderdomain.Patch) ([]reminderdomain.Reminder, error)
 	Delete(ctx context.Context, reminderID int64) ([]reminderdomain.Reminder, error)

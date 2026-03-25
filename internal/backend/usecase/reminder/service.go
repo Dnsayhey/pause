@@ -45,6 +45,26 @@ func (s *Service) Create(ctx context.Context, input reminderdomain.CreateInput) 
 	return s.List(ctx)
 }
 
+func (s *Service) EnsureDefaults(ctx context.Context, inputs []reminderdomain.CreateInput) error {
+	for _, input := range inputs {
+		if input.ReminderType == nil {
+			return errors.New("reminder reminderType is required")
+		}
+
+		enabled := true
+		if input.Enabled != nil {
+			enabled = *input.Enabled
+		}
+		normalized := input
+		normalized.Enabled = &enabled
+
+		if _, err := s.repo.CreateReminder(normalizeContext(ctx), normalized); err != nil && !errors.Is(err, reminderdomain.ErrAlreadyExists) {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) Update(ctx context.Context, patch reminderdomain.Patch) ([]reminderdomain.Reminder, error) {
 	if err := s.repo.UpdateReminder(normalizeContext(ctx), patch); err != nil {
 		return nil, err
