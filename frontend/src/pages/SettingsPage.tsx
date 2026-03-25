@@ -11,6 +11,7 @@ type SettingsPageProps = {
   showTrayCountdownOption: boolean;
   onLaunchAtLoginChange: (enabled: boolean) => Promise<void>;
   onPatch: (patch: SettingsPatch) => Promise<void>;
+  onThemeLabelDoubleClick?: () => void;
 };
 
 export function SettingsPage({
@@ -21,7 +22,8 @@ export function SettingsPage({
   soundModeSelectValue,
   showTrayCountdownOption,
   onLaunchAtLoginChange,
-  onPatch
+  onPatch,
+  onThemeLabelDoubleClick
 }: SettingsPageProps) {
   return (
     <section className="mt-3 px-2 sm:px-3">
@@ -34,6 +36,7 @@ export function SettingsPage({
         showTrayCountdownOption={showTrayCountdownOption}
         onLaunchAtLoginChange={onLaunchAtLoginChange}
         onPatch={onPatch}
+        onThemeLabelDoubleClick={onThemeLabelDoubleClick}
       />
     </section>
   );

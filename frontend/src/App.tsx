@@ -10,6 +10,18 @@ import { RemindersPage } from './pages/RemindersPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 const AnalyticsPage = lazy(async () => import('./pages/AnalyticsPage').then((module) => ({ default: module.AnalyticsPage })));
+const DARK_THEME_VARIANT_STORAGE_KEY = 'pause.darkThemeVariant';
+type DarkThemeVariant = 'default' | 'alt';
+
+function readDarkThemeVariant(): DarkThemeVariant {
+  if (typeof window === 'undefined') return 'default';
+  try {
+    const raw = window.localStorage.getItem(DARK_THEME_VARIANT_STORAGE_KEY);
+    return raw === 'alt' ? 'alt' : 'default';
+  } catch {
+    return 'default';
+  }
+}
 
 function detectPlatformClass(): string {
   if (typeof navigator === 'undefined') return 'other';
@@ -36,6 +48,7 @@ export function App() {
   const [isWindowsClosePressed, setIsWindowsClosePressed] = useState(false);
   const [createPanelRequestId, setCreatePanelRequestId] = useState(0);
   const [createPanelAnchor, setCreatePanelAnchor] = useState<{ top: number; right: number } | null>(null);
+  const [darkThemeVariant, setDarkThemeVariant] = useState<DarkThemeVariant>(() => readDarkThemeVariant());
   const addReminderButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const hasAssignedInitialFocusRef = useRef(false);
@@ -87,11 +100,29 @@ export function App() {
     } else {
       delete document.body.dataset.theme;
     }
+    if (theme === 'dark') {
+      document.body.dataset.themeVariant = darkThemeVariant;
+    } else {
+      delete document.body.dataset.themeVariant;
+    }
     return () => {
       delete document.body.dataset.language;
       delete document.body.dataset.theme;
+      delete document.body.dataset.themeVariant;
     };
-  }, [runtime?.effectiveLanguage, runtime?.effectiveTheme]);
+  }, [darkThemeVariant, runtime?.effectiveLanguage, runtime?.effectiveTheme]);
+
+  const toggleDarkThemeVariant = useCallback(() => {
+    setDarkThemeVariant((prev) => {
+      const next: DarkThemeVariant = prev === 'default' ? 'alt' : 'default';
+      try {
+        window.localStorage.setItem(DARK_THEME_VARIANT_STORAGE_KEY, next);
+      } catch {
+        // ignore localStorage write errors
+      }
+      return next;
+    });
+  }, []);
 
   const resetWindowsCloseVisualState = useCallback(() => {
     setIsWindowsCloseHovered(false);
@@ -359,6 +390,7 @@ export function App() {
                   showTrayCountdownOption={platformClass !== 'win'}
                   onLaunchAtLoginChange={applyLaunchAtLogin}
                   onPatch={applyPatch}
+                  onThemeLabelDoubleClick={toggleDarkThemeVariant}
                 />
               }
             />

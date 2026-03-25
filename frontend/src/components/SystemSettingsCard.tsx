@@ -12,6 +12,7 @@ type SystemSettingsCardProps = {
   showTrayCountdownOption: boolean;
   onLaunchAtLoginChange: (enabled: boolean) => Promise<void>;
   onPatch: (patch: SettingsPatch) => Promise<void>;
+  onThemeLabelDoubleClick?: () => void;
 };
 
 export function SystemSettingsCard({
@@ -22,7 +23,8 @@ export function SystemSettingsCard({
   soundModeSelectValue,
   showTrayCountdownOption,
   onLaunchAtLoginChange,
-  onPatch
+  onPatch,
+  onThemeLabelDoubleClick
 }: SystemSettingsCardProps) {
   return (
     <section>
@@ -59,7 +61,9 @@ export function SystemSettingsCard({
           />
         </div>
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
-          <span className="text-[var(--text-primary)]">{t(locale, 'theme')}</span>
+          <span className="text-[var(--text-primary)]" onDoubleClick={onThemeLabelDoubleClick}>
+            {t(locale, 'theme')}
+          </span>
           <PillSelect
             variant="minimal"
             value={settings.ui.theme}
