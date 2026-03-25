@@ -143,10 +143,8 @@ func (a *App) Startup(ctx context.Context) {
 		if err := a.settingsSvc.SyncPlatformSettings(appContextOrBackground(ctx)); err != nil {
 			logx.Warnf("app.startup sync_platform_settings_err=%v", err)
 		}
-	} else if a.engine != nil {
-		if err := a.engine.SyncPlatformSettings(); err != nil {
-			logx.Warnf("app.startup sync_platform_settings_err=%v", err)
-		}
+	} else {
+		logx.Warnf("app.startup sync_platform_settings_skipped reason=settings_service_unavailable")
 	}
 	a.engine.Start(ctx)
 	if a.desktop != nil {

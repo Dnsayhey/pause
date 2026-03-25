@@ -14,9 +14,6 @@ func (a *App) GetSettings() settings.Settings {
 	if a.settingsSvc != nil {
 		return a.settingsSvc.Get(appContextOrBackground(a.ctx))
 	}
-	if a.engine != nil {
-		return a.engine.GetSettings()
-	}
 	return settings.DefaultSettings()
 }
 
@@ -25,15 +22,7 @@ func (a *App) UpdateSettings(patch settings.SettingsPatch) (settings.Settings, e
 		return settings.Settings{}, errors.New("app unavailable")
 	}
 	if a.settingsSvc == nil {
-		if a.engine == nil {
-			return settings.Settings{}, errors.New("settings service unavailable")
-		}
-		nextSettings, err := a.engine.UpdateSettings(patch)
-		if err != nil {
-			logx.Warnf("app.update_settings_err err=%v", err)
-			return settings.Settings{}, err
-		}
-		return nextSettings, nil
+		return settings.Settings{}, errors.New("settings service unavailable")
 	}
 
 	nextSettings, err := a.settingsSvc.Update(appContextOrBackground(a.ctx), patch)
@@ -51,10 +40,7 @@ func (a *App) GetLaunchAtLogin() (bool, error) {
 	if a.settingsSvc != nil {
 		return a.settingsSvc.GetLaunchAtLogin(appContextOrBackground(a.ctx))
 	}
-	if a.engine == nil {
-		return false, errors.New("settings service unavailable")
-	}
-	return a.engine.GetLaunchAtLogin()
+	return false, errors.New("settings service unavailable")
 }
 
 func (a *App) SetLaunchAtLogin(enabled bool) (bool, error) {
@@ -64,8 +50,5 @@ func (a *App) SetLaunchAtLogin(enabled bool) (bool, error) {
 	if a.settingsSvc != nil {
 		return a.settingsSvc.SetLaunchAtLogin(appContextOrBackground(a.ctx), enabled)
 	}
-	if a.engine == nil {
-		return false, errors.New("settings service unavailable")
-	}
-	return a.engine.SetLaunchAtLogin(enabled)
+	return false, errors.New("settings service unavailable")
 }
