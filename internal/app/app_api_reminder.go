@@ -9,7 +9,7 @@ import (
 	"pause/internal/logx"
 )
 
-func (a *App) GetReminders() ([]reminderdomain.Reminder, error) {
+func (a *App) GetReminders() ([]ReminderConfig, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
@@ -17,49 +17,36 @@ func (a *App) GetReminders() ([]reminderdomain.Reminder, error) {
 	if err != nil {
 		return nil, err
 	}
-	return reminderDefsToConfig(defs), nil
+	return reminderConfigsFromDomain(defs), nil
 }
 
-func (a *App) UpdateReminder(patch reminderdomain.Patch) ([]reminderdomain.Reminder, error) {
+func (a *App) UpdateReminder(patch ReminderPatch) ([]ReminderConfig, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
 	ctx := appContextOrBackground(a.ctx)
-	defs, err := a.reminders.Update(ctx, reminderdomain.Patch{
-		ID:           patch.ID,
-		Name:         patch.Name,
-		Enabled:      patch.Enabled,
-		IntervalSec:  patch.IntervalSec,
-		BreakSec:     patch.BreakSec,
-		ReminderType: patch.ReminderType,
-	})
+	defs, err := a.reminders.Update(ctx, reminderPatchToDomain(patch))
 	if err != nil {
 		logx.Warnf("app.update_reminder_err stage=usecase_update patch_id=%d err=%v", patch.ID, err)
 		return nil, err
 	}
-	reminders := reminderDefsToConfig(defs)
+	reminders := reminderConfigsFromDomain(defs)
 	logx.Infof("app.reminder_updated id=%d count=%d", patch.ID, len(reminders))
 	return reminders, nil
 }
 
-func (a *App) CreateReminder(input reminderdomain.CreateInput) ([]reminderdomain.Reminder, error) {
+func (a *App) CreateReminder(input ReminderCreateInput) ([]ReminderConfig, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
 
 	ctx := appContextOrBackground(a.ctx)
-	defs, err := a.reminders.Create(ctx, reminderdomain.CreateInput{
-		Name:         input.Name,
-		IntervalSec:  input.IntervalSec,
-		BreakSec:     input.BreakSec,
-		Enabled:      input.Enabled,
-		ReminderType: input.ReminderType,
-	})
+	defs, err := a.reminders.Create(ctx, reminderCreateInputToDomain(input))
 	if err != nil {
 		logx.Warnf("app.create_reminder_err stage=usecase_create err=%v", err)
 		return nil, err
 	}
-	reminders := reminderDefsToConfig(defs)
+	reminders := reminderConfigsFromDomain(defs)
 	createdID := int64(0)
 	if len(reminders) > 0 {
 		createdID = reminders[len(reminders)-1].ID
@@ -68,7 +55,7 @@ func (a *App) CreateReminder(input reminderdomain.CreateInput) ([]reminderdomain
 	return reminders, nil
 }
 
-func (a *App) DeleteReminder(reminderID int64) ([]reminderdomain.Reminder, error) {
+func (a *App) DeleteReminder(reminderID int64) ([]ReminderConfig, error) {
 	if a == nil || a.reminders == nil {
 		return nil, errors.New("reminder service unavailable")
 	}
@@ -79,19 +66,19 @@ func (a *App) DeleteReminder(reminderID int64) ([]reminderdomain.Reminder, error
 		logx.Warnf("app.delete_reminder_err stage=usecase_delete id=%d err=%v", id, err)
 		return nil, err
 	}
-	reminders := reminderDefsToConfig(defs)
+	reminders := reminderConfigsFromDomain(defs)
 	logx.Infof("app.reminder_deleted id=%d count=%d", id, len(reminders))
 	return reminders, nil
 }
 
-func reminderDefsToConfig(defs []reminderdomain.Reminder) []reminderdomain.Reminder {
-	result := make([]reminderdomain.Reminder, 0, len(defs))
+func reminderConfigsFromDomain(defs []reminderdomain.Reminder) []ReminderConfig {
+	result := make([]ReminderConfig, 0, len(defs))
 	for _, def := range defs {
 		id := def.ID
 		if id <= 0 {
 			continue
 		}
-		result = append(result, reminderdomain.Reminder{
+		result = append(result, ReminderConfig{
 			ID:           id,
 			Name:         strings.TrimSpace(def.Name),
 			Enabled:      def.Enabled,
@@ -103,11 +90,11 @@ func reminderDefsToConfig(defs []reminderdomain.Reminder) []reminderdomain.Remin
 	return cloneReminderConfigs(result)
 }
 
-func cloneReminderConfigs(reminders []reminderdomain.Reminder) []reminderdomain.Reminder {
+func cloneReminderConfigs(reminders []ReminderConfig) []ReminderConfig {
 	if len(reminders) == 0 {
 		return nil
 	}
-	cloned := make([]reminderdomain.Reminder, 0, len(reminders))
+	cloned := make([]ReminderConfig, 0, len(reminders))
 	cloned = append(cloned, reminders...)
 	return cloned
 }

@@ -22,7 +22,7 @@ type Runtime struct {
 	Settings         *settingsjson.Store
 	History          *historydb.Store
 	HistoryPath      string
-	Engine           *service.Engine
+	Engine           RuntimeEngine
 	ReminderService  *reminderusecase.Service
 	AnalyticsService *analyticsusecase.Service
 	SettingsService  *settingsusecase.Service
@@ -77,7 +77,7 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		Settings:         store,
 		History:          historyStore,
 		HistoryPath:      historyPath,
-		Engine:           engine,
+		Engine:           WrapEngine(engine),
 		ReminderService:  container.ReminderService,
 		AnalyticsService: container.AnalyticsService,
 		SettingsService:  settingsService,

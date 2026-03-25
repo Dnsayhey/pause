@@ -3,34 +3,34 @@ package app
 import (
 	"errors"
 
-	"pause/internal/backend/domain/settings"
+	settingsdomain "pause/internal/backend/domain/settings"
 	"pause/internal/logx"
 )
 
-func (a *App) GetSettings() settings.Settings {
+func (a *App) GetSettings() Settings {
 	if a == nil {
-		return settings.DefaultSettings()
+		return settingsFromDomain(settingsdomain.DefaultSettings())
 	}
 	if a.settingsSvc != nil {
-		return a.settingsSvc.Get(appContextOrBackground(a.ctx))
+		return settingsFromDomain(a.settingsSvc.Get(appContextOrBackground(a.ctx)))
 	}
-	return settings.DefaultSettings()
+	return settingsFromDomain(settingsdomain.DefaultSettings())
 }
 
-func (a *App) UpdateSettings(patch settings.SettingsPatch) (settings.Settings, error) {
+func (a *App) UpdateSettings(patch SettingsPatch) (Settings, error) {
 	if a == nil {
-		return settings.Settings{}, errors.New("app unavailable")
+		return Settings{}, errors.New("app unavailable")
 	}
 	if a.settingsSvc == nil {
-		return settings.Settings{}, errors.New("settings service unavailable")
+		return Settings{}, errors.New("settings service unavailable")
 	}
 
-	nextSettings, err := a.settingsSvc.Update(appContextOrBackground(a.ctx), patch)
+	nextSettings, err := a.settingsSvc.Update(appContextOrBackground(a.ctx), settingsPatchToDomain(patch))
 	if err != nil {
 		logx.Warnf("app.update_settings_err err=%v", err)
-		return settings.Settings{}, err
+		return Settings{}, err
 	}
-	return nextSettings, nil
+	return settingsFromDomain(nextSettings), nil
 }
 
 func (a *App) GetLaunchAtLogin() (bool, error) {

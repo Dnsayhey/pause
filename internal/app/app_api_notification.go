@@ -10,7 +10,7 @@ import (
 	"pause/internal/logx"
 )
 
-func (a *App) SendBreakFallbackNotification(state state.RuntimeState) {
+func (a *App) sendBreakFallbackNotification(state state.RuntimeState) {
 	if a.notifier == nil {
 		logx.Warnf("overlay.fallback_notification_skipped reason=no_notifier")
 		return

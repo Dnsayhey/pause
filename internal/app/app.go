@@ -39,7 +39,7 @@ func NewApp(configPath string) (*App, error) {
 	)
 
 	return &App{
-		engine:      newEngineRuntime(runtime.Engine),
+		engine:      runtime.Engine,
 		history:     runtime.History,
 		reminders:   runtime.ReminderService,
 		analytics:   runtime.AnalyticsService,

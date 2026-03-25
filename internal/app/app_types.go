@@ -3,13 +3,12 @@ package app
 import (
 	"context"
 	"sync/atomic"
-	"time"
 
+	"pause/internal/backend/bootstrap"
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
 	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
-	"pause/internal/backend/runtime/state"
 )
 
 type App struct {
@@ -24,24 +23,12 @@ type App struct {
 	quitRequested atomic.Bool
 }
 
-type engineRuntime interface {
-	Start(ctx context.Context)
-	GetSettings() settings.Settings
-	GetRuntimeState(now time.Time) state.RuntimeState
-	Pause(now time.Time) (state.RuntimeState, error)
-	Resume(now time.Time) state.RuntimeState
-	PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
-	ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
-	SkipCurrentBreak(now time.Time, mode skipMode) (state.RuntimeState, error)
-	StartBreakNow(now time.Time) (state.RuntimeState, error)
-	StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error)
-}
-
-type skipMode string
+type engineRuntime = bootstrap.RuntimeEngine
+type skipMode = bootstrap.SkipMode
 
 const (
-	skipModeNormal    skipMode = "normal"
-	skipModeEmergency skipMode = "emergency"
+	skipModeNormal    skipMode = bootstrap.SkipModeNormal
+	skipModeEmergency skipMode = bootstrap.SkipModeEmergency
 )
 
 type historyCloser interface {

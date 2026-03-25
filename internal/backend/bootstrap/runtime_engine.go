@@ -1,4 +1,4 @@
-package app
+package bootstrap
 
 import (
 	"context"
@@ -9,11 +9,31 @@ import (
 	"pause/internal/backend/runtime/state"
 )
 
+type SkipMode string
+
+const (
+	SkipModeNormal    SkipMode = "normal"
+	SkipModeEmergency SkipMode = "emergency"
+)
+
+type RuntimeEngine interface {
+	Start(ctx context.Context)
+	GetSettings() settings.Settings
+	GetRuntimeState(now time.Time) state.RuntimeState
+	Pause(now time.Time) (state.RuntimeState, error)
+	Resume(now time.Time) state.RuntimeState
+	PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
+	ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
+	SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error)
+	StartBreakNow(now time.Time) (state.RuntimeState, error)
+	StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error)
+}
+
 type runtimeEngineAdapter struct {
 	engine *service.Engine
 }
 
-func newEngineRuntime(engine *service.Engine) engineRuntime {
+func WrapEngine(engine *service.Engine) RuntimeEngine {
 	if engine == nil {
 		return nil
 	}
@@ -48,7 +68,7 @@ func (a *runtimeEngineAdapter) ResumeReminder(reminderID int64, now time.Time) (
 	return a.engine.ResumeReminder(reminderID, now)
 }
 
-func (a *runtimeEngineAdapter) SkipCurrentBreak(now time.Time, mode skipMode) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error) {
 	return a.engine.SkipCurrentBreak(now, service.SkipMode(mode))
 }
 

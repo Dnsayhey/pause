@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"pause/internal/backend/bootstrap"
-	"pause/internal/backend/domain/reminder"
 	service "pause/internal/backend/runtime/engine"
 	"pause/internal/backend/storage/historydb"
 	"pause/internal/backend/storage/settingsjson"
@@ -37,11 +36,11 @@ func newTestAppWithHistory(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("ReminderService.List() error = %v", err)
 	}
-	engine.SetReminderConfigs(reminderDefsToConfig(defs))
+	engine.SetReminderConfigs(defs)
 
 	return &App{
 		ctx:       context.Background(),
-		engine:    newEngineRuntime(engine),
+		engine:    bootstrap.WrapEngine(engine),
 		history:   historyStore,
 		reminders: container.ReminderService,
 	}
@@ -50,7 +49,7 @@ func newTestAppWithHistory(t *testing.T) *App {
 func TestAppCreateReminderRejectsMissingType(t *testing.T) {
 	app := newTestAppWithHistory(t)
 
-	_, err := app.CreateReminder(reminder.CreateInput{
+	_, err := app.CreateReminder(ReminderCreateInput{
 		Name:        "Focus",
 		IntervalSec: 1500,
 		BreakSec:    30,
@@ -64,7 +63,7 @@ func TestAppReminderCRUDLifecycle(t *testing.T) {
 	app := newTestAppWithHistory(t)
 
 	restType := "rest"
-	created, err := app.CreateReminder(reminder.CreateInput{
+	created, err := app.CreateReminder(ReminderCreateInput{
 		Name:         "Focus",
 		IntervalSec:  1500,
 		BreakSec:     30,
@@ -83,7 +82,7 @@ func TestAppReminderCRUDLifecycle(t *testing.T) {
 
 	newName := "Deep Focus"
 	enabled := false
-	updated, err := app.UpdateReminder(reminder.Patch{
+	updated, err := app.UpdateReminder(ReminderPatch{
 		ID:      id,
 		Name:    &newName,
 		Enabled: &enabled,

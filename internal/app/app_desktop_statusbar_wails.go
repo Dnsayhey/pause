@@ -9,42 +9,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/desktop"
 	"pause/internal/logx"
 )
-
-type wailsDesktopController struct {
-	lastOverlayActive       bool
-	lastOverlaySkip         bool
-	lastOverlayLang         string
-	lastOverlayText         string
-	lastOverlayTheme        string
-	lastOverlaySessionStart time.Time
-	overlayFallbackNotified bool
-	lastLanguage            string
-	reminderActionOrder     []int64
-	reminderOrderMu         sync.RWMutex
-	lastStatusBarStatus     string
-	lastStatusBarCountdown  string
-	lastStatusBarTitle      string
-	lastStatusBarPaused     bool
-	lastRemindersPayload    string
-	lastDetailsVisible      bool
-	hasStatusBarSnapshot    bool
-	statusBarSyncMu         sync.Mutex
-	statusBarDetailsVisible atomic.Bool
-	statusBar               desktop.StatusBarController
-	overlay                 desktop.BreakOverlayController
-	startOnce               sync.Once
-}
 
 type autoReminderChoice struct {
 	reason    int64
@@ -60,90 +31,9 @@ type reminderStatusView struct {
 	Progress float64 `json:"progress"`
 }
 
-func newDesktopController() desktopController {
-	controller := &wailsDesktopController{
-		statusBar: desktop.NewStatusBarController(),
-		overlay:   desktop.NewBreakOverlayController(),
-	}
-	controller.statusBarDetailsVisible.Store(true)
-	return controller
-}
-
-func overlaySkipMode(settings settings.Settings) skipMode {
-	if settings.Enforcement.OverlaySkipAllowed {
-		return skipModeNormal
-	}
-	return skipModeEmergency
-}
-
-func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
-	c.startOnce.Do(func() {
-		logx.SetSink(func(level logx.Level, message string) {
-			switch level {
-			case logx.LevelError:
-				runtime.LogError(ctx, message)
-			case logx.LevelWarn:
-				runtime.LogWarning(ctx, message)
-			case logx.LevelInfo:
-				runtime.LogInfo(ctx, message)
-			default:
-				runtime.LogDebug(ctx, message)
-			}
-		})
-		go func() {
-			<-ctx.Done()
-			shutdownPreferredThemeProvider()
-			logx.ClearSink()
-		}()
-
-		initPreferredThemeProvider()
-		desktop.ConfigureDesktopWindowBehavior()
-		c.statusBar.Init(func(event desktop.StatusBarEvent) {
-			c.handleStatusBarEvent(ctx, app, event)
-		})
-		c.overlay.Init(func() {
-			skipMode := overlaySkipMode(app.engine.GetSettings())
-			_, err := app.skipCurrentBreakWithMode(skipMode)
-			c.logErr(ctx, err)
-		})
-		settings := app.engine.GetSettings()
-		c.lastLanguage = resolveEffectiveLanguage(settings.UI.Language)
-		c.statusBar.SetLocale(buildStatusBarLocaleStrings(c.lastLanguage))
-		go c.runtimeLoop(ctx, app)
-	})
-}
-
-func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
-	const statusLoopOffset = 150 * time.Millisecond
-	offsetTimer := time.NewTimer(statusLoopOffset)
-	defer offsetTimer.Stop()
-	select {
-	case <-ctx.Done():
-		return
-	case <-offsetTimer.C:
-	}
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	defer c.statusBar.Destroy()
-	defer c.overlay.Destroy()
-
-	settings := app.engine.GetSettings()
-	state := app.engine.GetRuntimeState(time.Now())
-	c.syncStatusBarWithLock(state, settings)
-	c.syncOverlay(ctx, app, state, settings)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case now := <-ticker.C:
-			settings := app.engine.GetSettings()
-			state := app.engine.GetRuntimeState(now)
-			c.syncStatusBarWithLock(state, settings)
-			c.syncOverlay(ctx, app, state, settings)
-		}
-	}
+type reminderRow struct {
+	choice autoReminderChoice
+	paused bool
 }
 
 func (c *wailsDesktopController) syncStatusBarWithLock(state state.RuntimeState, settings settings.Settings) {
@@ -246,65 +136,6 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 			return
 		}
 	}
-}
-
-func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, state state.RuntimeState, settings settings.Settings) {
-	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting"
-	overlaySkipAllowed := overlayActive && state.OverlaySkipAllowed && state.CurrentSession != nil && state.CurrentSession.CanSkip
-	language := c.lastLanguage
-	theme := resolveEffectiveTheme(settings.UI.Theme)
-	overlayText := ""
-	if overlayActive && state.CurrentSession != nil {
-		overlayText = overlayCountdownText(language, state.CurrentSession.RemainingSec)
-		if !state.CurrentSession.StartedAt.Equal(c.lastOverlaySessionStart) {
-			c.lastOverlaySessionStart = state.CurrentSession.StartedAt
-			c.overlayFallbackNotified = false
-		}
-	} else {
-		c.lastOverlaySessionStart = time.Time{}
-		c.overlayFallbackNotified = false
-	}
-
-	if c.overlay.IsNative() {
-		needsUpdate := overlayActive != c.lastOverlayActive || overlaySkipAllowed != c.lastOverlaySkip || language != c.lastOverlayLang || overlayText != c.lastOverlayText || theme != c.lastOverlayTheme
-		if needsUpdate {
-			if overlayActive {
-				// Keep native break overlay isolated from the main window.
-				desktop.HideMainWindowForOverlay(ctx)
-				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, theme) {
-					if !c.overlayFallbackNotified && app != nil {
-						app.SendBreakFallbackNotification(state)
-						c.overlayFallbackNotified = true
-					}
-				}
-			} else {
-				c.overlay.Hide()
-			}
-		}
-		c.lastOverlayActive = overlayActive
-		c.lastOverlaySkip = overlaySkipAllowed
-		c.lastOverlayLang = language
-		c.lastOverlayText = overlayText
-		c.lastOverlayTheme = theme
-		return
-	}
-
-	if overlayActive && !c.overlayFallbackNotified && app != nil {
-		app.SendBreakFallbackNotification(state)
-		c.overlayFallbackNotified = true
-	}
-	c.lastOverlayActive = overlayActive
-	c.lastOverlaySkip = overlaySkipAllowed
-	c.lastOverlayLang = language
-	c.lastOverlayText = overlayText
-	c.lastOverlayTheme = theme
-}
-
-func (c *wailsDesktopController) logErr(_ context.Context, err error) {
-	if err == nil {
-		return
-	}
-	logx.Errorf("desktop.error err=%v", err)
 }
 
 func buildPauseLabel(state state.RuntimeState, language string) string {
@@ -477,11 +308,6 @@ func buildRemindersPayload(state state.RuntimeState, language string) (string, [
 		return "", order
 	}
 	return string(encoded), order
-}
-
-type reminderRow struct {
-	choice autoReminderChoice
-	paused bool
 }
 
 func listReminderRows(state state.RuntimeState) []reminderRow {
