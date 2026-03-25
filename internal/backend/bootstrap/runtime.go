@@ -8,16 +8,16 @@ import (
 
 	historyadapter "pause/internal/backend/adapters/history"
 	"pause/internal/backend/storage/historydb"
+	"pause/internal/backend/storage/settingsjson"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
 	"pause/internal/core/service"
-	"pause/internal/core/settings"
 	"pause/internal/platform"
 )
 
 type Runtime struct {
-	SettingsStore    *settings.SettingsStore
+	Settings         *settingsjson.Store
 	History          *historydb.Store
 	HistoryPath      string
 	Engine           *service.Engine
@@ -33,7 +33,7 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		return nil, errors.New("config path is required")
 	}
 
-	store, err := settings.OpenSettingsStore(cleanPath)
+	store, err := settingsjson.OpenStore(cleanPath)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 	}
 
 	return &Runtime{
-		SettingsStore:    store,
+		Settings:         store,
 		History:          historyStore,
 		HistoryPath:      historyPath,
 		Engine:           engine,

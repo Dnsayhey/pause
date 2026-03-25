@@ -25,7 +25,7 @@ func TestNewRuntimeBuildsAllWiring(t *testing.T) {
 	}
 	defer runtime.Close()
 
-	if runtime.SettingsStore == nil {
+	if runtime.Settings == nil {
 		t.Fatalf("expected settings store to be initialized")
 	}
 	if runtime.History == nil {

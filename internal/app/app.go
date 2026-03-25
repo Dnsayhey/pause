@@ -22,8 +22,8 @@ func NewApp(configPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	if runtime.SettingsStore.WasCreated() {
-		language := resolveEffectiveLanguage(runtime.SettingsStore.Get().UI.Language)
+	if runtime.Settings.WasCreated() {
+		language := resolveEffectiveLanguage(runtime.Settings.Get().UI.Language)
 		if err := ensureBuiltInRemindersForFirstInstall(context.Background(), runtime.ReminderService, language); err != nil {
 			_ = runtime.Close()
 			return nil, err
@@ -43,7 +43,7 @@ func NewApp(configPath string) (*App, error) {
 		meta.EffectiveAppBundleID(),
 		configPath,
 		runtime.HistoryPath,
-		runtime.SettingsStore.WasCreated(),
+		runtime.Settings.WasCreated(),
 	)
 
 	return &App{

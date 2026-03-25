@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"pause/internal/backend/storage/settingsjson"
 	"pause/internal/core/reminder"
 	"pause/internal/core/settings"
 	"pause/internal/core/state"
@@ -76,7 +77,7 @@ func (f *fakeHistoryRecorder) RecordBreak(_ context.Context, startedAt time.Time
 func newTestEngine(t *testing.T, idle *fakeIdleProvider, startup *fakeStartupManager) *Engine {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := settings.OpenSettingsStore(path)
+	store, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -205,7 +206,7 @@ func TestIdlePauseModePausesImmediatelyWhenScreenLocked(t *testing.T) {
 	lockState := &fakeLockStateProvider{}
 
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := settings.OpenSettingsStore(path)
+	store, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -575,7 +576,7 @@ func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 	startup := &fakeStartupManager{}
 	history := &fakeHistoryRecorder{}
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := settings.OpenSettingsStore(path)
+	store, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -626,7 +627,7 @@ func TestHistoryRecorder_SkipBreak(t *testing.T) {
 	startup := &fakeStartupManager{}
 	history := &fakeHistoryRecorder{}
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := settings.OpenSettingsStore(path)
+	store, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -731,7 +732,7 @@ func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
 	startup := &fakeStartupManager{}
 	path := filepath.Join(t.TempDir(), "settings.json")
 
-	store1, err := settings.OpenSettingsStore(path)
+	store1, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -744,7 +745,7 @@ func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
 	}
 
 	startup.calls = 0
-	store2, err := settings.OpenSettingsStore(path)
+	store2, err := settingsjson.OpenStore(path)
 	if err != nil {
 		t.Fatalf("NewStore(reopen) error = %v", err)
 	}

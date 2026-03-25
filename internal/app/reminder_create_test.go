@@ -7,16 +7,16 @@ import (
 
 	"pause/internal/backend/bootstrap"
 	"pause/internal/backend/storage/historydb"
+	"pause/internal/backend/storage/settingsjson"
 	"pause/internal/core/reminder"
 	"pause/internal/core/service"
-	"pause/internal/core/settings"
 )
 
 func newTestAppWithHistory(t *testing.T) *App {
 	t.Helper()
 
 	configPath := filepath.Join(t.TempDir(), "settings.json")
-	store, err := settings.OpenSettingsStore(configPath)
+	store, err := settingsjson.OpenStore(configPath)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}

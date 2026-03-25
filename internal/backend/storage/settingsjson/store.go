@@ -1,4 +1,4 @@
-package settings
+package settingsjson
 
 import (
 	"bytes"
@@ -8,61 +8,63 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	coresettings "pause/internal/core/settings"
 )
 
-type SettingsStore struct {
+type Store struct {
 	path     string
 	mu       sync.RWMutex
-	settings Settings
+	settings coresettings.Settings
 	created  bool
 }
 
-func OpenSettingsStore(path string) (*SettingsStore, error) {
+func OpenStore(path string) (*Store, error) {
 	if path == "" {
 		return nil, errors.New("config path is required")
 	}
 
-	store := &SettingsStore{path: path, settings: DefaultSettings()}
+	store := &Store{path: path, settings: coresettings.DefaultSettings()}
 	if err := store.load(); err != nil {
 		return nil, err
 	}
 	return store, nil
 }
 
-func (s *SettingsStore) Path() string {
+func (s *Store) Path() string {
 	return s.path
 }
 
-func (s *SettingsStore) WasCreated() bool {
+func (s *Store) WasCreated() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.created
 }
 
-func (s *SettingsStore) Get() Settings {
+func (s *Store) Get() coresettings.Settings {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.settings
 }
 
-func (s *SettingsStore) Set(next Settings) error {
+func (s *Store) Set(next coresettings.Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.settings = next.Normalize()
 	return s.saveLocked()
 }
 
-func (s *SettingsStore) Update(patch SettingsPatch) (Settings, error) {
+func (s *Store) Update(patch coresettings.SettingsPatch) (coresettings.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.settings = s.settings.ApplyPatch(patch)
 	if err := s.saveLocked(); err != nil {
-		return Settings{}, err
+		return coresettings.Settings{}, err
 	}
 	return s.settings, nil
 }
 
-func (s *SettingsStore) load() error {
+func (s *Store) load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -72,20 +74,20 @@ func (s *SettingsStore) load() error {
 			if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 				return err
 			}
-			s.settings = DefaultSettings()
+			s.settings = coresettings.DefaultSettings()
 			s.created = true
 			return s.saveLocked()
 		}
 		return err
 	}
 
-	settings := DefaultSettings()
+	settings := coresettings.DefaultSettings()
 	if len(bytes.TrimSpace(data)) > 0 {
 		if err := json.Unmarshal(data, &settings); err != nil {
 			if err := s.backupCorruptedConfigLocked(data); err != nil {
 				return err
 			}
-			s.settings = DefaultSettings()
+			s.settings = coresettings.DefaultSettings()
 			return s.saveLocked()
 		}
 	}
@@ -94,7 +96,7 @@ func (s *SettingsStore) load() error {
 	return nil
 }
 
-func (s *SettingsStore) backupCorruptedConfigLocked(data []byte) error {
+func (s *Store) backupCorruptedConfigLocked(data []byte) error {
 	dir := filepath.Dir(s.path)
 	name := filepath.Base(s.path)
 	stamp := time.Now().UTC().Format("20060102-150405")
@@ -102,7 +104,7 @@ func (s *SettingsStore) backupCorruptedConfigLocked(data []byte) error {
 	return os.WriteFile(backupPath, data, 0o644)
 }
 
-func (s *SettingsStore) saveLocked() error {
+func (s *Store) saveLocked() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
