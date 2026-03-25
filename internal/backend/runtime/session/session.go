@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"pause/internal/core/scheduler"
-	"pause/internal/core/state"
+	"pause/internal/backend/runtime/scheduler"
+	"pause/internal/backend/runtime/state"
 )
 
 type Status string

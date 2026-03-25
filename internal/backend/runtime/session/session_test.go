@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"pause/internal/core/scheduler"
+	"pause/internal/backend/runtime/scheduler"
 )
 
 func TestSessionCompletesAfterDuration(t *testing.T) {

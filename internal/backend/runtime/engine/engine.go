@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"pause/internal/backend/runtime/scheduler"
+	"pause/internal/backend/runtime/session"
+	"pause/internal/backend/runtime/state"
 	"pause/internal/core/reminder"
-	"pause/internal/core/scheduler"
-	"pause/internal/core/session"
 	"pause/internal/core/settings"
-	"pause/internal/core/state"
 	"pause/internal/logx"
 	"pause/internal/platform"
 )

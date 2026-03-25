@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"pause/internal/core/state"
+	"pause/internal/backend/runtime/state"
 )
 
 func (a *App) GetRuntimeState() state.RuntimeState {

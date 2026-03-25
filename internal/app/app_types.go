@@ -7,9 +7,9 @@ import (
 
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
+	"pause/internal/backend/runtime/state"
 	corereminder "pause/internal/core/reminder"
 	"pause/internal/core/settings"
-	"pause/internal/core/state"
 	"pause/internal/platform"
 )
 

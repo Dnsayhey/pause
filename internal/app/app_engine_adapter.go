@@ -5,9 +5,9 @@ import (
 	"time"
 
 	service "pause/internal/backend/runtime/engine"
+	"pause/internal/backend/runtime/state"
 	"pause/internal/core/reminder"
 	"pause/internal/core/settings"
-	"pause/internal/core/state"
 )
 
 type coreEngineAdapter struct {

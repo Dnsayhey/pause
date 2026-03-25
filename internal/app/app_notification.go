@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"pause/internal/core/state"
+	"pause/internal/backend/runtime/state"
 	"pause/internal/logx"
 	"pause/internal/platform"
 )

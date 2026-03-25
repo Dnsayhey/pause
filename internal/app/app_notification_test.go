@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"pause/internal/core/state"
+	"pause/internal/backend/runtime/state"
 )
 
 func TestBuildBreakNotificationBodyUsesRuntimeReminderNames(t *testing.T) {
