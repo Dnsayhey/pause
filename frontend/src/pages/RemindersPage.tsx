@@ -103,10 +103,10 @@ function deriveDefaultEditUnits(reminder: ReminderConfig): ReminderEditUnits {
 }
 
 const createFieldInputClassName =
-  'h-[34px] w-full rounded-[10px] border border-[var(--dialog-field-border)] bg-[var(--dialog-field-bg)] px-3 text-[14px] text-[var(--dialog-field-text)] outline-none transition-colors focus:border-[var(--dialog-field-focus-border)] focus:ring-2 focus:ring-[var(--control-focus-ring)]';
+  'h-[34px] w-full rounded-[8px] border border-[var(--dialog-field-border)] bg-[var(--dialog-field-bg)] px-3 text-[14px] text-[var(--dialog-field-text)] outline-none transition-colors focus:border-[var(--dialog-field-focus-border)] focus:ring-2 focus:ring-[var(--control-focus-ring)]';
 
 const createFieldSelectClassName =
-  'h-[34px] w-full cursor-pointer rounded-[10px] border border-[var(--dialog-field-border)] bg-[var(--dialog-field-bg)] px-2 text-[14px] text-[var(--dialog-field-text)] outline-none transition-colors focus:border-[var(--dialog-field-focus-border)] focus:ring-2 focus:ring-[var(--control-focus-ring)]';
+  'h-[34px] w-full cursor-pointer rounded-[8px] border border-[var(--dialog-field-border)] bg-[var(--dialog-field-bg)] px-2 text-[14px] text-[var(--dialog-field-text)] outline-none transition-colors focus:border-[var(--dialog-field-focus-border)] focus:ring-2 focus:ring-[var(--control-focus-ring)]';
 
 export function RemindersPage({
   locale,
@@ -470,7 +470,7 @@ export function RemindersPage({
             role="dialog"
             aria-modal="true"
             aria-label={t(locale, 'addReminderCardTitle')}
-            className="fixed z-40 w-[340px] max-w-[calc(100vw-1.5rem)] rounded-[14px] border border-[var(--surface-border-strong)] bg-[var(--surface-bg)] p-4 shadow-[var(--surface-shadow)] max-sm:left-3 max-sm:right-3 max-sm:w-auto"
+            className="fixed z-40 w-[340px] max-w-[calc(100vw-1.5rem)] rounded-[12px] border border-[var(--surface-border-strong)] bg-[var(--surface-bg)] p-4 shadow-[var(--surface-shadow)] max-sm:left-3 max-sm:right-3 max-sm:w-auto"
             style={{
               top: `${createPanelAnchor?.top ?? 76}px`,
               right: `${createPanelAnchor?.right ?? 20}px`
@@ -555,7 +555,7 @@ export function RemindersPage({
                 type="button"
                 onClick={closeCreatePanel}
                 disabled={isCreating}
-                className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center justify-center rounded-[11px] border border-transparent bg-[var(--dialog-subtle-btn-bg)] px-[12px] py-1 text-[13px] text-[var(--dialog-subtle-btn-text)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center justify-center rounded-[9px] border border-transparent bg-[var(--dialog-subtle-btn-bg)] px-[12px] py-1 text-[13px] text-[var(--dialog-subtle-btn-text)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {t(locale, 'addReminderCancel')}
               </button>
@@ -565,7 +565,7 @@ export function RemindersPage({
                   void submitCreateReminder();
                 }}
                 disabled={isCreating}
-                className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center justify-center rounded-[11px] border border-transparent bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] px-[14px] py-1 text-[13px] font-medium text-white transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center justify-center rounded-[9px] border border-transparent bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] px-[14px] py-1 text-[13px] font-medium text-white transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isCreating ? t(locale, 'addReminderCreating') : t(locale, 'addReminderCreate')}
               </button>

@@ -116,8 +116,8 @@ export function PillSelect({
 
   const menuClassName =
     variant === 'minimal'
-      ? 'absolute right-0 top-[calc(100%+6px)] z-40 max-h-60 w-max min-w-[96px] max-w-[180px] overflow-auto rounded-[10px] border border-[var(--dropdown-border)] bg-[var(--dropdown-bg)] p-0 shadow-[var(--dropdown-shadow)]'
-      : 'absolute left-0 top-[calc(100%+6px)] z-40 max-h-60 w-max min-w-[96px] max-w-[180px] overflow-auto rounded-[10px] border border-[var(--dropdown-border)] bg-[var(--dropdown-bg)] p-0 shadow-[var(--dropdown-shadow)]';
+      ? 'absolute right-0 top-[calc(100%+6px)] z-40 max-h-60 w-max min-w-[96px] max-w-[180px] overflow-auto rounded-[8px] border border-[var(--dropdown-border)] bg-[var(--dropdown-bg)] p-0 shadow-[var(--dropdown-shadow)]'
+      : 'absolute left-0 top-[calc(100%+6px)] z-40 max-h-60 w-max min-w-[96px] max-w-[180px] overflow-auto rounded-[8px] border border-[var(--dropdown-border)] bg-[var(--dropdown-bg)] p-0 shadow-[var(--dropdown-shadow)]';
 
   const mergedClassName =
     variant === 'minimal'
