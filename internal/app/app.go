@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"pause/internal/backend/bootstrap"
+	reminderdomain "pause/internal/backend/domain/reminder"
 	"pause/internal/core/history"
 	"pause/internal/core/reminder"
 	"pause/internal/core/service"
@@ -24,9 +26,17 @@ type App struct {
 	ctx           context.Context
 	engine        *service.Engine
 	history       *history.HistoryStore
+	reminders     reminderService
 	notifier      platform.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
+}
+
+type reminderService interface {
+	List(ctx context.Context) ([]reminderdomain.Reminder, error)
+	Create(ctx context.Context, input reminderdomain.CreateInput) ([]reminderdomain.Reminder, error)
+	Update(ctx context.Context, patch reminderdomain.Patch) ([]reminderdomain.Reminder, error)
+	Delete(ctx context.Context, reminderID int64) ([]reminderdomain.Reminder, error)
 }
 
 type desktopController interface {
@@ -58,6 +68,11 @@ func NewApp(configPath string) (*App, error) {
 			return nil, err
 		}
 	}
+	container, err := bootstrap.NewContainer(historyStore)
+	if err != nil {
+		_ = historyStore.Close()
+		return nil, err
+	}
 
 	adapters := platform.NewAdapters(meta.EffectiveAppBundleID())
 	engine := service.NewEngine(
@@ -69,14 +84,14 @@ func NewApp(configPath string) (*App, error) {
 		historyStore,
 	)
 	engine.SetNotifier(adapters.Notifier)
-	defs, err := historyStore.ListReminders(context.Background())
+	defs, err := container.ReminderService.List(context.Background())
 	if err != nil {
 		_ = historyStore.Close()
 		return nil, err
 	}
-	engineReminders := historyDefsToConfig(defs)
+	engineReminders := reminderDefsToConfig(defs)
 	engine.SetReminderConfigs(engineReminders)
-	logx.Infof("app.reminders_synced source=history count=%d", len(engineReminders))
+	logx.Infof("app.reminders_synced source=usecase count=%d", len(engineReminders))
 
 	logx.Infof(
 		"app.init bundle_id=%s config_path=%s history_path=%s config_created=%t",
@@ -87,10 +102,11 @@ func NewApp(configPath string) (*App, error) {
 	)
 
 	return &App{
-		engine:   engine,
-		history:  historyStore,
-		notifier: adapters.Notifier,
-		desktop:  newDesktopController(),
+		engine:    engine,
+		history:   historyStore,
+		reminders: container.ReminderService,
+		notifier:  adapters.Notifier,
+		desktop:   newDesktopController(),
 	}, nil
 }
 
@@ -120,97 +136,78 @@ func (a *App) UpdateSettings(patch settings.SettingsPatch) (settings.Settings, e
 }
 
 func (a *App) GetReminders() ([]reminder.ReminderConfig, error) {
-	if a == nil || a.history == nil {
-		return nil, errors.New("history store unavailable")
+	if a == nil || a.reminders == nil {
+		return nil, errors.New("reminder service unavailable")
 	}
-	defs, err := a.history.ListReminders(appContextOrBackground(a.ctx))
+	defs, err := a.reminders.List(appContextOrBackground(a.ctx))
 	if err != nil {
 		return nil, err
 	}
-	return historyDefsToConfig(defs), nil
+	return reminderDefsToConfig(defs), nil
 }
 
 func (a *App) UpdateReminder(patch reminder.ReminderPatch) ([]reminder.ReminderConfig, error) {
-	if a == nil || a.history == nil {
-		return nil, errors.New("history store unavailable")
+	if a == nil || a.reminders == nil {
+		return nil, errors.New("reminder service unavailable")
 	}
 	ctx := appContextOrBackground(a.ctx)
-	mutation := history.ReminderPatch{
+	defs, err := a.reminders.Update(ctx, reminderdomain.Patch{
+		ID:           patch.ID,
 		Name:         patch.Name,
 		Enabled:      patch.Enabled,
 		IntervalSec:  patch.IntervalSec,
 		BreakSec:     patch.BreakSec,
 		ReminderType: patch.ReminderType,
-	}
-	if err := a.history.UpdateReminder(ctx, patch.ID, mutation); err != nil {
-		logx.Warnf("app.update_reminder_err stage=history_update patch_id=%d err=%v", patch.ID, err)
-		return nil, err
-	}
-	defs, err := a.history.ListReminders(ctx)
+	})
 	if err != nil {
-		logx.Warnf("app.update_reminder_err stage=history_reload patch_id=%d err=%v", patch.ID, err)
+		logx.Warnf("app.update_reminder_err stage=usecase_update patch_id=%d err=%v", patch.ID, err)
 		return nil, err
 	}
-	reminders := historyDefsToConfig(defs)
+	reminders := reminderDefsToConfig(defs)
 	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminder_updated id=%d count=%d", patch.ID, len(reminders))
 	return reminders, nil
 }
 
 func (a *App) CreateReminder(input reminder.ReminderCreateInput) ([]reminder.ReminderConfig, error) {
-	if a == nil || a.history == nil {
-		return nil, errors.New("history store unavailable")
-	}
-	if input.ReminderType == nil {
-		return nil, errors.New("reminder reminderType is required")
+	if a == nil || a.reminders == nil {
+		return nil, errors.New("reminder service unavailable")
 	}
 
 	ctx := appContextOrBackground(a.ctx)
-	enabled := true
-	if input.Enabled != nil {
-		enabled = *input.Enabled
-	}
-	id, err := a.history.CreateReminder(ctx, history.Reminder{
+	defs, err := a.reminders.Create(ctx, reminderdomain.CreateInput{
 		Name:         input.Name,
-		Enabled:      enabled,
 		IntervalSec:  input.IntervalSec,
 		BreakSec:     input.BreakSec,
-		ReminderType: *input.ReminderType,
+		Enabled:      input.Enabled,
+		ReminderType: input.ReminderType,
 	})
 	if err != nil {
-		logx.Warnf("app.create_reminder_err stage=history_create id=%d err=%v", id, err)
+		logx.Warnf("app.create_reminder_err stage=usecase_create err=%v", err)
 		return nil, err
 	}
-	defs, err := a.history.ListReminders(ctx)
-	if err != nil {
-		logx.Warnf("app.create_reminder_err stage=history_reload id=%d err=%v", id, err)
-		return nil, err
-	}
-	reminders := historyDefsToConfig(defs)
+	reminders := reminderDefsToConfig(defs)
 	a.engine.SetReminderConfigs(reminders)
-	logx.Infof("app.reminder_created id=%d count=%d", id, len(reminders))
+	createdID := int64(0)
+	if len(reminders) > 0 {
+		createdID = reminders[len(reminders)-1].ID
+	}
+	logx.Infof("app.reminder_created id=%d count=%d", createdID, len(reminders))
 	return reminders, nil
 }
 
 func (a *App) DeleteReminder(reminderID int64) ([]reminder.ReminderConfig, error) {
-	if a == nil || a.history == nil {
-		return nil, errors.New("history store unavailable")
+	if a == nil || a.reminders == nil {
+		return nil, errors.New("reminder service unavailable")
 	}
 	id := reminderID
-	if id <= 0 {
-		return nil, errors.New("reminder id is required")
-	}
 	ctx := appContextOrBackground(a.ctx)
-	if err := a.history.DeleteReminder(ctx, id); err != nil {
-		logx.Warnf("app.delete_reminder_err stage=history_delete id=%d err=%v", id, err)
-		return nil, err
-	}
-	defs, err := a.history.ListReminders(ctx)
+	defs, err := a.reminders.Delete(ctx, id)
 	if err != nil {
-		logx.Warnf("app.delete_reminder_err stage=history_reload id=%d err=%v", id, err)
+		logx.Warnf("app.delete_reminder_err stage=usecase_delete id=%d err=%v", id, err)
 		return nil, err
 	}
-	reminders := historyDefsToConfig(defs)
+	reminders := reminderDefsToConfig(defs)
 	a.engine.SetReminderConfigs(reminders)
 	logx.Infof("app.reminder_deleted id=%d count=%d", id, len(reminders))
 	return reminders, nil
@@ -376,6 +373,25 @@ func appContextOrBackground(ctx context.Context) context.Context {
 		return ctx
 	}
 	return context.Background()
+}
+
+func reminderDefsToConfig(defs []reminderdomain.Reminder) []reminder.ReminderConfig {
+	result := make([]reminder.ReminderConfig, 0, len(defs))
+	for _, def := range defs {
+		id := def.ID
+		if id <= 0 {
+			continue
+		}
+		result = append(result, reminder.ReminderConfig{
+			ID:           id,
+			Name:         strings.TrimSpace(def.Name),
+			Enabled:      def.Enabled,
+			IntervalSec:  def.IntervalSec,
+			BreakSec:     def.BreakSec,
+			ReminderType: strings.TrimSpace(def.ReminderType),
+		})
+	}
+	return cloneReminderConfigs(result)
 }
 
 func historyDefsToConfig(defs []history.Reminder) []reminder.ReminderConfig {

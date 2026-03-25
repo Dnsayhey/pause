@@ -1,0 +1,96 @@
+package reminder
+
+import (
+	"context"
+	"errors"
+	"strings"
+
+	reminderdomain "pause/internal/backend/domain/reminder"
+	"pause/internal/backend/ports"
+)
+
+type Service struct {
+	repo ports.ReminderRepository
+}
+
+func NewService(repo ports.ReminderRepository) (*Service, error) {
+	if repo == nil {
+		return nil, errors.New("reminder repository is required")
+	}
+	return &Service{repo: repo}, nil
+}
+
+func (s *Service) List(ctx context.Context) ([]reminderdomain.Reminder, error) {
+	items, err := s.repo.ListReminders(normalizeContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return normalizeReminders(items), nil
+}
+
+func (s *Service) Create(ctx context.Context, input reminderdomain.CreateInput) ([]reminderdomain.Reminder, error) {
+	if input.ReminderType == nil {
+		return nil, errors.New("reminder reminderType is required")
+	}
+	enabled := true
+	if input.Enabled != nil {
+		enabled = *input.Enabled
+	}
+	normalized := input
+	normalized.Enabled = &enabled
+
+	if _, err := s.repo.CreateReminder(normalizeContext(ctx), normalized); err != nil {
+		return nil, err
+	}
+	return s.List(ctx)
+}
+
+func (s *Service) Update(ctx context.Context, patch reminderdomain.Patch) ([]reminderdomain.Reminder, error) {
+	if err := s.repo.UpdateReminder(normalizeContext(ctx), patch); err != nil {
+		return nil, err
+	}
+	return s.List(ctx)
+}
+
+func (s *Service) Delete(ctx context.Context, reminderID int64) ([]reminderdomain.Reminder, error) {
+	if reminderID <= 0 {
+		return nil, errors.New("reminder id is required")
+	}
+	if err := s.repo.DeleteReminder(normalizeContext(ctx), reminderID); err != nil {
+		return nil, err
+	}
+	return s.List(ctx)
+}
+
+func normalizeContext(ctx context.Context) context.Context {
+	if ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
+func normalizeReminders(reminders []reminderdomain.Reminder) []reminderdomain.Reminder {
+	if len(reminders) == 0 {
+		return nil
+	}
+	result := make([]reminderdomain.Reminder, 0, len(reminders))
+	for _, item := range reminders {
+		if item.ID <= 0 {
+			continue
+		}
+		result = append(result, reminderdomain.Reminder{
+			ID:           item.ID,
+			Name:         strings.TrimSpace(item.Name),
+			Enabled:      item.Enabled,
+			IntervalSec:  item.IntervalSec,
+			BreakSec:     item.BreakSec,
+			ReminderType: strings.TrimSpace(item.ReminderType),
+		})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	cloned := make([]reminderdomain.Reminder, 0, len(result))
+	cloned = append(cloned, result...)
+	return cloned
+}

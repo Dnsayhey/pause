@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"pause/internal/backend/bootstrap"
 	"pause/internal/core/history"
 	"pause/internal/core/reminder"
 	"pause/internal/core/service"
@@ -26,6 +27,10 @@ func newTestAppWithHistory(t *testing.T) *App {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	t.Cleanup(func() { _ = historyStore.Close() })
+	container, err := bootstrap.NewContainer(historyStore)
+	if err != nil {
+		t.Fatalf("NewContainer() error = %v", err)
+	}
 
 	engine := service.NewEngine(store, nil, nil, nil, nil, historyStore)
 	defs, err := historyStore.ListReminders(context.Background())
@@ -35,9 +40,10 @@ func newTestAppWithHistory(t *testing.T) *App {
 	engine.SetReminderConfigs(historyDefsToConfig(defs))
 
 	return &App{
-		ctx:     context.Background(),
-		engine:  engine,
-		history: historyStore,
+		ctx:       context.Background(),
+		engine:    engine,
+		history:   historyStore,
+		reminders: container.ReminderService,
 	}
 }
 
