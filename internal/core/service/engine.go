@@ -30,6 +30,12 @@ type BreakHistoryRecorder interface {
 	RecordBreak(ctx context.Context, startedAt time.Time, endedAt time.Time, source string, plannedBreakSec int, actualBreakSec int, skipped bool, reminderIDs []int64) error
 }
 
+type SettingsStore interface {
+	WasCreated() bool
+	Get() settings.Settings
+	Update(patch settings.SettingsPatch) (settings.Settings, error)
+}
+
 type pendingHistoryBreak struct {
 	StartedAt       time.Time
 	Source          string
@@ -41,7 +47,7 @@ type Engine struct {
 	mu        sync.Mutex
 	startOnce sync.Once
 
-	store     *settings.SettingsStore
+	store     SettingsStore
 	reminders []reminder.ReminderConfig
 	scheduler *scheduler.Scheduler
 	session   *session.Manager
@@ -66,7 +72,7 @@ type Engine struct {
 }
 
 func NewEngine(
-	store *settings.SettingsStore,
+	store SettingsStore,
 	idleProvider platform.IdleProvider,
 	lockProvider platform.LockStateProvider,
 	soundPlayer platform.SoundPlayer,
