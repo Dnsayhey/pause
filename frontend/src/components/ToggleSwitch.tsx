@@ -31,7 +31,7 @@ export function ToggleSwitch({ ariaLabel, checked, disabled = false, onChange }:
       />
       <span
         className={[
-          'pointer-events-none block h-4 w-4 rounded-full bg-[var(--surface-bg)] shadow-[0_1px_3px_rgba(0,0,0,0.24)] transition-transform duration-200',
+          'pointer-events-none block h-4 w-4 rounded-full bg-[var(--surface-bg)] shadow-[var(--shadow-knob)] transition-transform duration-200',
           checked ? 'translate-x-[14px]' : 'translate-x-0'
         ].join(' ')}
       />

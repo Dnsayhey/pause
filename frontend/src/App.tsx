@@ -264,13 +264,13 @@ export function App() {
                   </button>
                 ) : null}
 
-                <div className="inline-flex rounded-full border border-[var(--seg-border)] bg-[var(--seg-bg)] p-1 shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
+                <div className="inline-flex rounded-full border border-[var(--seg-border)] bg-[var(--seg-bg)] p-1 shadow-[var(--shadow-subtle)]">
                   <NavLink
                     to="/reminders"
                     className={({ isActive }) =>
                       `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
                         isActive
-                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[var(--shadow-raised)]'
                           : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
                       }`
                     }
@@ -282,7 +282,7 @@ export function App() {
                     className={({ isActive }) =>
                       `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
                         isActive
-                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[var(--shadow-raised)]'
                           : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
                       }`
                     }
@@ -294,7 +294,7 @@ export function App() {
                     className={({ isActive }) =>
                       `rounded-full px-3 py-1 text-xs font-medium no-underline transition-colors ${
                         isActive
-                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]'
+                          ? 'bg-[linear-gradient(140deg,var(--seg-active),var(--seg-active-strong))] text-white shadow-[var(--shadow-raised)]'
                           : 'text-[var(--seg-text)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
                       }`
                     }

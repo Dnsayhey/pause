@@ -24,7 +24,7 @@ const classNameBySize: Record<NonNullable<PillSelectProps['size']>, string> = {
 };
 
 const classNameBase =
-  'appearance-none border border-[var(--control-border)] bg-[var(--surface-bg)] bg-no-repeat bg-[length:10px_6px] leading-[1.2] text-[var(--control-text)] shadow-[0_1px_1px_rgba(15,23,42,0.05)] outline-offset-1 transition-colors hover:border-[var(--surface-border-strong)] hover:bg-[var(--surface-muted)] focus-visible:border-[var(--toggle-on)] focus-visible:outline-2 focus-visible:outline-[var(--control-focus-ring)]';
+  'appearance-none border border-[var(--control-border)] bg-[var(--surface-bg)] bg-no-repeat bg-[length:10px_6px] leading-[1.2] text-[var(--control-text)] shadow-[var(--shadow-soft)] outline-offset-1 transition-colors hover:border-[var(--surface-border-strong)] hover:bg-[var(--surface-muted)] focus-visible:border-[var(--toggle-on)] focus-visible:outline-2 focus-visible:outline-[var(--control-focus-ring)]';
 
 const minimalClassName =
   'w-auto min-w-0 appearance-none border-0 bg-transparent bg-no-repeat bg-[position:right_0_center] bg-[length:10px_12px] px-0 pr-4 text-sm font-normal leading-[1.25] text-[var(--control-text)] shadow-none outline-none transition-colors hover:text-[var(--text-primary)] focus-visible:outline-none';
