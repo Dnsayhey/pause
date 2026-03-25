@@ -3,17 +3,20 @@ package app
 import (
 	"context"
 	"sync/atomic"
+	"time"
 
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
+	corereminder "pause/internal/core/reminder"
 	"pause/internal/core/service"
 	"pause/internal/core/settings"
+	"pause/internal/core/state"
 	"pause/internal/platform"
 )
 
 type App struct {
 	ctx           context.Context
-	engine        *service.Engine
+	engine        engineRuntime
 	history       historyCloser
 	reminders     reminderService
 	analytics     analyticsService
@@ -21,6 +24,20 @@ type App struct {
 	notifier      platform.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
+}
+
+type engineRuntime interface {
+	Start(ctx context.Context)
+	GetSettings() settings.Settings
+	GetRuntimeState(now time.Time) state.RuntimeState
+	Pause(now time.Time) (state.RuntimeState, error)
+	Resume(now time.Time) state.RuntimeState
+	PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
+	ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
+	SkipCurrentBreak(now time.Time, mode service.SkipMode) (state.RuntimeState, error)
+	StartBreakNow(now time.Time) (state.RuntimeState, error)
+	StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error)
+	SetReminderConfigs(reminders []corereminder.ReminderConfig) []corereminder.ReminderConfig
 }
 
 type historyCloser interface {
