@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"pause/internal/backend/bootstrap"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/storage/historydb"
-	"pause/internal/core/settings"
 )
 
 func TestEnsureBuiltInRemindersForFirstInstallSeedsZhNames(t *testing.T) {

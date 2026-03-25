@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"pause/internal/backend/domain/reminder"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
 	"pause/internal/backend/runtime/scheduler"
 	"pause/internal/backend/runtime/session"
 	"pause/internal/backend/runtime/state"
-	"pause/internal/core/reminder"
-	"pause/internal/core/settings"
 	"pause/internal/logx"
 )
 

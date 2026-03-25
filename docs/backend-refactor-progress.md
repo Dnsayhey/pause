@@ -9,13 +9,19 @@
 ## 1. 当前状态快照
 
 - 分支：`codex/reminder-edit-unit-toggle`
-- 工作区：代码工作区稳定，本次为文档同步更新
-- 最近一次提交：`fa8ae46`
-- 当前重构总体进度：约 `91%`（阶段 A/B/C/D 完成，阶段 E 深化中）
+- 工作区：存在待提交改动（`internal/core` 收口到 `backend/domain` + 文档同步）
+- 最近一次提交：`986cba2`
+- 当前重构总体进度：约 `95%`（阶段 A/B/C/D 完成，阶段 E 收尾中）
 
 ## 2. 已完成里程碑（按时间倒序）
 
 ### 2026-03-25
+
+1. `WIP` `refactor(domain): consolidate core models into backend domain`
+- `internal/core` 目录已从代码层移除，`analytics/reminder/settings` 类型统一收口到 `internal/backend/domain/*`。
+- app 与 platform 引用切换到 `backend/domain`，移除 analytics 旧转换层。
+- settings 领域模型文件迁移到 `backend/domain/settings`，并清理残留 `core*` 命名，降低阅读噪音。
+- 验证：`go test ./...` 通过，`npm --prefix frontend run build` 通过。
 
 1. `7e79da5` `refactor(runtime): remove empty analytics alias and split engine helpers`
 - 删除无实际价值的空别名端口：`ports/analytics_query_repo.go`。
@@ -146,8 +152,8 @@ internal/backend/
 ### 下一步候选（按优先级）
 
 1. 继续收口跨层类型泄漏，统一 DTO 边界（尤其 app <-> backend）。
-2. 将 `backend/domain/settings` 从“alias 形态”升级为独立领域模型，逐步摆脱对 `core/settings` 的映射依赖。
-3. 拆分 breaksession slice（状态机与副作用执行分离），减少 `engine` 复杂度。
+2. 拆分 runtime engine 的命令处理职责（按 pause/resume/break/settings 分文件），继续压缩超大文件。
+3. 评估并消除剩余“仅命名转发”的 type alias，保留真正有语义价值的边界类型。
 
 ## 5. 每次更新模板（后续追加到本文件）
 

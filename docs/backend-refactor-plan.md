@@ -20,7 +20,7 @@
 
 - `app` 只做编排与交互绑定；
 - `backend` 承担用例、端口、适配器、运行时与存储实现；
-- `core` 收敛为纯领域模型与无 IO 的业务规则。
+- `backend/domain` 作为唯一领域模型与无 IO 业务规则承载层。
 
 ### 2.2 约束原则
 
@@ -42,12 +42,6 @@ internal/
     runtime/                # 运行时引擎与调度编排
     storage/                # 持久化实现（historydb/settingsjson）
     bootstrap/              # 组装根（容器、运行时装配）
-  core/
-    analytics/              # API/DTO 基础类型
-    reminder/               # reminder 纯类型
-    scheduler/ session/     # 纯业务逻辑
-    settings/               # settings 结构与 normalize 逻辑
-    state/                  # runtime state 结构
 ```
 
 ## 4. 分阶段计划与验收
@@ -101,7 +95,7 @@ internal/
 
 验收：
 
-- `core` 不再承担 IO 存储职责；
+- `internal/core` 已完全移除，领域模型统一收口到 `backend/domain`；
 - import 路径与包名与职责一致；
 - 全量测试通过。
 
@@ -110,7 +104,7 @@ internal/
 目标：
 
 - 继续收敛跨层类型泄漏，统一 API DTO 边界。
-- 评估并收口 `core/scheduler + core/session + core/state` 与 runtime 的边界。
+- 继续收敛 runtime 层职责边界（`engine / scheduler / session / state`）。
 - 建立稳定的“重构日志 + 验收标准”机制，避免后续回弹。
 
 验收：
@@ -140,4 +134,3 @@ internal/
   - 验证结果（测试/构建命令）
   - 风险与下一步
 - 若出现偏离本计划的重构动作，先在进度文档写明“偏离原因”再执行。
-

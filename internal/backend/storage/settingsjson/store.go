@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	coresettings "pause/internal/core/settings"
+	settingsdomain "pause/internal/backend/domain/settings"
 )
 
 type Store struct {
 	path     string
 	mu       sync.RWMutex
-	settings coresettings.Settings
+	settings settingsdomain.Settings
 	created  bool
 }
 
@@ -24,7 +24,7 @@ func OpenStore(path string) (*Store, error) {
 		return nil, errors.New("config path is required")
 	}
 
-	store := &Store{path: path, settings: coresettings.DefaultSettings()}
+	store := &Store{path: path, settings: settingsdomain.DefaultSettings()}
 	if err := store.load(); err != nil {
 		return nil, err
 	}
@@ -41,25 +41,25 @@ func (s *Store) WasCreated() bool {
 	return s.created
 }
 
-func (s *Store) Get() coresettings.Settings {
+func (s *Store) Get() settingsdomain.Settings {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.settings
 }
 
-func (s *Store) Set(next coresettings.Settings) error {
+func (s *Store) Set(next settingsdomain.Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.settings = next.Normalize()
 	return s.saveLocked()
 }
 
-func (s *Store) Update(patch coresettings.SettingsPatch) (coresettings.Settings, error) {
+func (s *Store) Update(patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.settings = s.settings.ApplyPatch(patch)
 	if err := s.saveLocked(); err != nil {
-		return coresettings.Settings{}, err
+		return settingsdomain.Settings{}, err
 	}
 	return s.settings, nil
 }
@@ -74,20 +74,20 @@ func (s *Store) load() error {
 			if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 				return err
 			}
-			s.settings = coresettings.DefaultSettings()
+			s.settings = settingsdomain.DefaultSettings()
 			s.created = true
 			return s.saveLocked()
 		}
 		return err
 	}
 
-	settings := coresettings.DefaultSettings()
+	settings := settingsdomain.DefaultSettings()
 	if len(bytes.TrimSpace(data)) > 0 {
 		if err := json.Unmarshal(data, &settings); err != nil {
 			if err := s.backupCorruptedConfigLocked(data); err != nil {
 				return err
 			}
-			s.settings = coresettings.DefaultSettings()
+			s.settings = settingsdomain.DefaultSettings()
 			return s.saveLocked()
 		}
 	}

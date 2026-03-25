@@ -5,8 +5,8 @@ package app
 import (
 	"testing"
 
+	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/state"
-	"pause/internal/core/settings"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	coresettings "pause/internal/core/settings"
+	settingsdomain "pause/internal/backend/domain/settings"
 )
 
 func TestStoreCreatesDefaults(t *testing.T) {
@@ -20,8 +20,8 @@ func TestStoreCreatesDefaults(t *testing.T) {
 	if !got.Enforcement.OverlaySkipAllowed {
 		t.Fatalf("expected overlay skip allowed by default")
 	}
-	if got.UI.Theme != coresettings.UIThemeAuto {
-		t.Fatalf("expected default theme %q, got %q", coresettings.UIThemeAuto, got.UI.Theme)
+	if got.UI.Theme != settingsdomain.UIThemeAuto {
+		t.Fatalf("expected default theme %q, got %q", settingsdomain.UIThemeAuto, got.UI.Theme)
 	}
 	if !store.WasCreated() {
 		t.Fatalf("expected WasCreated()=true when config file is newly created")
@@ -36,7 +36,7 @@ func TestStoreUpdatePersistsSettings(t *testing.T) {
 	}
 
 	off := false
-	_, err = store.Update(coresettings.SettingsPatch{
+	_, err = store.Update(settingsdomain.SettingsPatch{
 		GlobalEnabled: &off,
 	})
 	if err != nil {
@@ -77,7 +77,7 @@ func TestStoreRecoversFromCorruptedConfig(t *testing.T) {
 	}
 
 	got := store.Get()
-	want := coresettings.DefaultSettings()
+	want := settingsdomain.DefaultSettings()
 	if got.UI.Theme != want.UI.Theme {
 		t.Fatalf("expected default theme %q after recovery, got %q", want.UI.Theme, got.UI.Theme)
 	}

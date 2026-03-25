@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
+	"pause/internal/backend/domain/reminder"
+	"pause/internal/backend/domain/settings"
 	service "pause/internal/backend/runtime/engine"
 	"pause/internal/backend/runtime/state"
-	"pause/internal/core/reminder"
-	"pause/internal/core/settings"
 )
 
-type coreEngineAdapter struct {
+type runtimeEngineAdapter struct {
 	engine *service.Engine
 }
 
@@ -18,49 +18,49 @@ func newEngineRuntime(engine *service.Engine) engineRuntime {
 	if engine == nil {
 		return nil
 	}
-	return &coreEngineAdapter{engine: engine}
+	return &runtimeEngineAdapter{engine: engine}
 }
 
-func (a *coreEngineAdapter) Start(ctx context.Context) {
+func (a *runtimeEngineAdapter) Start(ctx context.Context) {
 	a.engine.Start(ctx)
 }
 
-func (a *coreEngineAdapter) GetSettings() settings.Settings {
+func (a *runtimeEngineAdapter) GetSettings() settings.Settings {
 	return a.engine.GetSettings()
 }
 
-func (a *coreEngineAdapter) GetRuntimeState(now time.Time) state.RuntimeState {
+func (a *runtimeEngineAdapter) GetRuntimeState(now time.Time) state.RuntimeState {
 	return a.engine.GetRuntimeState(now)
 }
 
-func (a *coreEngineAdapter) Pause(now time.Time) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) Pause(now time.Time) (state.RuntimeState, error) {
 	return a.engine.Pause(now)
 }
 
-func (a *coreEngineAdapter) Resume(now time.Time) state.RuntimeState {
+func (a *runtimeEngineAdapter) Resume(now time.Time) state.RuntimeState {
 	return a.engine.Resume(now)
 }
 
-func (a *coreEngineAdapter) PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error) {
 	return a.engine.PauseReminder(reminderID, now)
 }
 
-func (a *coreEngineAdapter) ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error) {
 	return a.engine.ResumeReminder(reminderID, now)
 }
 
-func (a *coreEngineAdapter) SkipCurrentBreak(now time.Time, mode skipMode) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) SkipCurrentBreak(now time.Time, mode skipMode) (state.RuntimeState, error) {
 	return a.engine.SkipCurrentBreak(now, service.SkipMode(mode))
 }
 
-func (a *coreEngineAdapter) StartBreakNow(now time.Time) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) StartBreakNow(now time.Time) (state.RuntimeState, error) {
 	return a.engine.StartBreakNow(now)
 }
 
-func (a *coreEngineAdapter) StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error) {
 	return a.engine.StartBreakNowForReason(reason, now)
 }
 
-func (a *coreEngineAdapter) SetReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
+func (a *runtimeEngineAdapter) SetReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
 	return a.engine.SetReminderConfigs(reminders)
 }

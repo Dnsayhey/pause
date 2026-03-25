@@ -1,12 +1,12 @@
 package historydb
 
-import coreanalytics "pause/internal/core/analytics"
+import analyticsdomain "pause/internal/backend/domain/analytics"
 
-type AnalyticsReminderStat = coreanalytics.ReminderStat
-type AnalyticsSummaryStats = coreanalytics.SummaryStats
-type AnalyticsWeeklyStats = coreanalytics.WeeklyStats
-type AnalyticsSummary = coreanalytics.Summary
-type AnalyticsTrendPoint = coreanalytics.TrendPoint
-type AnalyticsTrend = coreanalytics.Trend
-type AnalyticsBreakTypeDistributionItem = coreanalytics.BreakTypeDistributionItem
-type AnalyticsBreakTypeDistribution = coreanalytics.BreakTypeDistribution
+type AnalyticsReminderStat = analyticsdomain.ReminderStat
+type AnalyticsSummaryStats = analyticsdomain.SummaryStats
+type AnalyticsWeeklyStats = analyticsdomain.WeeklyStats
+type AnalyticsSummary = analyticsdomain.Summary
+type AnalyticsTrendPoint = analyticsdomain.TrendPoint
+type AnalyticsTrend = analyticsdomain.Trend
+type AnalyticsBreakTypeDistributionItem = analyticsdomain.BreakTypeDistributionItem
+type AnalyticsBreakTypeDistribution = analyticsdomain.BreakTypeDistribution

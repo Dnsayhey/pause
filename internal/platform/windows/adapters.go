@@ -17,7 +17,7 @@ import (
 	xwindows "golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
-	"pause/internal/core/settings"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )

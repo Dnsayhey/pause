@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"pause/internal/backend/bootstrap"
+	"pause/internal/backend/domain/reminder"
 	service "pause/internal/backend/runtime/engine"
 	"pause/internal/backend/storage/historydb"
 	"pause/internal/backend/storage/settingsjson"
-	"pause/internal/core/reminder"
 )
 
 func newTestAppWithHistory(t *testing.T) *App {

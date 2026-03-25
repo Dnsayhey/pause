@@ -1,6 +1,6 @@
 package app
 
-import "pause/internal/core/settings"
+import "pause/internal/backend/domain/settings"
 
 func resolveEffectiveTheme(setting string) string {
 	return resolveEffectiveThemeWithSystem(setting, detectPreferredTheme())

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"pause/internal/backend/domain/reminder"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/backend/storage/settingsjson"
-	"pause/internal/core/reminder"
-	"pause/internal/core/settings"
 )
 
 const (

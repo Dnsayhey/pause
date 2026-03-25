@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"pause/internal/backend/domain/reminder"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/scheduler"
 	"pause/internal/backend/runtime/state"
-	"pause/internal/core/reminder"
-	"pause/internal/core/settings"
 )
 
 func buildImmediateBreakEvent(reminders []reminder.ReminderConfig, nextByID map[int64]int, forcedReason int64) *scheduler.Event {

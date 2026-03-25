@@ -3,7 +3,7 @@ package scheduler
 import (
 	"testing"
 
-	"pause/internal/core/reminder"
+	"pause/internal/backend/domain/reminder"
 )
 
 const (

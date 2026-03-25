@@ -1,82 +1,82 @@
 package analytics
 
 type ReminderStat struct {
-	ReminderID          int64
-	ReminderName        string
-	Enabled             bool
-	ReminderType        string
-	TriggeredCount      int
-	CompletedCount      int
-	SkippedCount        int
-	CanceledCount       int
-	TotalActualBreakSec int
-	AvgActualBreakSec   float64
+	ReminderID          int64   `json:"reminderId"`
+	ReminderName        string  `json:"reminderName"`
+	Enabled             bool    `json:"enabled"`
+	ReminderType        string  `json:"reminderType"`
+	TriggeredCount      int     `json:"triggeredCount"`
+	CompletedCount      int     `json:"completedCount"`
+	SkippedCount        int     `json:"skippedCount"`
+	CanceledCount       int     `json:"canceledCount"`
+	TotalActualBreakSec int     `json:"totalActualBreakSec"`
+	AvgActualBreakSec   float64 `json:"avgActualBreakSec"`
 }
 
 type SummaryStats struct {
-	TotalSessions       int
-	TotalCompleted      int
-	TotalSkipped        int
-	TotalCanceled       int
-	TotalActualBreakSec int
-	AvgActualBreakSec   float64
+	TotalSessions       int     `json:"totalSessions"`
+	TotalCompleted      int     `json:"totalCompleted"`
+	TotalSkipped        int     `json:"totalSkipped"`
+	TotalCanceled       int     `json:"totalCanceled"`
+	TotalActualBreakSec int     `json:"totalActualBreakSec"`
+	AvgActualBreakSec   float64 `json:"avgActualBreakSec"`
 }
 
 type WeeklyStats struct {
-	FromSec   int64
-	ToSec     int64
-	Reminders []ReminderStat
-	Summary   SummaryStats
+	FromSec   int64          `json:"fromSec"`
+	ToSec     int64          `json:"toSec"`
+	Reminders []ReminderStat `json:"reminders"`
+	Summary   SummaryStats   `json:"summary"`
 }
 
 type Summary struct {
-	FromSec             int64
-	ToSec               int64
-	TotalSessions       int
-	TotalCompleted      int
-	TotalSkipped        int
-	TotalCanceled       int
-	CompletionRate      float64
-	SkipRate            float64
-	TotalActualBreakSec int
-	AvgActualBreakSec   float64
+	FromSec             int64   `json:"fromSec"`
+	ToSec               int64   `json:"toSec"`
+	TotalSessions       int     `json:"totalSessions"`
+	TotalCompleted      int     `json:"totalCompleted"`
+	TotalSkipped        int     `json:"totalSkipped"`
+	TotalCanceled       int     `json:"totalCanceled"`
+	CompletionRate      float64 `json:"completionRate"`
+	SkipRate            float64 `json:"skipRate"`
+	TotalActualBreakSec int     `json:"totalActualBreakSec"`
+	AvgActualBreakSec   float64 `json:"avgActualBreakSec"`
 }
 
 type TrendPoint struct {
-	Day                 string
-	TotalSessions       int
-	TotalCompleted      int
-	TotalSkipped        int
-	TotalCanceled       int
-	CompletionRate      float64
-	SkipRate            float64
-	TotalActualBreakSec int
-	AvgActualBreakSec   float64
+	Day                 string  `json:"day"`
+	TotalSessions       int     `json:"totalSessions"`
+	TotalCompleted      int     `json:"totalCompleted"`
+	TotalSkipped        int     `json:"totalSkipped"`
+	TotalCanceled       int     `json:"totalCanceled"`
+	CompletionRate      float64 `json:"completionRate"`
+	SkipRate            float64 `json:"skipRate"`
+	TotalActualBreakSec int     `json:"totalActualBreakSec"`
+	AvgActualBreakSec   float64 `json:"avgActualBreakSec"`
 }
 
 type Trend struct {
-	FromSec int64
-	ToSec   int64
-	Points  []TrendPoint
+	FromSec int64        `json:"fromSec"`
+	ToSec   int64        `json:"toSec"`
+	Points  []TrendPoint `json:"points"`
 }
 
 type BreakTypeDistributionItem struct {
-	ReminderID      int64
-	ReminderName    string
-	TriggeredCount  int
-	CompletedCount  int
-	SkippedCount    int
-	CanceledCount   int
-	CompletionRate  float64
-	SkipRate        float64
-	TriggeredShare  float64
-	ReminderType    string
-	ReminderEnabled bool
+	ReminderID      int64   `json:"reminderId"`
+	ReminderName    string  `json:"reminderName"`
+	TriggeredCount  int     `json:"triggeredCount"`
+	CompletedCount  int     `json:"completedCount"`
+	SkippedCount    int     `json:"skippedCount"`
+	CanceledCount   int     `json:"canceledCount"`
+	CompletionRate  float64 `json:"completionRate"`
+	SkipRate        float64 `json:"skipRate"`
+	TriggeredShare  float64 `json:"triggeredShare"`
+	ReminderType    string  `json:"reminderType,omitempty"`
+	ReminderEnabled bool    `json:"reminderEnabled"`
 }
 
 type BreakTypeDistribution struct {
-	FromSec        int64
-	ToSec          int64
-	TotalTriggered int
-	Items          []BreakTypeDistributionItem
+	FromSec        int64                       `json:"fromSec"`
+	ToSec          int64                       `json:"toSec"`
+	TotalTriggered int                         `json:"totalTriggered"`
+	Items          []BreakTypeDistributionItem `json:"items"`
 }

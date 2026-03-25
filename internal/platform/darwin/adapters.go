@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"pause/internal/core/settings"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )

@@ -15,8 +15,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/state"
-	"pause/internal/core/settings"
 	"pause/internal/desktop"
 	"pause/internal/logx"
 )

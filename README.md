@@ -107,8 +107,7 @@ Pause 是一个跨平台（macOS / Windows / Linux）的休息提醒应用。当
 
 - `main.go` / `main_wails.go`：根入口（Wails 构建根入口，含嵌入式前端资源）。
 - `internal/app/`：应用编排层（App 生命周期、Wails 绑定、桌面交互逻辑）。
-- `internal/backend/`：后端分层实现（`domain / usecase / ports / adapters / runtime / storage / bootstrap`）。
-- `internal/core/`：轻量共享核心（`analytics / reminder / settings` 等纯类型与规则）。
+- `internal/backend/`：后端分层实现（`domain / usecase / ports / adapters / runtime / storage / bootstrap`），其中 `domain/` 是后端唯一领域模型来源。
 - `internal/desktop/`：桌面能力抽象（状态栏、全屏遮罩、窗口行为）。
 - `internal/desktop/macbridge/`：macOS 原生桥接实现（状态栏、全屏遮罩、窗口行为的 Objective-C 桥接）。
 - `internal/platform/`：平台 facade 与接口定义。

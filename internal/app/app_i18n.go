@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"pause/internal/core/settings"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/desktop"
 )
 

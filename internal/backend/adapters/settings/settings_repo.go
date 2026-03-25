@@ -6,18 +6,18 @@ import (
 
 	settingsdomain "pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
-	coreservice "pause/internal/backend/runtime/engine"
+	runtimeengine "pause/internal/backend/runtime/engine"
 )
 
 var errEngineUnavailable = errors.New("engine unavailable")
 
 type SettingsRepository struct {
-	engine *coreservice.Engine
+	engine *runtimeengine.Engine
 }
 
 var _ ports.SettingsRepository = (*SettingsRepository)(nil)
 
-func NewSettingsRepository(engine *coreservice.Engine) *SettingsRepository {
+func NewSettingsRepository(engine *runtimeengine.Engine) *SettingsRepository {
 	return &SettingsRepository{engine: engine}
 }
 

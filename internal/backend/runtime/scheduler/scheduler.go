@@ -3,7 +3,7 @@ package scheduler
 import (
 	"sort"
 
-	"pause/internal/core/reminder"
+	"pause/internal/backend/domain/reminder"
 )
 
 const mergeWindowSec = 60

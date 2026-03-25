@@ -5,7 +5,7 @@ import (
 
 	historyadapter "pause/internal/backend/adapters/history"
 	settingsadapter "pause/internal/backend/adapters/settings"
-	coreservice "pause/internal/backend/runtime/engine"
+	runtimeengine "pause/internal/backend/runtime/engine"
 	historydb "pause/internal/backend/storage/historydb"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
@@ -37,7 +37,7 @@ func NewContainer(historyStore *historydb.Store) (*Container, error) {
 	}, nil
 }
 
-func NewSettingsService(engine *coreservice.Engine) (*settingsusecase.Service, error) {
+func NewSettingsService(engine *runtimeengine.Engine) (*settingsusecase.Service, error) {
 	if engine == nil {
 		return nil, errors.New("engine unavailable")
 	}

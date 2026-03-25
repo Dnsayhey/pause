@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"pause/internal/core/settings"
+	"pause/internal/backend/domain/settings"
 )
 
 type BreakRepository interface {

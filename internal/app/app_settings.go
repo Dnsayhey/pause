@@ -3,7 +3,7 @@ package app
 import (
 	"errors"
 
-	"pause/internal/core/settings"
+	"pause/internal/backend/domain/settings"
 	"pause/internal/logx"
 )
 

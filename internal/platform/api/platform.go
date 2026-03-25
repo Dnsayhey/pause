@@ -1,6 +1,6 @@
 package api
 
-import "pause/internal/core/settings"
+import "pause/internal/backend/domain/settings"
 
 type Adapters struct {
 	IdleProvider      IdleProvider
