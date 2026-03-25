@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"pause/internal/backend/bootstrap"
-	"pause/internal/core/history"
+	"pause/internal/backend/storage/historydb"
 	"pause/internal/core/settings"
 )
 
@@ -87,7 +87,7 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 	intervalSec := 999
 	breakSec := 11
 	reminderType := "rest"
-	if _, err := store.CreateReminder(context.Background(), history.Reminder{
+	if _, err := store.CreateReminder(context.Background(), historydb.Reminder{
 		Name:         customName,
 		Enabled:      enabled,
 		IntervalSec:  intervalSec,
@@ -117,17 +117,17 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 	requireReminderByName(t, items, "喝水")
 }
 
-func openHistoryStoreForSeedTest(t *testing.T) *history.Store {
+func openHistoryStoreForSeedTest(t *testing.T) *historydb.Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(context.Background(), path)
+	store, err := historydb.OpenStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
 	return store
 }
 
-func openReminderServiceForSeedTest(t *testing.T, store *history.Store) reminderService {
+func openReminderServiceForSeedTest(t *testing.T, store *historydb.Store) reminderService {
 	t.Helper()
 	container, err := bootstrap.NewContainer(store)
 	if err != nil {
@@ -136,7 +136,7 @@ func openReminderServiceForSeedTest(t *testing.T, store *history.Store) reminder
 	return container.ReminderService
 }
 
-func requireReminderByName(t *testing.T, reminders []history.Reminder, name string) history.Reminder {
+func requireReminderByName(t *testing.T, reminders []historydb.Reminder, name string) historydb.Reminder {
 	t.Helper()
 	for _, reminder := range reminders {
 		if reminder.Name == name {
@@ -144,5 +144,5 @@ func requireReminderByName(t *testing.T, reminders []history.Reminder, name stri
 		}
 	}
 	t.Fatalf("expected reminder %q in list", name)
-	return history.Reminder{}
+	return historydb.Reminder{}
 }

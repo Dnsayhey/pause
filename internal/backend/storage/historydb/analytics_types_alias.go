@@ -1,4 +1,4 @@
-package history
+package historydb
 
 import coreanalytics "pause/internal/core/analytics"
 

@@ -6,18 +6,18 @@ import (
 
 	reminderdomain "pause/internal/backend/domain/reminder"
 	"pause/internal/backend/ports"
-	corehistory "pause/internal/core/history"
+	historydb "pause/internal/backend/storage/historydb"
 )
 
 var errHistoryStoreUnavailable = errors.New("history store unavailable")
 
 type ReminderRepository struct {
-	store *corehistory.Store
+	store *historydb.Store
 }
 
 var _ ports.ReminderRepository = (*ReminderRepository)(nil)
 
-func NewReminderRepository(store *corehistory.Store) *ReminderRepository {
+func NewReminderRepository(store *historydb.Store) *ReminderRepository {
 	return &ReminderRepository{store: store}
 }
 
@@ -57,7 +57,7 @@ func (r *ReminderRepository) CreateReminder(ctx context.Context, input reminderd
 		reminderType = *input.ReminderType
 	}
 
-	id, err := r.store.CreateReminder(ctx, corehistory.Reminder{
+	id, err := r.store.CreateReminder(ctx, historydb.Reminder{
 		Name:         input.Name,
 		Enabled:      enabled,
 		IntervalSec:  input.IntervalSec,
@@ -65,7 +65,7 @@ func (r *ReminderRepository) CreateReminder(ctx context.Context, input reminderd
 		ReminderType: reminderType,
 	})
 	if err != nil {
-		if errors.Is(err, corehistory.ErrReminderAlreadyExists) {
+		if errors.Is(err, historydb.ErrReminderAlreadyExists) {
 			return 0, reminderdomain.ErrAlreadyExists
 		}
 		return 0, err
@@ -78,7 +78,7 @@ func (r *ReminderRepository) UpdateReminder(ctx context.Context, patch reminderd
 		return err
 	}
 
-	err := r.store.UpdateReminder(ctx, patch.ID, corehistory.ReminderPatch{
+	err := r.store.UpdateReminder(ctx, patch.ID, historydb.ReminderPatch{
 		Name:         patch.Name,
 		Enabled:      patch.Enabled,
 		IntervalSec:  patch.IntervalSec,
@@ -86,7 +86,7 @@ func (r *ReminderRepository) UpdateReminder(ctx context.Context, patch reminderd
 		ReminderType: patch.ReminderType,
 	})
 	if err != nil {
-		if errors.Is(err, corehistory.ErrReminderNotFound) {
+		if errors.Is(err, historydb.ErrReminderNotFound) {
 			return reminderdomain.ErrNotFound
 		}
 		return err
@@ -100,7 +100,7 @@ func (r *ReminderRepository) DeleteReminder(ctx context.Context, reminderID int6
 	}
 	err := r.store.DeleteReminder(ctx, reminderID)
 	if err != nil {
-		if errors.Is(err, corehistory.ErrReminderNotFound) {
+		if errors.Is(err, historydb.ErrReminderNotFound) {
 			return reminderdomain.ErrNotFound
 		}
 		return err

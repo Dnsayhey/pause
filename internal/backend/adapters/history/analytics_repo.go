@@ -6,16 +6,16 @@ import (
 
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	"pause/internal/backend/ports"
-	corehistory "pause/internal/core/history"
+	historydb "pause/internal/backend/storage/historydb"
 )
 
 type AnalyticsRepository struct {
-	store *corehistory.Store
+	store *historydb.Store
 }
 
 var _ ports.AnalyticsRepository = (*AnalyticsRepository)(nil)
 
-func NewAnalyticsRepository(store *corehistory.Store) *AnalyticsRepository {
+func NewAnalyticsRepository(store *historydb.Store) *AnalyticsRepository {
 	return &AnalyticsRepository{store: store}
 }
 
@@ -74,7 +74,7 @@ func (r *AnalyticsRepository) ensureStore() error {
 	return nil
 }
 
-func weeklyStatsFromHistory(source corehistory.AnalyticsWeeklyStats) analyticsdomain.WeeklyStats {
+func weeklyStatsFromHistory(source historydb.AnalyticsWeeklyStats) analyticsdomain.WeeklyStats {
 	items := make([]analyticsdomain.ReminderStat, 0, len(source.Reminders))
 	for _, item := range source.Reminders {
 		items = append(items, analyticsdomain.ReminderStat{
@@ -105,7 +105,7 @@ func weeklyStatsFromHistory(source corehistory.AnalyticsWeeklyStats) analyticsdo
 	}
 }
 
-func summaryFromHistory(source corehistory.AnalyticsSummary) analyticsdomain.Summary {
+func summaryFromHistory(source historydb.AnalyticsSummary) analyticsdomain.Summary {
 	return analyticsdomain.Summary{
 		FromSec:             source.FromSec,
 		ToSec:               source.ToSec,
@@ -120,7 +120,7 @@ func summaryFromHistory(source corehistory.AnalyticsSummary) analyticsdomain.Sum
 	}
 }
 
-func trendFromHistory(source corehistory.AnalyticsTrend) analyticsdomain.Trend {
+func trendFromHistory(source historydb.AnalyticsTrend) analyticsdomain.Trend {
 	points := make([]analyticsdomain.TrendPoint, 0, len(source.Points))
 	for _, item := range source.Points {
 		points = append(points, analyticsdomain.TrendPoint{
@@ -142,7 +142,7 @@ func trendFromHistory(source corehistory.AnalyticsTrend) analyticsdomain.Trend {
 	}
 }
 
-func breakTypeDistributionFromHistory(source corehistory.AnalyticsBreakTypeDistribution) analyticsdomain.BreakTypeDistribution {
+func breakTypeDistributionFromHistory(source historydb.AnalyticsBreakTypeDistribution) analyticsdomain.BreakTypeDistribution {
 	items := make([]analyticsdomain.BreakTypeDistributionItem, 0, len(source.Items))
 	for _, item := range source.Items {
 		items = append(items, analyticsdomain.BreakTypeDistributionItem{

@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	historyadapter "pause/internal/backend/adapters/history"
+	"pause/internal/backend/storage/historydb"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
-	"pause/internal/core/history"
 	"pause/internal/core/service"
 	"pause/internal/core/settings"
 	"pause/internal/platform"
@@ -18,7 +18,7 @@ import (
 
 type Runtime struct {
 	SettingsStore    *settings.SettingsStore
-	History          *history.Store
+	History          *historydb.Store
 	HistoryPath      string
 	Engine           *service.Engine
 	ReminderService  *reminderusecase.Service
@@ -38,7 +38,7 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		return nil, err
 	}
 	historyPath := defaultHistoryPath(cleanPath)
-	historyStore, err := history.OpenStore(context.Background(), historyPath)
+	historyStore, err := historydb.OpenStore(context.Background(), historyPath)
 	if err != nil {
 		return nil, err
 	}

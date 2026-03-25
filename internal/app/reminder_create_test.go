@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"pause/internal/backend/bootstrap"
-	"pause/internal/core/history"
+	"pause/internal/backend/storage/historydb"
 	"pause/internal/core/reminder"
 	"pause/internal/core/service"
 	"pause/internal/core/settings"
@@ -22,7 +22,7 @@ func newTestAppWithHistory(t *testing.T) *App {
 	}
 
 	historyPath := filepath.Join(t.TempDir(), "history.db")
-	historyStore, err := history.OpenStore(context.Background(), historyPath)
+	historyStore, err := historydb.OpenStore(context.Background(), historyPath)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}

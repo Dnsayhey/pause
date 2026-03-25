@@ -5,10 +5,10 @@ import (
 
 	historyadapter "pause/internal/backend/adapters/history"
 	settingsadapter "pause/internal/backend/adapters/settings"
+	historydb "pause/internal/backend/storage/historydb"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
-	corehistory "pause/internal/core/history"
 	coreservice "pause/internal/core/service"
 )
 
@@ -17,7 +17,7 @@ type Container struct {
 	AnalyticsService *analyticsusecase.Service
 }
 
-func NewContainer(historyStore *corehistory.Store) (*Container, error) {
+func NewContainer(historyStore *historydb.Store) (*Container, error) {
 	if historyStore == nil {
 		return nil, errors.New("history store unavailable")
 	}
