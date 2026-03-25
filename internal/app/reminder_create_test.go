@@ -33,11 +33,11 @@ func newTestAppWithHistory(t *testing.T) *App {
 	}
 
 	engine := service.NewEngine(store, nil, nil, nil, nil, historyStore)
-	defs, err := historyStore.ListReminders(context.Background())
+	defs, err := container.ReminderService.List(context.Background())
 	if err != nil {
-		t.Fatalf("ListReminders() error = %v", err)
+		t.Fatalf("ReminderService.List() error = %v", err)
 	}
-	engine.SetReminderConfigs(historyDefsToConfig(defs))
+	engine.SetReminderConfigs(reminderDefsToConfig(defs))
 
 	return &App{
 		ctx:       context.Background(),

@@ -4,12 +4,14 @@ import (
 	"errors"
 
 	historyadapter "pause/internal/backend/adapters/history"
+	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	corehistory "pause/internal/core/history"
 )
 
 type Container struct {
-	ReminderService *reminderusecase.Service
+	ReminderService  *reminderusecase.Service
+	AnalyticsService *analyticsusecase.Service
 }
 
 func NewContainer(historyStore *corehistory.HistoryStore) (*Container, error) {
@@ -21,7 +23,13 @@ func NewContainer(historyStore *corehistory.HistoryStore) (*Container, error) {
 	if err != nil {
 		return nil, err
 	}
+	analyticsRepo := historyadapter.NewAnalyticsRepository(historyStore)
+	analyticsService, err := analyticsusecase.NewService(analyticsRepo)
+	if err != nil {
+		return nil, err
+	}
 	return &Container{
-		ReminderService: reminderService,
+		ReminderService:  reminderService,
+		AnalyticsService: analyticsService,
 	}, nil
 }

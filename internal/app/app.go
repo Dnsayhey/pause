@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"pause/internal/backend/bootstrap"
+	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
 	"pause/internal/core/history"
 	"pause/internal/core/reminder"
@@ -27,6 +28,7 @@ type App struct {
 	engine        *service.Engine
 	history       *history.HistoryStore
 	reminders     reminderService
+	analytics     analyticsService
 	notifier      platform.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
@@ -37,6 +39,13 @@ type reminderService interface {
 	Create(ctx context.Context, input reminderdomain.CreateInput) ([]reminderdomain.Reminder, error)
 	Update(ctx context.Context, patch reminderdomain.Patch) ([]reminderdomain.Reminder, error)
 	Delete(ctx context.Context, reminderID int64) ([]reminderdomain.Reminder, error)
+}
+
+type analyticsService interface {
+	GetWeeklyStats(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.WeeklyStats, error)
+	GetSummary(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.Summary, error)
+	GetTrendByDay(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.Trend, error)
+	GetBreakTypeDistribution(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.BreakTypeDistribution, error)
 }
 
 type desktopController interface {
@@ -105,6 +114,7 @@ func NewApp(configPath string) (*App, error) {
 		engine:    engine,
 		history:   historyStore,
 		reminders: container.ReminderService,
+		analytics: container.AnalyticsService,
 		notifier:  adapters.Notifier,
 		desktop:   newDesktopController(),
 	}, nil
@@ -394,25 +404,6 @@ func reminderDefsToConfig(defs []reminderdomain.Reminder) []reminder.ReminderCon
 	return cloneReminderConfigs(result)
 }
 
-func historyDefsToConfig(defs []history.Reminder) []reminder.ReminderConfig {
-	result := make([]reminder.ReminderConfig, 0, len(defs))
-	for _, def := range defs {
-		id := def.ID
-		if id <= 0 {
-			continue
-		}
-		result = append(result, reminder.ReminderConfig{
-			ID:           id,
-			Name:         strings.TrimSpace(def.Name),
-			Enabled:      def.Enabled,
-			IntervalSec:  def.IntervalSec,
-			BreakSec:     def.BreakSec,
-			ReminderType: strings.TrimSpace(def.ReminderType),
-		})
-	}
-	return cloneReminderConfigs(result)
-}
-
 func cloneReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
 	if len(reminders) == 0 {
 		return nil
@@ -420,6 +411,100 @@ func cloneReminderConfigs(reminders []reminder.ReminderConfig) []reminder.Remind
 	cloned := make([]reminder.ReminderConfig, 0, len(reminders))
 	cloned = append(cloned, reminders...)
 	return cloned
+}
+
+func analyticsWeeklyStatsToHistory(source analyticsdomain.WeeklyStats) history.AnalyticsWeeklyStats {
+	reminders := make([]history.AnalyticsReminderStat, 0, len(source.Reminders))
+	for _, row := range source.Reminders {
+		reminders = append(reminders, history.AnalyticsReminderStat{
+			ReminderID:          row.ReminderID,
+			ReminderName:        row.ReminderName,
+			Enabled:             row.Enabled,
+			ReminderType:        row.ReminderType,
+			TriggeredCount:      row.TriggeredCount,
+			CompletedCount:      row.CompletedCount,
+			SkippedCount:        row.SkippedCount,
+			CanceledCount:       row.CanceledCount,
+			TotalActualBreakSec: row.TotalActualBreakSec,
+			AvgActualBreakSec:   row.AvgActualBreakSec,
+		})
+	}
+
+	return history.AnalyticsWeeklyStats{
+		FromSec:   source.FromSec,
+		ToSec:     source.ToSec,
+		Reminders: reminders,
+		Summary: history.AnalyticsSummaryStats{
+			TotalSessions:       source.Summary.TotalSessions,
+			TotalCompleted:      source.Summary.TotalCompleted,
+			TotalSkipped:        source.Summary.TotalSkipped,
+			TotalCanceled:       source.Summary.TotalCanceled,
+			TotalActualBreakSec: source.Summary.TotalActualBreakSec,
+			AvgActualBreakSec:   source.Summary.AvgActualBreakSec,
+		},
+	}
+}
+
+func analyticsSummaryToHistory(source analyticsdomain.Summary) history.AnalyticsSummary {
+	return history.AnalyticsSummary{
+		FromSec:             source.FromSec,
+		ToSec:               source.ToSec,
+		TotalSessions:       source.TotalSessions,
+		TotalCompleted:      source.TotalCompleted,
+		TotalSkipped:        source.TotalSkipped,
+		TotalCanceled:       source.TotalCanceled,
+		CompletionRate:      source.CompletionRate,
+		SkipRate:            source.SkipRate,
+		TotalActualBreakSec: source.TotalActualBreakSec,
+		AvgActualBreakSec:   source.AvgActualBreakSec,
+	}
+}
+
+func analyticsTrendToHistory(source analyticsdomain.Trend) history.AnalyticsTrend {
+	points := make([]history.AnalyticsTrendPoint, 0, len(source.Points))
+	for _, row := range source.Points {
+		points = append(points, history.AnalyticsTrendPoint{
+			Day:                 row.Day,
+			TotalSessions:       row.TotalSessions,
+			TotalCompleted:      row.TotalCompleted,
+			TotalSkipped:        row.TotalSkipped,
+			TotalCanceled:       row.TotalCanceled,
+			CompletionRate:      row.CompletionRate,
+			SkipRate:            row.SkipRate,
+			TotalActualBreakSec: row.TotalActualBreakSec,
+			AvgActualBreakSec:   row.AvgActualBreakSec,
+		})
+	}
+	return history.AnalyticsTrend{
+		FromSec: source.FromSec,
+		ToSec:   source.ToSec,
+		Points:  points,
+	}
+}
+
+func analyticsBreakTypeDistributionToHistory(source analyticsdomain.BreakTypeDistribution) history.AnalyticsBreakTypeDistribution {
+	items := make([]history.AnalyticsBreakTypeDistributionItem, 0, len(source.Items))
+	for _, row := range source.Items {
+		items = append(items, history.AnalyticsBreakTypeDistributionItem{
+			ReminderID:      row.ReminderID,
+			ReminderName:    row.ReminderName,
+			TriggeredCount:  row.TriggeredCount,
+			CompletedCount:  row.CompletedCount,
+			SkippedCount:    row.SkippedCount,
+			CanceledCount:   row.CanceledCount,
+			CompletionRate:  row.CompletionRate,
+			SkipRate:        row.SkipRate,
+			TriggeredShare:  row.TriggeredShare,
+			ReminderType:    row.ReminderType,
+			ReminderEnabled: row.ReminderEnabled,
+		})
+	}
+	return history.AnalyticsBreakTypeDistribution{
+		FromSec:        source.FromSec,
+		ToSec:          source.ToSec,
+		TotalTriggered: source.TotalTriggered,
+		Items:          items,
+	}
 }
 
 func ensureBuiltInRemindersForFirstInstall(ctx context.Context, store *history.HistoryStore, language string) error {
@@ -471,71 +556,48 @@ func ensureBuiltInRemindersForFirstInstall(ctx context.Context, store *history.H
 	return nil
 }
 
-func currentWeekRange(now time.Time) (time.Time, time.Time) {
-	local := now.Local()
-	weekday := int(local.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	start := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location()).
-		AddDate(0, 0, -(weekday - 1))
-	end := start.AddDate(0, 0, 7)
-	return start, end
-}
-
 func (a *App) GetAnalyticsWeeklyStats(fromSec int64, toSec int64) (history.AnalyticsWeeklyStats, error) {
-	if a == nil || a.history == nil {
-		return history.AnalyticsWeeklyStats{}, errors.New("history store unavailable")
+	if a == nil || a.analytics == nil {
+		return history.AnalyticsWeeklyStats{}, errors.New("analytics service unavailable")
 	}
-	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	result, err := a.analytics.GetWeeklyStats(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
 		return history.AnalyticsWeeklyStats{}, err
 	}
-	return a.history.QueryAnalyticsWeeklyStats(from, to)
+	return analyticsWeeklyStatsToHistory(result), nil
 }
 
 func (a *App) GetAnalyticsSummary(fromSec int64, toSec int64) (history.AnalyticsSummary, error) {
-	if a == nil || a.history == nil {
-		return history.AnalyticsSummary{}, errors.New("history store unavailable")
+	if a == nil || a.analytics == nil {
+		return history.AnalyticsSummary{}, errors.New("analytics service unavailable")
 	}
-	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	result, err := a.analytics.GetSummary(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
 		return history.AnalyticsSummary{}, err
 	}
-	return a.history.QueryAnalyticsSummary(from, to)
+	return analyticsSummaryToHistory(result), nil
 }
 
 func (a *App) GetAnalyticsTrendByDay(fromSec int64, toSec int64) (history.AnalyticsTrend, error) {
-	if a == nil || a.history == nil {
-		return history.AnalyticsTrend{}, errors.New("history store unavailable")
+	if a == nil || a.analytics == nil {
+		return history.AnalyticsTrend{}, errors.New("analytics service unavailable")
 	}
-	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	result, err := a.analytics.GetTrendByDay(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
 		return history.AnalyticsTrend{}, err
 	}
-	return a.history.QueryAnalyticsTrendByDay(from, to)
+	return analyticsTrendToHistory(result), nil
 }
 
 func (a *App) GetAnalyticsBreakTypeDistribution(fromSec int64, toSec int64) (history.AnalyticsBreakTypeDistribution, error) {
-	if a == nil || a.history == nil {
-		return history.AnalyticsBreakTypeDistribution{}, errors.New("history store unavailable")
+	if a == nil || a.analytics == nil {
+		return history.AnalyticsBreakTypeDistribution{}, errors.New("analytics service unavailable")
 	}
-	from, to, err := resolveAnalyticsRange(fromSec, toSec)
+	result, err := a.analytics.GetBreakTypeDistribution(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
 		return history.AnalyticsBreakTypeDistribution{}, err
 	}
-	return a.history.QueryAnalyticsBreakTypeDistribution(from, to)
-}
-
-func resolveAnalyticsRange(fromSec int64, toSec int64) (time.Time, time.Time, error) {
-	if fromSec == 0 && toSec == 0 {
-		start, end := currentWeekRange(time.Now())
-		return start, end, nil
-	}
-	if toSec <= fromSec {
-		return time.Time{}, time.Time{}, errors.New("invalid time range")
-	}
-	return time.Unix(fromSec, 0), time.Unix(toSec, 0), nil
+	return analyticsBreakTypeDistributionToHistory(result), nil
 }
 
 func (a *App) Shutdown(_ context.Context) {
