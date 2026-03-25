@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestShowReminderPrefersToastPath(t *testing.T) {
+func TestShowReminder_PrefersToast(t *testing.T) {
 	origToast := showToastReminder
 	origBalloon := showBalloonNotification
 	t.Cleanup(func() {
@@ -19,14 +19,8 @@ func TestShowReminderPrefersToastPath(t *testing.T) {
 	calledBalloon := false
 	showToastReminder = func(appID, title, body string) error {
 		calledToast = true
-		if appID != "com.pause.app" {
-			t.Fatalf("unexpected appID: %s", appID)
-		}
-		if title != "Pause" {
-			t.Fatalf("unexpected title: %s", title)
-		}
-		if body != "Break started" {
-			t.Fatalf("unexpected body: %s", body)
+		if appID != "com.pause.app" || title != "Pause" || body != "Break started" {
+			t.Fatalf("unexpected toast payload appID=%q title=%q body=%q", appID, title, body)
 		}
 		return nil
 	}
@@ -37,17 +31,14 @@ func TestShowReminderPrefersToastPath(t *testing.T) {
 
 	n := windowsNotifier{appID: "com.pause.app"}
 	if err := n.ShowReminder(" ", " "); err != nil {
-		t.Fatalf("ShowReminder() error = %v", err)
+		t.Fatalf("ShowReminder() err=%v", err)
 	}
-	if !calledToast {
-		t.Fatalf("expected toast path to be called")
-	}
-	if calledBalloon {
-		t.Fatalf("did not expect balloon fallback when toast succeeds")
+	if !calledToast || calledBalloon {
+		t.Fatalf("toast/balloon path mismatch toast=%t balloon=%t", calledToast, calledBalloon)
 	}
 }
 
-func TestShowReminderFallsBackWhenToastFails(t *testing.T) {
+func TestShowReminder_FallsBackToBalloonError(t *testing.T) {
 	origToast := showToastReminder
 	origBalloon := showBalloonNotification
 	t.Cleanup(func() {
@@ -57,17 +48,11 @@ func TestShowReminderFallsBackWhenToastFails(t *testing.T) {
 
 	toastErr := errors.New("toast failed")
 	balloonErr := errors.New("balloon failed")
-
-	showToastReminder = func(_, _, _ string) error {
-		return toastErr
-	}
-	showBalloonNotification = func(_, _ string) error {
-		return balloonErr
-	}
+	showToastReminder = func(_, _, _ string) error { return toastErr }
+	showBalloonNotification = func(_, _ string) error { return balloonErr }
 
 	n := windowsNotifier{appID: "com.pause.app"}
-	err := n.ShowReminder("t", "b")
-	if !errors.Is(err, balloonErr) {
-		t.Fatalf("expected balloon error, got %v", err)
+	if err := n.ShowReminder("t", "b"); !errors.Is(err, balloonErr) {
+		t.Fatalf("expected balloon error, got=%v", err)
 	}
 }

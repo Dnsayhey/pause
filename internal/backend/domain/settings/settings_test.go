@@ -2,81 +2,77 @@ package settings
 
 import "testing"
 
-func TestApplyPatchNormalizesValues(t *testing.T) {
+func TestSettingsApplyPatch_NormalizeInvalidValues(t *testing.T) {
 	base := DefaultSettings()
-	badMode := "bad_mode"
-	badVolume := 999
-	badThreshold := -1
-	badLanguage := "fr-FR"
+	badMode := "wrong"
+	badVolume := 101
+	badThreshold := -3
+	badLanguage := "ja-JP"
 	badTheme := "sepia"
 
 	got := base.ApplyPatch(SettingsPatch{
 		Sound: &SoundSettingsPatch{Volume: &badVolume},
-		Timer: &TimerSettingsPatch{
-			Mode:                  &badMode,
-			IdlePauseThresholdSec: &badThreshold,
-		},
-		UI: &UISettingsPatch{
-			Language: &badLanguage,
-			Theme:    &badTheme,
-		},
+		Timer: &TimerSettingsPatch{Mode: &badMode, IdlePauseThresholdSec: &badThreshold},
+		UI:    &UISettingsPatch{Language: &badLanguage, Theme: &badTheme},
 	})
 
-	if got.Timer.Mode != TimerModeIdlePause {
-		t.Fatalf("expected timer mode fallback to %q, got %q", TimerModeIdlePause, got.Timer.Mode)
-	}
 	if got.Sound.Volume != base.Sound.Volume {
-		t.Fatalf("expected volume fallback to %d, got %d", base.Sound.Volume, got.Sound.Volume)
+		t.Fatalf("volume fallback mismatch: got=%d want=%d", got.Sound.Volume, base.Sound.Volume)
+	}
+	if got.Timer.Mode != TimerModeIdlePause {
+		t.Fatalf("timer mode fallback mismatch: got=%q", got.Timer.Mode)
 	}
 	if got.Timer.IdlePauseThresholdSec != base.Timer.IdlePauseThresholdSec {
-		t.Fatalf("expected idle threshold fallback to %d, got %d", base.Timer.IdlePauseThresholdSec, got.Timer.IdlePauseThresholdSec)
+		t.Fatalf("idle threshold fallback mismatch: got=%d want=%d", got.Timer.IdlePauseThresholdSec, base.Timer.IdlePauseThresholdSec)
 	}
 	if got.UI.Language != base.UI.Language {
-		t.Fatalf("expected language fallback to %q, got %q", base.UI.Language, got.UI.Language)
+		t.Fatalf("language fallback mismatch: got=%q want=%q", got.UI.Language, base.UI.Language)
 	}
 	if got.UI.Theme != base.UI.Theme {
-		t.Fatalf("expected theme fallback to %q, got %q", base.UI.Theme, got.UI.Theme)
+		t.Fatalf("theme fallback mismatch: got=%q want=%q", got.UI.Theme, base.UI.Theme)
 	}
 }
 
-func TestNormalizeUILanguage(t *testing.T) {
+func TestNormalizeUILanguage_Table(t *testing.T) {
 	cases := []struct {
-		input string
-		want  string
+		in   string
+		want string
 	}{
-		{input: "", want: UILanguageAuto},
-		{input: "auto", want: UILanguageAuto},
-		{input: "zh", want: UILanguageZhCN},
-		{input: "zh-CN", want: UILanguageZhCN},
-		{input: "en", want: UILanguageEnUS},
-		{input: "en-US", want: UILanguageEnUS},
-		{input: "unknown", want: UILanguageAuto},
+		{"", UILanguageAuto},
+		{"auto", UILanguageAuto},
+		{"zh", UILanguageZhCN},
+		{"zh-CN", UILanguageZhCN},
+		{"en", UILanguageEnUS},
+		{"en-US", UILanguageEnUS},
+		{"unknown", UILanguageAuto},
 	}
 
 	for _, tc := range cases {
-		got := NormalizeUILanguage(tc.input)
-		if got != tc.want {
-			t.Fatalf("NormalizeUILanguage(%q) = %q, want %q", tc.input, got, tc.want)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			if got := NormalizeUILanguage(tc.in); got != tc.want {
+				t.Fatalf("NormalizeUILanguage(%q)=%q want=%q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestNormalizeUITheme(t *testing.T) {
+func TestNormalizeUITheme_Table(t *testing.T) {
 	cases := []struct {
-		input string
-		want  string
+		in   string
+		want string
 	}{
-		{input: "", want: UIThemeAuto},
-		{input: "auto", want: UIThemeAuto},
-		{input: "light", want: UIThemeLight},
-		{input: "dark", want: UIThemeDark},
-		{input: "unknown", want: UIThemeAuto},
+		{"", UIThemeAuto},
+		{"auto", UIThemeAuto},
+		{"light", UIThemeLight},
+		{"dark", UIThemeDark},
+		{"unknown", UIThemeAuto},
 	}
 
 	for _, tc := range cases {
-		got := NormalizeUITheme(tc.input)
-		if got != tc.want {
-			t.Fatalf("NormalizeUITheme(%q) = %q, want %q", tc.input, got, tc.want)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			if got := NormalizeUITheme(tc.in); got != tc.want {
+				t.Fatalf("NormalizeUITheme(%q)=%q want=%q", tc.in, got, tc.want)
+			}
+		})
 	}
 }

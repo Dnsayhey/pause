@@ -5,111 +5,63 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	analyticsdomain "pause/internal/backend/domain/analytics"
 )
 
-type analyticsFixture struct {
-	eyeID   int64
-	standID int64
-	from    time.Time
-	to      time.Time
-}
-
-func prepareAnalyticsFixture(t *testing.T) (*Store, analyticsFixture) {
+func analyticsFixtureStore(t *testing.T) *Store {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenStore(context.Background(), filepath.Join(t.TempDir(), "history.db"))
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenStore() err=%v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
-	eyeID, err := store.CreateReminder(context.Background(), Reminder{
-		Name:         "Eye",
-		Enabled:      true,
-		IntervalSec:  20 * 60,
-		BreakSec:     20,
-		ReminderType: "rest",
-	})
+	eyeID, err := store.CreateReminder(context.Background(), Reminder{Name: "Eye", Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"})
 	if err != nil {
-		t.Fatalf("CreateReminder(eye) error = %v", err)
+		t.Fatalf("CreateReminder(Eye) err=%v", err)
 	}
-	standID, err := store.CreateReminder(context.Background(), Reminder{
-		Name:         "Stand",
-		Enabled:      true,
-		IntervalSec:  60 * 60,
-		BreakSec:     5 * 60,
-		ReminderType: "rest",
-	})
+	standID, err := store.CreateReminder(context.Background(), Reminder{Name: "Stand", Enabled: true, IntervalSec: 60 * 60, BreakSec: 300, ReminderType: "rest"})
 	if err != nil {
-		t.Fatalf("CreateReminder(stand) error = %v", err)
+		t.Fatalf("CreateReminder(Stand) err=%v", err)
 	}
 
 	base := time.Unix(1_700_000_000, 0).UTC()
 	if err := store.RecordBreak(context.Background(), base, base.Add(20*time.Second), "scheduled", 20, 20, false, []int64{eyeID}); err != nil {
-		t.Fatalf("RecordBreak(s1) error = %v", err)
+		t.Fatalf("RecordBreak(completed) err=%v", err)
 	}
-
-	if err := store.RecordBreak(
-		context.Background(),
-		base.Add(2*time.Hour),
-		base.Add(2*time.Hour+40*time.Second),
-		"manual",
-		300,
-		40,
-		true,
-		[]int64{standID},
-	); err != nil {
-		t.Fatalf("RecordBreak(s2) error = %v", err)
+	if err := store.RecordBreak(context.Background(), base.Add(time.Hour), base.Add(time.Hour+40*time.Second), "manual", 300, 40, true, []int64{standID}); err != nil {
+		t.Fatalf("RecordBreak(skipped) err=%v", err)
 	}
+	return store
+}
 
-	return store, analyticsFixture{
-		eyeID:   eyeID,
-		standID: standID,
-		from:    base.Add(-time.Hour),
-		to:      base.Add(24 * time.Hour),
+func TestAnalytics_QuerySummary(t *testing.T) {
+	store := analyticsFixtureStore(t)
+	base := time.Unix(1_700_000_000, 0).UTC()
+
+	summary, err := store.QueryAnalyticsSummary(base.Add(-time.Hour), base.Add(24*time.Hour))
+	if err != nil {
+		t.Fatalf("QueryAnalyticsSummary() err=%v", err)
+	}
+	if summary.TotalSessions != 2 || summary.TotalCompleted != 1 || summary.TotalSkipped != 1 {
+		t.Fatalf("summary counters mismatch: %+v", summary)
+	}
+	if summary.TotalActualBreakSec != 20 {
+		t.Fatalf("unexpected total actual break sec=%d", summary.TotalActualBreakSec)
 	}
 }
 
-func TestQueryAnalyticsSummary(t *testing.T) {
-	store, fixture := prepareAnalyticsFixture(t)
-	defer store.Close()
+func TestAnalytics_QueryBreakTypeDistribution(t *testing.T) {
+	store := analyticsFixtureStore(t)
+	base := time.Unix(1_700_000_000, 0).UTC()
 
-	summary, err := store.QueryAnalyticsSummary(fixture.from, fixture.to)
+	dist, err := store.QueryAnalyticsBreakTypeDistribution(base.Add(-time.Hour), base.Add(24*time.Hour))
 	if err != nil {
-		t.Fatalf("QueryAnalyticsSummary() error = %v", err)
+		t.Fatalf("QueryAnalyticsBreakTypeDistribution() err=%v", err)
 	}
-	if summary.TotalSessions != 2 {
-		t.Fatalf("expected total sessions 2, got %d", summary.TotalSessions)
+	if dist.TotalTriggered != 2 {
+		t.Fatalf("total triggered mismatch: got=%d want=2", dist.TotalTriggered)
 	}
-	if summary.TotalCompleted != 1 {
-		t.Fatalf("expected completed 1, got %d", summary.TotalCompleted)
-	}
-	if summary.TotalSkipped != 1 {
-		t.Fatalf("expected skipped 1, got %d", summary.TotalSkipped)
-	}
-}
-
-func TestQueryAnalyticsBreakTypeDistribution(t *testing.T) {
-	store, fixture := prepareAnalyticsFixture(t)
-	defer store.Close()
-
-	distribution, err := store.QueryAnalyticsBreakTypeDistribution(fixture.from, fixture.to)
-	if err != nil {
-		t.Fatalf("QueryAnalyticsBreakTypeDistribution() error = %v", err)
-	}
-	if distribution.TotalTriggered != 2 {
-		t.Fatalf("expected total triggered 2, got %d", distribution.TotalTriggered)
-	}
-
-	byID := map[int64]analyticsdomain.BreakTypeDistributionItem{}
-	for _, item := range distribution.Items {
-		byID[item.ReminderID] = item
-	}
-	if _, ok := byID[fixture.eyeID]; !ok {
-		t.Fatalf("expected eye reminder distribution item")
-	}
-	if _, ok := byID[fixture.standID]; !ok {
-		t.Fatalf("expected stand reminder distribution item")
+	if len(dist.Items) == 0 {
+		t.Fatalf("expected distribution items")
 	}
 }

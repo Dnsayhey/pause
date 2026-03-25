@@ -13,10 +13,8 @@ type fakeSettingsStore struct {
 	current settingsdomain.Settings
 }
 
-func (s *fakeSettingsStore) WasCreated() bool { return s.created }
-func (s *fakeSettingsStore) Get() settingsdomain.Settings {
-	return s.current
-}
+func (s *fakeSettingsStore) WasCreated() bool             { return s.created }
+func (s *fakeSettingsStore) Get() settingsdomain.Settings { return s.current }
 func (s *fakeSettingsStore) Update(patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error) {
 	s.current = s.current.ApplyPatch(patch)
 	return s.current, nil
@@ -24,8 +22,8 @@ func (s *fakeSettingsStore) Update(patch settingsdomain.SettingsPatch) (settings
 
 type fakeStartupManager struct {
 	setCalls int
-	lastSet  bool
 	getCalls int
+	lastSet  bool
 	current  bool
 	setErr   error
 	getErr   error
@@ -49,52 +47,48 @@ func (m *fakeStartupManager) GetLaunchAtLogin() (bool, error) {
 	return m.current, nil
 }
 
-func TestSyncPlatformSettingsOnlyOnFirstRun(t *testing.T) {
+func TestSettingsRepository_SyncFirstInstallOnly(t *testing.T) {
 	manager := &fakeStartupManager{}
-	firstStore := &fakeSettingsStore{created: true, current: settingsdomain.DefaultSettings()}
-	firstRepo := NewSettingsRepository(firstStore, manager)
-
-	if err := firstRepo.SyncPlatformSettings(context.Background()); err != nil {
-		t.Fatalf("SyncPlatformSettings(first run) error = %v", err)
+	first := NewSettingsRepository(&fakeSettingsStore{created: true, current: settingsdomain.DefaultSettings()}, manager)
+	if err := first.SyncPlatformSettings(context.Background()); err != nil {
+		t.Fatalf("SyncPlatformSettings(first) err=%v", err)
 	}
 	if manager.setCalls != 1 || !manager.lastSet {
-		t.Fatalf("expected first run to set launch at login=true once")
+		t.Fatalf("first install sync mismatch")
 	}
 
 	manager.setCalls = 0
-	existingStore := &fakeSettingsStore{created: false, current: settingsdomain.DefaultSettings()}
-	existingRepo := NewSettingsRepository(existingStore, manager)
-	if err := existingRepo.SyncPlatformSettings(context.Background()); err != nil {
-		t.Fatalf("SyncPlatformSettings(existing config) error = %v", err)
+	existing := NewSettingsRepository(&fakeSettingsStore{created: false, current: settingsdomain.DefaultSettings()}, manager)
+	if err := existing.SyncPlatformSettings(context.Background()); err != nil {
+		t.Fatalf("SyncPlatformSettings(existing) err=%v", err)
 	}
 	if manager.setCalls != 0 {
-		t.Fatalf("expected existing config to skip launch-at-login sync")
+		t.Fatalf("existing config should not trigger startup sync")
 	}
 }
 
-func TestSetLaunchAtLoginVerifiesCurrentState(t *testing.T) {
+func TestSettingsRepository_SetLaunchAtLogin_VerifyRoundTrip(t *testing.T) {
 	manager := &fakeStartupManager{}
 	repo := NewSettingsRepository(&fakeSettingsStore{current: settingsdomain.DefaultSettings()}, manager)
 
 	actual, err := repo.SetLaunchAtLogin(context.Background(), true)
 	if err != nil {
-		t.Fatalf("SetLaunchAtLogin() error = %v", err)
+		t.Fatalf("SetLaunchAtLogin() err=%v", err)
 	}
 	if !actual {
-		t.Fatalf("expected launch-at-login state to be true")
+		t.Fatalf("expected true")
 	}
 	if manager.setCalls != 1 || manager.getCalls != 1 {
-		t.Fatalf("expected set/get calls to both be 1, got set=%d get=%d", manager.setCalls, manager.getCalls)
+		t.Fatalf("call count mismatch set=%d get=%d", manager.setCalls, manager.getCalls)
 	}
 }
 
-func TestSetLaunchAtLoginReturnsSetError(t *testing.T) {
-	expected := errors.New("set failed")
-	manager := &fakeStartupManager{setErr: expected}
+func TestSettingsRepository_SetLaunchAtLogin_PropagatesSetError(t *testing.T) {
+	wantErr := errors.New("set failed")
+	manager := &fakeStartupManager{setErr: wantErr}
 	repo := NewSettingsRepository(&fakeSettingsStore{current: settingsdomain.DefaultSettings()}, manager)
 
-	_, err := repo.SetLaunchAtLogin(context.Background(), true)
-	if !errors.Is(err, expected) {
-		t.Fatalf("expected set error %v, got %v", expected, err)
+	if _, err := repo.SetLaunchAtLogin(context.Background(), true); !errors.Is(err, wantErr) {
+		t.Fatalf("err mismatch: got=%v want=%v", err, wantErr)
 	}
 }

@@ -7,37 +7,37 @@ import (
 	"pause/internal/backend/runtime/scheduler"
 )
 
-func TestSessionCompletesAfterDuration(t *testing.T) {
+func TestManager_CompletesAfterDuration(t *testing.T) {
 	m := NewManager()
-	now := time.Unix(1_700_000_000, 0)
+	base := time.Unix(1_700_000_000, 0)
 
-	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{1}, BreakSec: 20}, true)
+	m.StartBreak(base, &scheduler.Event{Reasons: []scheduler.ReminderType{1}, BreakSec: 20}, true)
 	if !m.IsActive() {
-		t.Fatalf("expected active session after StartBreak")
+		t.Fatalf("expected active session")
 	}
 
-	m.Tick(now.Add(20 * time.Second))
-	view := m.CurrentView(now.Add(20 * time.Second))
+	m.Tick(base.Add(20 * time.Second))
+	view := m.CurrentView(base.Add(20 * time.Second))
 	if view == nil || view.Status != string(StatusCompleted) {
-		t.Fatalf("expected completed session, got %#v", view)
+		t.Fatalf("expected completed session, got=%#v", view)
 	}
 }
 
-func TestSkipRespectsCanSkip(t *testing.T) {
+func TestManager_SkipHonorsCanSkip(t *testing.T) {
 	m := NewManager()
-	now := time.Unix(1_700_000_000, 0)
+	base := time.Unix(1_700_000_000, 0)
 
-	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{2}, BreakSec: 60}, false)
+	m.StartBreak(base, &scheduler.Event{Reasons: []scheduler.ReminderType{2}, BreakSec: 60}, false)
 	if err := m.Skip(); err == nil {
-		t.Fatalf("expected error when skip is disabled")
+		t.Fatalf("expected skip error when disabled")
 	}
 
-	m.StartBreak(now, &scheduler.Event{Reasons: []scheduler.ReminderType{2}, BreakSec: 60}, true)
+	m.StartBreak(base, &scheduler.Event{Reasons: []scheduler.ReminderType{2}, BreakSec: 60}, true)
 	if err := m.Skip(); err != nil {
-		t.Fatalf("expected skip success, got %v", err)
+		t.Fatalf("expected skip success, err=%v", err)
 	}
 	m.ClearIfDone()
-	if m.CurrentView(now) != nil {
-		t.Fatalf("expected session to be cleared")
+	if m.CurrentView(base) != nil {
+		t.Fatalf("expected session cleared")
 	}
 }

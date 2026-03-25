@@ -6,71 +6,53 @@ import (
 	"pause/internal/backend/domain/reminder"
 )
 
-const (
-	testReminderIDEye   int64 = 1
-	testReminderIDStand int64 = 2
-)
-
-func defaultReminderFixtures() []reminder.Reminder {
+func fixtureReminders() []reminder.Reminder {
 	return []reminder.Reminder{
-		{ID: testReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
-		{ID: testReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
+		{ID: 1, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
+		{ID: 2, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
 	}
 }
 
-func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
+func TestScheduler_TriggersOnIntervalBoundary(t *testing.T) {
 	s := New()
-	reminders := defaultReminderFixtures()
-	eye, _ := findReminderByID(reminders, testReminderIDEye)
+	reminders := fixtureReminders()
+	eye := reminders[0]
 
-	evt := s.OnActiveSeconds(eye.IntervalSec-1, reminders)
-	if evt != nil {
-		t.Fatalf("unexpected event before interval")
+	if evt := s.OnActiveSeconds(eye.IntervalSec-1, reminders); evt != nil {
+		t.Fatalf("unexpected event before boundary")
 	}
-
-	evt = s.OnActiveSeconds(1, reminders)
+	evt := s.OnActiveSeconds(1, reminders)
 	if evt == nil {
-		t.Fatalf("expected eye reminder event")
+		t.Fatalf("expected boundary event")
 	}
-	if len(evt.Reasons) != 1 || evt.Reasons[0] != ReminderType(testReminderIDEye) {
-		t.Fatalf("unexpected reasons: %#v", evt.Reasons)
+	if len(evt.Reasons) != 1 || evt.Reasons[0] != ReminderType(1) {
+		t.Fatalf("unexpected reasons=%v", evt.Reasons)
 	}
 	if evt.BreakSec != eye.BreakSec {
-		t.Fatalf("expected break %d, got %d", eye.BreakSec, evt.BreakSec)
+		t.Fatalf("break mismatch got=%d want=%d", evt.BreakSec, eye.BreakSec)
 	}
 }
 
-func TestMergeConflictWithinWindow(t *testing.T) {
+func TestScheduler_MergesNearbyReminders(t *testing.T) {
 	s := New()
 	reminders := []reminder.Reminder{
-		{ID: testReminderIDEye, Enabled: true, IntervalSec: 1200, BreakSec: 20},
-		{ID: testReminderIDStand, Enabled: true, IntervalSec: 1230, BreakSec: 300},
+		{ID: 1, Enabled: true, IntervalSec: 1200, BreakSec: 20, ReminderType: "rest"},
+		{ID: 2, Enabled: true, IntervalSec: 1230, BreakSec: 300, ReminderType: "rest"},
 	}
-	stand, _ := findReminderByID(reminders, testReminderIDStand)
-
-	evt := s.OnActiveSeconds(1200, reminders)
-	if evt == nil {
-		t.Fatalf("expected merged event")
-	}
-	if len(evt.Reasons) != 2 {
-		t.Fatalf("expected merged reasons, got %#v", evt.Reasons)
-	}
-	if evt.BreakSec != stand.BreakSec {
-		t.Fatalf("expected max break %d, got %d", stand.BreakSec, evt.BreakSec)
+	if evt := s.OnActiveSeconds(1200, reminders); evt == nil || len(evt.Reasons) != 2 || evt.BreakSec != 300 {
+		t.Fatalf("expected merged event, got=%#v", evt)
 	}
 }
 
-func TestNextCountdown(t *testing.T) {
+func TestScheduler_NextInSec(t *testing.T) {
 	s := New()
-	reminders := defaultReminderFixtures()
-	eye, _ := findReminderByID(reminders, testReminderIDEye)
-	stand, _ := findReminderByID(reminders, testReminderIDStand)
-
+	reminders := fixtureReminders()
 	s.OnActiveSeconds(100, reminders)
-	if got := s.NextInSec(reminders, testReminderIDEye); got != eye.IntervalSec-100 {
-		t.Fatalf("unexpected next eye in sec: %d", got)
+
+	if got := s.NextInSec(reminders, 1); got != reminders[0].IntervalSec-100 {
+		t.Fatalf("next eye mismatch got=%d", got)
 	}
-	if got := s.NextInSec(reminders, testReminderIDStand); got != stand.IntervalSec-100 {
-		t.Fatalf("unexpected next stand in sec: %d", got)
+	if got := s.NextInSec(reminders, 2); got != reminders[1].IntervalSec-100 {
+		t.Fatalf("next stand mismatch got=%d", got)
 	}
 }
