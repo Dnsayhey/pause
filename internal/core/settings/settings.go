@@ -1,20 +1,9 @@
-package config
-
-import "time"
+package settings
 
 const (
 	TimerModeIdlePause = "idle_pause"
 	TimerModeRealTime  = "real_time"
 )
-
-type ReminderConfig struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name,omitempty"`
-	Enabled      bool   `json:"enabled"`
-	IntervalSec  int    `json:"intervalSec"`
-	BreakSec     int    `json:"breakSec"`
-	ReminderType string `json:"reminderType,omitempty"`
-}
 
 type EnforcementSettings struct {
 	OverlaySkipAllowed bool `json:"overlaySkipAllowed"`
@@ -44,23 +33,6 @@ type Settings struct {
 	UI            UISettings          `json:"ui"`
 }
 
-type ReminderPatch struct {
-	ID           int64   `json:"id"`
-	Name         *string `json:"name,omitempty"`
-	Enabled      *bool   `json:"enabled,omitempty"`
-	IntervalSec  *int    `json:"intervalSec,omitempty"`
-	BreakSec     *int    `json:"breakSec,omitempty"`
-	ReminderType *string `json:"reminderType,omitempty"`
-}
-
-type ReminderCreateInput struct {
-	Name         string  `json:"name"`
-	IntervalSec  int     `json:"intervalSec"`
-	BreakSec     int     `json:"breakSec"`
-	Enabled      *bool   `json:"enabled,omitempty"`
-	ReminderType *string `json:"reminderType,omitempty"`
-}
-
 type EnforcementSettingsPatch struct {
 	OverlaySkipAllowed *bool `json:"overlaySkipAllowed,omitempty"`
 }
@@ -87,43 +59,6 @@ type SettingsPatch struct {
 	Sound         *SoundSettingsPatch       `json:"sound,omitempty"`
 	Timer         *TimerSettingsPatch       `json:"timer,omitempty"`
 	UI            *UISettingsPatch          `json:"ui,omitempty"`
-}
-
-type ReminderRuntime struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name,omitempty"`
-	ReminderType string `json:"reminderType,omitempty"`
-	Enabled      bool   `json:"enabled"`
-	Paused       bool   `json:"paused"`
-	NextInSec    int    `json:"nextInSec"`
-	IntervalSec  int    `json:"intervalSec"`
-	BreakSec     int    `json:"breakSec"`
-}
-
-type RuntimeState struct {
-	Now                time.Time         `json:"now"`
-	CurrentSession     *BreakSessionView `json:"currentSession,omitempty"`
-	Reminders          []ReminderRuntime `json:"reminders"`
-	NextBreakReason    []int64           `json:"nextBreakReason"`
-	GlobalEnabled      bool              `json:"globalEnabled"`
-	TimerMode          string            `json:"timerMode"`
-	IdleThresholdSec   int               `json:"idleThresholdSec"`
-	LastTickActive     bool              `json:"lastTickActive"`
-	CurrentIdleSec     int               `json:"currentIdleSec"`
-	ShowTrayCountdown  bool              `json:"showTrayCountdown"`
-	OverlaySkipAllowed bool              `json:"overlaySkipAllowed"`
-	OverlayNative      bool              `json:"overlayNative"`
-	EffectiveLanguage  string            `json:"effectiveLanguage,omitempty"`
-	EffectiveTheme     string            `json:"effectiveTheme,omitempty"`
-}
-
-type BreakSessionView struct {
-	Status       string    `json:"status"`
-	Reasons      []int64   `json:"reasons"`
-	StartedAt    time.Time `json:"startedAt"`
-	EndsAt       time.Time `json:"endsAt"`
-	RemainingSec int       `json:"remainingSec"`
-	CanSkip      bool      `json:"canSkip"`
 }
 
 func DefaultSettings() Settings {

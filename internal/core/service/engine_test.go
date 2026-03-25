@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"pause/internal/core/config"
+	"pause/internal/core/reminder"
+	"pause/internal/core/settings"
+	"pause/internal/core/state"
 )
 
 const (
@@ -74,7 +76,7 @@ func (f *fakeHistoryRecorder) RecordBreak(_ context.Context, startedAt time.Time
 func newTestEngine(t *testing.T, idle *fakeIdleProvider, startup *fakeStartupManager) *Engine {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := config.NewStore(path)
+	store, err := settings.OpenSettingsStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -87,14 +89,14 @@ func seedDefaultReminders(engine *Engine) {
 	if engine == nil {
 		return
 	}
-	engine.SetReminderConfigs([]config.ReminderConfig{
+	engine.SetReminderConfigs([]reminder.ReminderConfig{
 		{ID: testReminderIDEye, Name: "Eye", Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
 		{ID: testReminderIDStand, Name: "Stand", Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
 	})
 }
 
-func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) config.ReminderPatch {
-	return config.ReminderPatch{
+func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) reminder.ReminderPatch {
+	return reminder.ReminderPatch{
 		ID:          id,
 		Enabled:     enabled,
 		IntervalSec: intervalSec,
@@ -102,7 +104,7 @@ func reminderPatch(id int64, enabled *bool, intervalSec *int, breakSec *int) con
 	}
 }
 
-func setReminderPatches(t *testing.T, engine *Engine, patches ...config.ReminderPatch) {
+func setReminderPatches(t *testing.T, engine *Engine, patches ...reminder.ReminderPatch) {
 	t.Helper()
 	if engine == nil {
 		t.Fatalf("engine is nil")
@@ -149,15 +151,15 @@ func setReminderPatches(t *testing.T, engine *Engine, patches ...config.Reminder
 	engine.SetReminderConfigs(next)
 }
 
-func requireReminderRuntime(t *testing.T, state config.RuntimeState, id int64) config.ReminderRuntime {
+func requireReminderRuntime(t *testing.T, runtimeState state.RuntimeState, id int64) state.ReminderRuntime {
 	t.Helper()
-	for _, reminder := range state.Reminders {
+	for _, reminder := range runtimeState.Reminders {
 		if reminder.ID == id {
 			return reminder
 		}
 	}
 	t.Fatalf("expected reminder runtime for id %d", id)
-	return config.ReminderRuntime{}
+	return state.ReminderRuntime{}
 }
 
 func TestIdlePauseModeBoundary(t *testing.T) {
@@ -203,7 +205,7 @@ func TestIdlePauseModePausesImmediatelyWhenScreenLocked(t *testing.T) {
 	lockState := &fakeLockStateProvider{}
 
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := config.NewStore(path)
+	store, err := settings.OpenSettingsStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -246,11 +248,11 @@ func TestRealTimeModeIgnoresIdle(t *testing.T) {
 	idle := &fakeIdleProvider{idleSec: 10_000}
 	engine := newTestEngine(t, idle, &fakeStartupManager{})
 
-	mode := config.TimerModeRealTime
+	mode := settings.TimerModeRealTime
 	eyeInterval := 10
 	standEnabled := false
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Timer: &config.TimerSettingsPatch{Mode: &mode},
+	_, err := engine.UpdateSettings(settings.SettingsPatch{
+		Timer: &settings.TimerSettingsPatch{Mode: &mode},
 	})
 	if err != nil {
 		t.Fatalf("UpdateSettings() error = %v", err)
@@ -367,8 +369,8 @@ func TestUpdateSettingsAffectsSkipImmediately(t *testing.T) {
 	}
 
 	skipAllowed := false
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Enforcement: &config.EnforcementSettingsPatch{OverlaySkipAllowed: &skipAllowed},
+	_, err := engine.UpdateSettings(settings.SettingsPatch{
+		Enforcement: &settings.EnforcementSettingsPatch{OverlaySkipAllowed: &skipAllowed},
 	})
 	if err != nil {
 		t.Fatalf("UpdateSettings() error = %v", err)
@@ -398,8 +400,8 @@ func TestSkipCurrentBreakEmergencyBypassesSkipSetting(t *testing.T) {
 	}
 
 	skipAllowed := false
-	_, err := engine.UpdateSettings(config.SettingsPatch{
-		Enforcement: &config.EnforcementSettingsPatch{OverlaySkipAllowed: &skipAllowed},
+	_, err := engine.UpdateSettings(settings.SettingsPatch{
+		Enforcement: &settings.EnforcementSettingsPatch{OverlaySkipAllowed: &skipAllowed},
 	})
 	if err != nil {
 		t.Fatalf("UpdateSettings() error = %v", err)
@@ -573,7 +575,7 @@ func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 	startup := &fakeStartupManager{}
 	history := &fakeHistoryRecorder{}
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := config.NewStore(path)
+	store, err := settings.OpenSettingsStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -624,7 +626,7 @@ func TestHistoryRecorder_SkipBreak(t *testing.T) {
 	startup := &fakeStartupManager{}
 	history := &fakeHistoryRecorder{}
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := config.NewStore(path)
+	store, err := settings.OpenSettingsStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -729,7 +731,7 @@ func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
 	startup := &fakeStartupManager{}
 	path := filepath.Join(t.TempDir(), "settings.json")
 
-	store1, err := config.NewStore(path)
+	store1, err := settings.OpenSettingsStore(path)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -742,7 +744,7 @@ func TestSyncPlatformSettingsDoesNotReapplyOnExistingConfig(t *testing.T) {
 	}
 
 	startup.calls = 0
-	store2, err := config.NewStore(path)
+	store2, err := settings.OpenSettingsStore(path)
 	if err != nil {
 		t.Fatalf("NewStore(reopen) error = %v", err)
 	}

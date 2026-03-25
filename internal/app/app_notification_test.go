@@ -4,16 +4,16 @@ import (
 	"testing"
 	"time"
 
-	"pause/internal/core/config"
+	"pause/internal/core/state"
 )
 
 func TestBuildBreakNotificationBodyUsesRuntimeReminderNames(t *testing.T) {
-	state := config.RuntimeState{
-		CurrentSession: &config.BreakSessionView{
+	state := state.RuntimeState{
+		CurrentSession: &state.BreakSessionView{
 			Reasons:      []int64{1, 2},
 			RemainingSec: 20,
 		},
-		Reminders: []config.ReminderRuntime{
+		Reminders: []state.ReminderRuntime{
 			{ID: 1, Name: "护眼"},
 			{ID: 2, Name: "站立"},
 		},

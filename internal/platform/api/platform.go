@@ -1,6 +1,6 @@
 package api
 
-import "pause/internal/core/config"
+import "pause/internal/core/settings"
 
 type Adapters struct {
 	IdleProvider      IdleProvider
@@ -23,7 +23,7 @@ type Notifier interface {
 }
 
 type SoundPlayer interface {
-	PlayBreakEnd(sound config.SoundSettings) error
+	PlayBreakEnd(sound settings.SoundSettings) error
 }
 
 type StartupManager interface {
@@ -45,7 +45,7 @@ func (NoopNotifier) ShowReminder(_, _ string) error { return nil }
 
 type NoopSoundPlayer struct{}
 
-func (NoopSoundPlayer) PlayBreakEnd(_ config.SoundSettings) error { return nil }
+func (NoopSoundPlayer) PlayBreakEnd(_ settings.SoundSettings) error { return nil }
 
 type NoopStartupManager struct{}
 

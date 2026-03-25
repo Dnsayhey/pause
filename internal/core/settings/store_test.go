@@ -1,4 +1,4 @@
-package config
+package settings
 
 import (
 	"os"
@@ -9,9 +9,9 @@ import (
 
 func TestStoreCreatesDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := NewStore(path)
+	store, err := OpenSettingsStore(path)
 	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
+		t.Fatalf("OpenSettingsStore() error = %v", err)
 	}
 
 	got := store.Get()
@@ -28,9 +28,9 @@ func TestStoreCreatesDefaults(t *testing.T) {
 
 func TestStoreUpdatePersistsSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	store, err := NewStore(path)
+	store, err := OpenSettingsStore(path)
 	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
+		t.Fatalf("OpenSettingsStore() error = %v", err)
 	}
 
 	off := false
@@ -41,9 +41,9 @@ func TestStoreUpdatePersistsSettings(t *testing.T) {
 		t.Fatalf("Update() error = %v", err)
 	}
 
-	reloaded, err := NewStore(path)
+	reloaded, err := OpenSettingsStore(path)
 	if err != nil {
-		t.Fatalf("NewStore(reload) error = %v", err)
+		t.Fatalf("OpenSettingsStore(reload) error = %v", err)
 	}
 	if reloaded.WasCreated() {
 		t.Fatalf("expected WasCreated()=false for existing config file")
@@ -69,9 +69,9 @@ func TestStoreRecoversFromCorruptedConfig(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	store, err := NewStore(path)
+	store, err := OpenSettingsStore(path)
 	if err != nil {
-		t.Fatalf("NewStore() error = %v", err)
+		t.Fatalf("OpenSettingsStore() error = %v", err)
 	}
 
 	got := store.Get()

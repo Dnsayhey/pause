@@ -1,4 +1,4 @@
-package config
+package settings
 
 import (
 	"bytes"
@@ -10,49 +10,49 @@ import (
 	"time"
 )
 
-type Store struct {
+type SettingsStore struct {
 	path     string
 	mu       sync.RWMutex
 	settings Settings
 	created  bool
 }
 
-func NewStore(path string) (*Store, error) {
+func OpenSettingsStore(path string) (*SettingsStore, error) {
 	if path == "" {
 		return nil, errors.New("config path is required")
 	}
 
-	store := &Store{path: path, settings: DefaultSettings()}
+	store := &SettingsStore{path: path, settings: DefaultSettings()}
 	if err := store.load(); err != nil {
 		return nil, err
 	}
 	return store, nil
 }
 
-func (s *Store) Path() string {
+func (s *SettingsStore) Path() string {
 	return s.path
 }
 
-func (s *Store) WasCreated() bool {
+func (s *SettingsStore) WasCreated() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.created
 }
 
-func (s *Store) Get() Settings {
+func (s *SettingsStore) Get() Settings {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.settings
 }
 
-func (s *Store) Set(next Settings) error {
+func (s *SettingsStore) Set(next Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.settings = next.Normalize()
 	return s.saveLocked()
 }
 
-func (s *Store) Update(patch SettingsPatch) (Settings, error) {
+func (s *SettingsStore) Update(patch SettingsPatch) (Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.settings = s.settings.ApplyPatch(patch)
@@ -62,7 +62,7 @@ func (s *Store) Update(patch SettingsPatch) (Settings, error) {
 	return s.settings, nil
 }
 
-func (s *Store) load() error {
+func (s *SettingsStore) load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -94,7 +94,7 @@ func (s *Store) load() error {
 	return nil
 }
 
-func (s *Store) backupCorruptedConfigLocked(data []byte) error {
+func (s *SettingsStore) backupCorruptedConfigLocked(data []byte) error {
 	dir := filepath.Dir(s.path)
 	name := filepath.Base(s.path)
 	stamp := time.Now().UTC().Format("20060102-150405")
@@ -102,7 +102,7 @@ func (s *Store) backupCorruptedConfigLocked(data []byte) error {
 	return os.WriteFile(backupPath, data, 0o644)
 }
 
-func (s *Store) saveLocked() error {
+func (s *SettingsStore) saveLocked() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ import (
 	xwindows "golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
-	"pause/internal/core/config"
+	"pause/internal/core/settings"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )
@@ -277,7 +277,7 @@ func showBalloonReminder(title, body string) error {
 	return nil
 }
 
-func (windowsSoundPlayer) PlayBreakEnd(sound config.SoundSettings) error {
+func (windowsSoundPlayer) PlayBreakEnd(sound settings.SoundSettings) error {
 	if !sound.Enabled {
 		return nil
 	}

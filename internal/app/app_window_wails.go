@@ -19,4 +19,3 @@ func (a *App) CloseWindow() {
 	logx.Infof("app.close_window action=hide_main_window")
 	desktop.HideMainWindowForClose(a.ctx)
 }
-

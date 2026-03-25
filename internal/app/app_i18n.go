@@ -5,13 +5,13 @@ import (
 	"os"
 	"strings"
 
-	"pause/internal/core/config"
+	"pause/internal/core/settings"
 	"pause/internal/desktop"
 )
 
 func resolveEffectiveLanguage(setting string) string {
-	normalized := config.NormalizeUILanguage(setting)
-	if normalized != config.UILanguageAuto {
+	normalized := settings.NormalizeUILanguage(setting)
+	if normalized != settings.UILanguageAuto {
 		return normalized
 	}
 
@@ -24,7 +24,7 @@ func resolveEffectiveLanguage(setting string) string {
 			return lang
 		}
 	}
-	return config.UILanguageEnUS
+	return settings.UILanguageEnUS
 }
 
 func languageFromLocaleValue(value string) string {
@@ -34,16 +34,16 @@ func languageFromLocaleValue(value string) string {
 	}
 	lower := strings.ToLower(cleaned)
 	if strings.HasPrefix(lower, "zh") {
-		return config.UILanguageZhCN
+		return settings.UILanguageZhCN
 	}
 	if strings.HasPrefix(lower, "en") {
-		return config.UILanguageEnUS
+		return settings.UILanguageEnUS
 	}
 	return ""
 }
 
 func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings {
-	if language == config.UILanguageZhCN {
+	if language == settings.UILanguageZhCN {
 		return desktop.StatusBarLocaleStrings{
 			PopoverTitle:          "Pause",
 			BreakNowButton:        "立即休息",
@@ -74,9 +74,9 @@ func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings
 }
 
 func localizedBuiltInReminderSeedNames(language string) (eye string, stand string, water string) {
-	normalized := config.NormalizeUILanguage(strings.TrimSpace(language))
+	normalized := settings.NormalizeUILanguage(strings.TrimSpace(language))
 	switch normalized {
-	case config.UILanguageZhCN:
+	case settings.UILanguageZhCN:
 		return "护眼", "站立", "喝水"
 	default:
 		return "Eye", "Stand", "Hydrate"
@@ -84,7 +84,7 @@ func localizedBuiltInReminderSeedNames(language string) (eye string, stand strin
 }
 
 func overlaySkipButtonTitle(language string) string {
-	if language == config.UILanguageZhCN {
+	if language == settings.UILanguageZhCN {
 		return "跳过"
 	}
 	return "Skip"

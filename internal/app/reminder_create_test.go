@@ -5,22 +5,23 @@ import (
 	"path/filepath"
 	"testing"
 
-	"pause/internal/core/config"
 	"pause/internal/core/history"
+	"pause/internal/core/reminder"
 	"pause/internal/core/service"
+	"pause/internal/core/settings"
 )
 
 func newTestAppWithHistory(t *testing.T) *App {
 	t.Helper()
 
 	configPath := filepath.Join(t.TempDir(), "settings.json")
-	store, err := config.NewStore(configPath)
+	store, err := settings.OpenSettingsStore(configPath)
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
 
 	historyPath := filepath.Join(t.TempDir(), "history.db")
-	historyStore, err := history.OpenStore(context.Background(), historyPath)
+	historyStore, err := history.OpenHistoryStore(context.Background(), historyPath)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}
@@ -43,7 +44,7 @@ func newTestAppWithHistory(t *testing.T) *App {
 func TestAppCreateReminderRejectsMissingType(t *testing.T) {
 	app := newTestAppWithHistory(t)
 
-	_, err := app.CreateReminder(config.ReminderCreateInput{
+	_, err := app.CreateReminder(reminder.ReminderCreateInput{
 		Name:        "Focus",
 		IntervalSec: 1500,
 		BreakSec:    30,
@@ -57,7 +58,7 @@ func TestAppReminderCRUDLifecycle(t *testing.T) {
 	app := newTestAppWithHistory(t)
 
 	restType := "rest"
-	created, err := app.CreateReminder(config.ReminderCreateInput{
+	created, err := app.CreateReminder(reminder.ReminderCreateInput{
 		Name:         "Focus",
 		IntervalSec:  1500,
 		BreakSec:     30,
@@ -76,7 +77,7 @@ func TestAppReminderCRUDLifecycle(t *testing.T) {
 
 	newName := "Deep Focus"
 	enabled := false
-	updated, err := app.UpdateReminder(config.ReminderPatch{
+	updated, err := app.UpdateReminder(reminder.ReminderPatch{
 		ID:      id,
 		Name:    &newName,
 		Enabled: &enabled,

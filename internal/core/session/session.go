@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"pause/internal/core/config"
 	"pause/internal/core/scheduler"
+	"pause/internal/core/state"
 )
 
 type Status string
@@ -96,7 +96,7 @@ func (m *Manager) SetCanSkip(canSkip bool) {
 	m.current.canSkip = canSkip
 }
 
-func (m *Manager) CurrentView(now time.Time) *config.BreakSessionView {
+func (m *Manager) CurrentView(now time.Time) *state.BreakSessionView {
 	if m.current == nil {
 		return nil
 	}
@@ -106,7 +106,7 @@ func (m *Manager) CurrentView(now time.Time) *config.BreakSessionView {
 		remaining = 0
 	}
 
-	return &config.BreakSessionView{
+	return &state.BreakSessionView{
 		Status:       string(m.current.status),
 		Reasons:      append([]int64(nil), m.current.reasons...),
 		StartedAt:    m.current.startedAt,

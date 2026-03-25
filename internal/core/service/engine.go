@@ -10,9 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"pause/internal/core/config"
+	"pause/internal/core/reminder"
 	"pause/internal/core/scheduler"
 	"pause/internal/core/session"
+	"pause/internal/core/settings"
+	"pause/internal/core/state"
 	"pause/internal/logx"
 	"pause/internal/platform"
 )
@@ -39,8 +41,8 @@ type Engine struct {
 	mu        sync.Mutex
 	startOnce sync.Once
 
-	store     *config.Store
-	reminders []config.ReminderConfig
+	store     *settings.SettingsStore
+	reminders []reminder.ReminderConfig
 	scheduler *scheduler.Scheduler
 	session   *session.Manager
 	history   BreakHistoryRecorder
@@ -64,7 +66,7 @@ type Engine struct {
 }
 
 func NewEngine(
-	store *config.Store,
+	store *settings.SettingsStore,
 	idleProvider platform.IdleProvider,
 	lockProvider platform.LockStateProvider,
 	soundPlayer platform.SoundPlayer,
@@ -273,11 +275,11 @@ func (e *Engine) Tick(now time.Time) {
 	e.logTickLocked(now, settings, effectiveReminders, "event", rawDeltaSec, appliedDeltaSec, restEvent)
 }
 
-func (e *Engine) GetSettings() config.Settings {
+func (e *Engine) GetSettings() settings.Settings {
 	return e.store.Get()
 }
 
-func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, error) {
+func (e *Engine) UpdateSettings(patch settings.SettingsPatch) (settings.Settings, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -286,7 +288,7 @@ func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, er
 	next, err := e.store.Update(patch)
 	if err != nil {
 		logx.Warnf("settings.update_err patch=%s err=%v", patchJSON, err)
-		return config.Settings{}, err
+		return settings.Settings{}, err
 	}
 
 	if patch.Enforcement != nil && patch.Enforcement.OverlaySkipAllowed != nil {
@@ -299,7 +301,7 @@ func (e *Engine) UpdateSettings(patch config.SettingsPatch) (config.Settings, er
 	return next, nil
 }
 
-func (e *Engine) SetReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {
+func (e *Engine) SetReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -339,7 +341,7 @@ func (e *Engine) SetLaunchAtLogin(enabled bool) (bool, error) {
 	return actual, nil
 }
 
-func (e *Engine) GetRuntimeState(now time.Time) config.RuntimeState {
+func (e *Engine) GetRuntimeState(now time.Time) state.RuntimeState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -347,30 +349,30 @@ func (e *Engine) GetRuntimeState(now time.Time) config.RuntimeState {
 	return e.runtimeStateLocked(now, settings)
 }
 
-func (e *Engine) Pause(now time.Time) (config.RuntimeState, error) {
+func (e *Engine) Pause(now time.Time) (state.RuntimeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	enabled := false
 	prev := e.store.Get()
-	next, err := e.store.Update(config.SettingsPatch{
+	next, err := e.store.Update(settings.SettingsPatch{
 		GlobalEnabled: &enabled,
 	})
 	if err != nil {
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
 	e.applyGlobalSettingPatchLocked(prev, next)
 	logx.Infof("global_enabled.set enabled=false source=pause")
 	return e.runtimeStateLocked(now, next), nil
 }
 
-func (e *Engine) Resume(now time.Time) config.RuntimeState {
+func (e *Engine) Resume(now time.Time) state.RuntimeState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	enabled := true
 	prev := e.store.Get()
-	next, err := e.store.Update(config.SettingsPatch{
+	next, err := e.store.Update(settings.SettingsPatch{
 		GlobalEnabled: &enabled,
 	})
 	if err != nil {
@@ -382,16 +384,16 @@ func (e *Engine) Resume(now time.Time) config.RuntimeState {
 	return e.runtimeStateLocked(now, next)
 }
 
-func (e *Engine) PauseReminder(reminderID int64, now time.Time) (config.RuntimeState, error) {
+func (e *Engine) PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	key := normalizeReminderID(reminderID)
 	if key <= 0 {
-		return config.RuntimeState{}, errors.New("invalid reminder reason")
+		return state.RuntimeState{}, errors.New("invalid reminder reason")
 	}
 	if _, ok := findReminderByID(e.reminders, key); !ok {
-		return config.RuntimeState{}, errors.New("unknown reminder reason")
+		return state.RuntimeState{}, errors.New("unknown reminder reason")
 	}
 	wasPaused := e.pausedReminder[key]
 	e.pausedReminder[key] = true
@@ -401,13 +403,13 @@ func (e *Engine) PauseReminder(reminderID int64, now time.Time) (config.RuntimeS
 	return e.runtimeStateLocked(now, settings), nil
 }
 
-func (e *Engine) ResumeReminder(reminderID int64, now time.Time) (config.RuntimeState, error) {
+func (e *Engine) ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	key := normalizeReminderID(reminderID)
 	if key <= 0 {
-		return config.RuntimeState{}, errors.New("invalid reminder reason")
+		return state.RuntimeState{}, errors.New("invalid reminder reason")
 	}
 	wasPaused := e.pausedReminder[key]
 	delete(e.pausedReminder, key)
@@ -417,7 +419,7 @@ func (e *Engine) ResumeReminder(reminderID int64, now time.Time) (config.Runtime
 	return e.runtimeStateLocked(now, settings), nil
 }
 
-func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (config.RuntimeState, error) {
+func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -426,18 +428,18 @@ func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (config.RuntimeS
 	switch mode {
 	case "", SkipModeNormal:
 		if !settings.Enforcement.OverlaySkipAllowed {
-			return config.RuntimeState{}, errors.New("skip is disabled by settings")
+			return state.RuntimeState{}, errors.New("skip is disabled by settings")
 		}
 	case SkipModeEmergency:
 		// Emergency path: allow explicit user escape from enforced overlay.
 		e.session.SetCanSkip(true)
 	default:
-		return config.RuntimeState{}, errors.New("invalid skip mode")
+		return state.RuntimeState{}, errors.New("invalid skip mode")
 	}
 
 	if err := e.session.Skip(); err != nil {
 		logx.Warnf("break.skip_err mode=%s err=%v", mode, err)
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
 	if view != nil {
 		e.recordBreakSkippedLocked(now, view)
@@ -452,26 +454,26 @@ func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (config.RuntimeS
 	return e.runtimeStateLocked(now, settings), nil
 }
 
-func (e *Engine) StartBreakNow(now time.Time) (config.RuntimeState, error) {
+func (e *Engine) StartBreakNow(now time.Time) (state.RuntimeState, error) {
 	return e.StartBreakNowForReason(0, now)
 }
 
-func (e *Engine) StartBreakNowForReason(reason int64, now time.Time) (config.RuntimeState, error) {
+func (e *Engine) StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	settings := e.store.Get()
 	if !settings.GlobalEnabled {
-		return config.RuntimeState{}, errors.New("global reminders are disabled")
+		return state.RuntimeState{}, errors.New("global reminders are disabled")
 	}
 	if e.session.IsActive() {
-		return config.RuntimeState{}, errors.New("break already active")
+		return state.RuntimeState{}, errors.New("break already active")
 	}
 
 	effectiveReminders := e.effectiveReminderConfigsLocked(e.reminders)
 	evt := buildImmediateBreakEvent(effectiveReminders, e.scheduler.NextByID(effectiveReminders), reason)
 	if evt == nil {
-		return config.RuntimeState{}, errors.New("no enabled reminder rules")
+		return state.RuntimeState{}, errors.New("no enabled reminder rules")
 	}
 
 	// Manual break should reset cadence for selected reminder reasons to avoid
@@ -492,13 +494,13 @@ func (e *Engine) StartBreakNowForReason(reason int64, now time.Time) (config.Run
 	return e.runtimeStateLocked(now, settings), nil
 }
 
-func (e *Engine) runtimeStateLocked(now time.Time, settings config.Settings) config.RuntimeState {
+func (e *Engine) runtimeStateLocked(now time.Time, settings settings.Settings) state.RuntimeState {
 	effectiveReminders := e.effectiveReminderConfigsLocked(e.reminders)
-	reminders := make([]config.ReminderRuntime, 0, len(e.reminders))
+	reminders := make([]state.ReminderRuntime, 0, len(e.reminders))
 	for _, reminder := range e.reminders {
 		paused := e.pausedReminder[reminder.ID]
 		nextIn := e.scheduler.NextInSec(effectiveReminders, reminder.ID)
-		reminders = append(reminders, config.ReminderRuntime{
+		reminders = append(reminders, state.ReminderRuntime{
 			ID:           reminder.ID,
 			Name:         reminder.Name,
 			ReminderType: reminder.ReminderType,
@@ -510,7 +512,7 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings config.Settings) con
 		})
 	}
 	reasons := nextReasons(reminders, e.reminders)
-	return config.RuntimeState{
+	return state.RuntimeState{
 		Now:                now,
 		CurrentSession:     e.session.CurrentView(now),
 		Reminders:          reminders,
@@ -525,14 +527,14 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings config.Settings) con
 	}
 }
 
-func (e *Engine) isTickActive(settings config.Settings) bool {
-	if settings.Timer.Mode == config.TimerModeRealTime {
+func (e *Engine) isTickActive(cfg settings.Settings) bool {
+	if cfg.Timer.Mode == settings.TimerModeRealTime {
 		return true
 	}
 	if e.currentLocked {
 		return false
 	}
-	return e.currentIdleSec < settings.Timer.IdlePauseThresholdSec
+	return e.currentIdleSec < cfg.Timer.IdlePauseThresholdSec
 }
 
 func reminderIDsFromEvent(evt *scheduler.Event) []int64 {
@@ -579,7 +581,7 @@ func (e *Engine) recordBreakStartedLocked(now time.Time, source string, evt *sch
 	}
 }
 
-func (e *Engine) recordBreakCompletedLocked(view *config.BreakSessionView) {
+func (e *Engine) recordBreakCompletedLocked(view *state.BreakSessionView) {
 	if e.history == nil || view == nil || e.activeHistoryBreak == nil {
 		e.activeHistoryBreak = nil
 		return
@@ -595,7 +597,7 @@ func (e *Engine) recordBreakCompletedLocked(view *config.BreakSessionView) {
 	e.activeHistoryBreak = nil
 }
 
-func (e *Engine) recordBreakSkippedLocked(now time.Time, view *config.BreakSessionView) {
+func (e *Engine) recordBreakSkippedLocked(now time.Time, view *state.BreakSessionView) {
 	if e.history == nil || view == nil || e.activeHistoryBreak == nil {
 		e.activeHistoryBreak = nil
 		return
@@ -611,7 +613,7 @@ func (e *Engine) recordBreakSkippedLocked(now time.Time, view *config.BreakSessi
 	e.activeHistoryBreak = nil
 }
 
-func (e *Engine) logTickLocked(now time.Time, settings config.Settings, reminders []config.ReminderConfig, reason string, rawDeltaSec, appliedDeltaSec int, evt *scheduler.Event) {
+func (e *Engine) logTickLocked(now time.Time, settings settings.Settings, reminders []reminder.ReminderConfig, reason string, rawDeltaSec, appliedDeltaSec int, evt *scheduler.Event) {
 	sessionStatus := "none"
 	if view := e.session.CurrentView(now); view != nil {
 		sessionStatus = view.Status
@@ -653,7 +655,7 @@ func (e *Engine) logTickLocked(now time.Time, settings config.Settings, reminder
 	)
 }
 
-func (e *Engine) applyGlobalSettingPatchLocked(prev, next config.Settings) {
+func (e *Engine) applyGlobalSettingPatchLocked(prev, next settings.Settings) {
 	if prev.GlobalEnabled != next.GlobalEnabled {
 		e.scheduler.Reset()
 		e.pausedReminder = map[int64]bool{}
@@ -662,12 +664,12 @@ func (e *Engine) applyGlobalSettingPatchLocked(prev, next config.Settings) {
 	}
 }
 
-func (e *Engine) applyReminderConfigPatchLocked(prev, next []config.ReminderConfig) {
-	prevByID := map[int64]config.ReminderConfig{}
+func (e *Engine) applyReminderConfigPatchLocked(prev, next []reminder.ReminderConfig) {
+	prevByID := map[int64]reminder.ReminderConfig{}
 	for _, reminder := range prev {
 		prevByID[reminder.ID] = reminder
 	}
-	nextByID := map[int64]config.ReminderConfig{}
+	nextByID := map[int64]reminder.ReminderConfig{}
 	for _, reminder := range next {
 		nextByID[reminder.ID] = reminder
 	}
@@ -694,8 +696,8 @@ func (e *Engine) applyReminderConfigPatchLocked(prev, next []config.ReminderConf
 	}
 }
 
-func (e *Engine) effectiveReminderConfigsLocked(reminders []config.ReminderConfig) []config.ReminderConfig {
-	updated := make([]config.ReminderConfig, 0, len(reminders))
+func (e *Engine) effectiveReminderConfigsLocked(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
+	updated := make([]reminder.ReminderConfig, 0, len(reminders))
 	for _, reminder := range reminders {
 		next := reminder
 		if next.Enabled && e.pausedReminder[next.ID] {
@@ -706,7 +708,7 @@ func (e *Engine) effectiveReminderConfigsLocked(reminders []config.ReminderConfi
 	return updated
 }
 
-func buildImmediateBreakEvent(reminders []config.ReminderConfig, nextByID map[int64]int, forcedReason int64) *scheduler.Event {
+func buildImmediateBreakEvent(reminders []reminder.ReminderConfig, nextByID map[int64]int, forcedReason int64) *scheduler.Event {
 	reasonKey := normalizeReminderID(forcedReason)
 	if reasonKey <= 0 {
 		reasonKey = selectImmediateReason(nextByID)
@@ -731,23 +733,23 @@ func normalizeReminderID(id int64) int64 {
 	return id
 }
 
-func cloneReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {
+func cloneReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
 	if len(reminders) == 0 {
 		return nil
 	}
-	cloned := make([]config.ReminderConfig, 0, len(reminders))
+	cloned := make([]reminder.ReminderConfig, 0, len(reminders))
 	cloned = append(cloned, reminders...)
 	return cloned
 }
 
-func findReminderByID(reminders []config.ReminderConfig, id int64) (config.ReminderConfig, bool) {
+func findReminderByID(reminders []reminder.ReminderConfig, id int64) (reminder.ReminderConfig, bool) {
 	norm := normalizeReminderID(id)
 	for _, cfg := range reminders {
 		if cfg.ID == norm {
 			return cfg, true
 		}
 	}
-	return config.ReminderConfig{}, false
+	return reminder.ReminderConfig{}, false
 }
 
 func selectImmediateReason(nextByID map[int64]int) int64 {
@@ -803,7 +805,7 @@ func joinReasons(reasons []int64) string {
 	return strings.Join(parts, "+")
 }
 
-func marshalPatchForLog(patch config.SettingsPatch) string {
+func marshalPatchForLog(patch settings.SettingsPatch) string {
 	raw, err := json.Marshal(patch)
 	if err != nil {
 		return "{}"
@@ -811,7 +813,7 @@ func marshalPatchForLog(patch config.SettingsPatch) string {
 	return string(raw)
 }
 
-func nextReasons(reminders []config.ReminderRuntime, defs []config.ReminderConfig) []int64 {
+func nextReasons(reminders []state.ReminderRuntime, defs []reminder.ReminderConfig) []int64 {
 	restReminderIDs := map[int64]struct{}{}
 	for _, def := range defs {
 		if !isRestReminderType(def.ReminderType) {
@@ -856,12 +858,12 @@ func isRestReminderType(reminderType string) bool {
 	return strings.ToLower(strings.TrimSpace(reminderType)) != "notify"
 }
 
-func splitReminderEventByType(evt *scheduler.Event, reminders []config.ReminderConfig) (*scheduler.Event, []int64) {
+func splitReminderEventByType(evt *scheduler.Event, reminders []reminder.ReminderConfig) (*scheduler.Event, []int64) {
 	if evt == nil || len(evt.Reasons) == 0 {
 		return nil, nil
 	}
 
-	byID := make(map[int64]config.ReminderConfig, len(reminders))
+	byID := make(map[int64]reminder.ReminderConfig, len(reminders))
 	for _, reminder := range reminders {
 		byID[reminder.ID] = reminder
 	}
@@ -927,7 +929,7 @@ func (e *Engine) notifyRemindersLocked(reminderIDs []int64, language string) {
 		return
 	}
 	names := make([]string, 0, len(reminderIDs))
-	byID := make(map[int64]config.ReminderConfig, len(e.reminders))
+	byID := make(map[int64]reminder.ReminderConfig, len(e.reminders))
 	for _, reminder := range e.reminders {
 		byID[reminder.ID] = reminder
 	}
@@ -948,7 +950,7 @@ func (e *Engine) notifyRemindersLocked(reminderIDs []int64, language string) {
 
 	title := "Reminder"
 	body := strings.Join(names, " · ")
-	if language == config.UILanguageZhCN {
+	if language == settings.UILanguageZhCN {
 		title = "提醒"
 	}
 	notifier := e.notifier

@@ -5,15 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"pause/internal/core/config"
 	"pause/internal/core/history"
+	"pause/internal/core/settings"
 )
 
 func TestEnsureBuiltInRemindersForFirstInstallSeedsZhNames(t *testing.T) {
 	store := openHistoryStoreForSeedTest(t)
 	defer store.Close()
 
-	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, config.UILanguageZhCN); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, settings.UILanguageZhCN); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestEnsureBuiltInRemindersForFirstInstallSeedsEnglishNames(t *testing.T) {
 	store := openHistoryStoreForSeedTest(t)
 	defer store.Close()
 
-	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, config.UILanguageEnUS); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, settings.UILanguageEnUS); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 		t.Fatalf("CreateReminder(eye) error = %v", err)
 	}
 
-	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, config.UILanguageZhCN); err != nil {
+	if err := ensureBuiltInRemindersForFirstInstall(context.Background(), store, settings.UILanguageZhCN); err != nil {
 		t.Fatalf("ensureBuiltInRemindersForFirstInstall() error = %v", err)
 	}
 
@@ -113,10 +113,10 @@ func TestEnsureBuiltInRemindersForFirstInstallDoesNotOverwriteExistingActive(t *
 	requireReminderByName(t, reminders, "喝水")
 }
 
-func openHistoryStoreForSeedTest(t *testing.T) *history.Store {
+func openHistoryStoreForSeedTest(t *testing.T) *history.HistoryStore {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := history.OpenStore(context.Background(), path)
+	store, err := history.OpenHistoryStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenStore() error = %v", err)
 	}

@@ -15,8 +15,9 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"pause/internal/core/config"
 	"pause/internal/core/service"
+	"pause/internal/core/settings"
+	"pause/internal/core/state"
 	"pause/internal/desktop"
 	"pause/internal/logx"
 )
@@ -69,7 +70,7 @@ func newDesktopController() desktopController {
 	return controller
 }
 
-func overlaySkipMode(settings config.Settings) service.SkipMode {
+func overlaySkipMode(settings settings.Settings) service.SkipMode {
 	if settings.Enforcement.OverlaySkipAllowed {
 		return service.SkipModeNormal
 	}
@@ -146,13 +147,13 @@ func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
 	}
 }
 
-func (c *wailsDesktopController) syncStatusBarWithLock(state config.RuntimeState, settings config.Settings) {
+func (c *wailsDesktopController) syncStatusBarWithLock(state state.RuntimeState, settings settings.Settings) {
 	c.statusBarSyncMu.Lock()
 	defer c.statusBarSyncMu.Unlock()
 	c.syncStatusBar(state, settings)
 }
 
-func (c *wailsDesktopController) syncStatusBar(state config.RuntimeState, settings config.Settings) {
+func (c *wailsDesktopController) syncStatusBar(state state.RuntimeState, settings settings.Settings) {
 	language := resolveEffectiveLanguage(settings.UI.Language)
 	if c.lastLanguage != language {
 		c.statusBar.SetLocale(buildStatusBarLocaleStrings(language))
@@ -248,7 +249,7 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 	}
 }
 
-func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, state config.RuntimeState, settings config.Settings) {
+func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, state state.RuntimeState, settings settings.Settings) {
 	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting"
 	overlaySkipAllowed := overlayActive && state.OverlaySkipAllowed && state.CurrentSession != nil && state.CurrentSession.CanSkip
 	language := c.lastLanguage
@@ -307,26 +308,26 @@ func (c *wailsDesktopController) logErr(_ context.Context, err error) {
 	logx.Errorf("desktop.error err=%v", err)
 }
 
-func buildPauseLabel(state config.RuntimeState, language string) string {
+func buildPauseLabel(state state.RuntimeState, language string) string {
 	if !state.GlobalEnabled {
-		if language == config.UILanguageZhCN {
+		if language == settings.UILanguageZhCN {
 			return "状态：已关闭"
 		}
 		return "Status: disabled"
 	}
 	if state.CurrentSession != nil && state.CurrentSession.Status == "resting" {
-		if language == config.UILanguageZhCN {
+		if language == settings.UILanguageZhCN {
 			return "状态：休息中"
 		}
 		return "Status: on break"
 	}
-	if language == config.UILanguageZhCN {
+	if language == settings.UILanguageZhCN {
 		return "状态：运行中"
 	}
 	return "Status: running"
 }
 
-func buildCountdownLabel(state config.RuntimeState, language string) string {
+func buildCountdownLabel(state state.RuntimeState, language string) string {
 	rows := listReminderRows(state)
 	if len(rows) == 0 {
 		return localizeNoRemindersLabel(language)
@@ -348,7 +349,7 @@ func formatCountdown(sec int) string {
 	return fmt.Sprintf("%02d:%02d", m, s)
 }
 
-func buildStatusBarTitle(state config.RuntimeState) string {
+func buildStatusBarTitle(state state.RuntimeState) string {
 	if !state.ShowTrayCountdown {
 		return ""
 	}
@@ -371,7 +372,7 @@ func buildStatusBarTitle(state config.RuntimeState) string {
 	return formatCountdown(choice.remaining)
 }
 
-func buildStatusBarProgress(state config.RuntimeState) float64 {
+func buildStatusBarProgress(state state.RuntimeState) float64 {
 	if state.CurrentSession != nil && state.CurrentSession.Status == "resting" {
 		// During break keep progress bar fixed; next countdown starts after break ends.
 		return 1
@@ -389,7 +390,7 @@ func buildStatusBarProgress(state config.RuntimeState) float64 {
 	return clampProgress(progress)
 }
 
-func nearestCountdownRemainingAndTotal(state config.RuntimeState) (int, int) {
+func nearestCountdownRemainingAndTotal(state state.RuntimeState) (int, int) {
 	choice := selectAutoReminderChoice(state)
 	if choice.reason <= 0 {
 		return 0, 0
@@ -397,7 +398,7 @@ func nearestCountdownRemainingAndTotal(state config.RuntimeState) (int, int) {
 	return choice.remaining, choice.total
 }
 
-func selectAutoReminderChoice(state config.RuntimeState) autoReminderChoice {
+func selectAutoReminderChoice(state state.RuntimeState) autoReminderChoice {
 	choices := listAutoReminderChoices(state)
 	if len(choices) == 0 {
 		return autoReminderChoice{}
@@ -405,7 +406,7 @@ func selectAutoReminderChoice(state config.RuntimeState) autoReminderChoice {
 	return choices[0]
 }
 
-func listAutoReminderChoices(state config.RuntimeState) []autoReminderChoice {
+func listAutoReminderChoices(state state.RuntimeState) []autoReminderChoice {
 	choices := make([]autoReminderChoice, 0, len(state.Reminders))
 	for _, reminder := range state.Reminders {
 		if !reminder.Enabled || reminder.Paused || reminder.NextInSec < 0 || !isRestRuntimeReminder(reminder) {
@@ -430,7 +431,7 @@ func listAutoReminderChoices(state config.RuntimeState) []autoReminderChoice {
 func buildReminderTitle(choice autoReminderChoice, language string, paused bool) string {
 	reasonText := reminderDisplayName(choice, language)
 	if paused {
-		if language == config.UILanguageZhCN {
+		if language == settings.UILanguageZhCN {
 			return fmt.Sprintf("%s - 已暂停", reasonText)
 		}
 		return fmt.Sprintf("%s - Paused", reasonText)
@@ -444,11 +445,11 @@ func reminderDisplayName(choice autoReminderChoice, language string) string {
 	return strings.TrimSpace(choice.name)
 }
 
-func isRestRuntimeReminder(reminder config.ReminderRuntime) bool {
+func isRestRuntimeReminder(reminder state.ReminderRuntime) bool {
 	return strings.ToLower(strings.TrimSpace(reminder.ReminderType)) != "notify"
 }
 
-func buildRemindersPayload(state config.RuntimeState, language string) (string, []int64) {
+func buildRemindersPayload(state state.RuntimeState, language string) (string, []int64) {
 	rows := listReminderRows(state)
 	if len(rows) == 0 {
 		return "", nil
@@ -484,7 +485,7 @@ type reminderRow struct {
 	paused bool
 }
 
-func listReminderRows(state config.RuntimeState) []reminderRow {
+func listReminderRows(state state.RuntimeState) []reminderRow {
 	rows := make([]reminderRow, 0, len(state.Reminders))
 	for _, reminder := range state.Reminders {
 		if !reminder.Enabled || !isRestRuntimeReminder(reminder) {
@@ -549,7 +550,7 @@ func reminderProgress(choice autoReminderChoice) float64 {
 }
 
 func localizeNoRemindersLabel(language string) string {
-	if language == config.UILanguageZhCN {
+	if language == settings.UILanguageZhCN {
 		return "暂无提醒"
 	}
 	return "No reminders"

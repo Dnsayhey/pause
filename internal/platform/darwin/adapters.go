@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"pause/internal/core/config"
+	"pause/internal/core/settings"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )
@@ -113,7 +113,7 @@ func (darwinNotifier) ShowReminder(title, body string) error {
 	return showDarwinUserNotification(title, body)
 }
 
-func (darwinSoundPlayer) PlayBreakEnd(sound config.SoundSettings) error {
+func (darwinSoundPlayer) PlayBreakEnd(sound settings.SoundSettings) error {
 	if !sound.Enabled {
 		return nil
 	}

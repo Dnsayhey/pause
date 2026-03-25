@@ -9,9 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"pause/internal/core/config"
 	"pause/internal/core/history"
+	"pause/internal/core/reminder"
 	"pause/internal/core/service"
+	"pause/internal/core/settings"
+	"pause/internal/core/state"
 	"pause/internal/logx"
 	"pause/internal/meta"
 	"pause/internal/paths"
@@ -21,7 +23,7 @@ import (
 type App struct {
 	ctx           context.Context
 	engine        *service.Engine
-	history       *history.Store
+	history       *history.HistoryStore
 	notifier      platform.Notifier
 	desktop       desktopController
 	quitRequested atomic.Bool
@@ -40,12 +42,12 @@ func NewApp(configPath string) (*App, error) {
 		configPath = resolved
 	}
 
-	store, err := config.NewStore(configPath)
+	store, err := settings.OpenSettingsStore(configPath)
 	if err != nil {
 		return nil, err
 	}
 	historyPath := defaultHistoryPath(configPath)
-	historyStore, err := history.OpenStore(context.Background(), historyPath)
+	historyStore, err := history.OpenHistoryStore(context.Background(), historyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -104,20 +106,20 @@ func (a *App) Startup(ctx context.Context) {
 	logx.Infof("app.startup completed")
 }
 
-func (a *App) GetSettings() config.Settings {
+func (a *App) GetSettings() settings.Settings {
 	return a.engine.GetSettings()
 }
 
-func (a *App) UpdateSettings(patch config.SettingsPatch) (config.Settings, error) {
-	settings, err := a.engine.UpdateSettings(patch)
+func (a *App) UpdateSettings(patch settings.SettingsPatch) (settings.Settings, error) {
+	nextSettings, err := a.engine.UpdateSettings(patch)
 	if err != nil {
 		logx.Warnf("app.update_settings_err err=%v", err)
-		return config.Settings{}, err
+		return settings.Settings{}, err
 	}
-	return settings, nil
+	return nextSettings, nil
 }
 
-func (a *App) GetReminders() ([]config.ReminderConfig, error) {
+func (a *App) GetReminders() ([]reminder.ReminderConfig, error) {
 	if a == nil || a.history == nil {
 		return nil, errors.New("history store unavailable")
 	}
@@ -128,7 +130,7 @@ func (a *App) GetReminders() ([]config.ReminderConfig, error) {
 	return historyDefsToConfig(defs), nil
 }
 
-func (a *App) UpdateReminder(patch config.ReminderPatch) ([]config.ReminderConfig, error) {
+func (a *App) UpdateReminder(patch reminder.ReminderPatch) ([]reminder.ReminderConfig, error) {
 	if a == nil || a.history == nil {
 		return nil, errors.New("history store unavailable")
 	}
@@ -155,7 +157,7 @@ func (a *App) UpdateReminder(patch config.ReminderPatch) ([]config.ReminderConfi
 	return reminders, nil
 }
 
-func (a *App) CreateReminder(input config.ReminderCreateInput) ([]config.ReminderConfig, error) {
+func (a *App) CreateReminder(input reminder.ReminderCreateInput) ([]reminder.ReminderConfig, error) {
 	if a == nil || a.history == nil {
 		return nil, errors.New("history store unavailable")
 	}
@@ -190,7 +192,7 @@ func (a *App) CreateReminder(input config.ReminderCreateInput) ([]config.Reminde
 	return reminders, nil
 }
 
-func (a *App) DeleteReminder(reminderID int64) ([]config.ReminderConfig, error) {
+func (a *App) DeleteReminder(reminderID int64) ([]reminder.ReminderConfig, error) {
 	if a == nil || a.history == nil {
 		return nil, errors.New("history store unavailable")
 	}
@@ -214,78 +216,78 @@ func (a *App) DeleteReminder(reminderID int64) ([]config.ReminderConfig, error) 
 	return reminders, nil
 }
 
-func (a *App) GetRuntimeState() config.RuntimeState {
-	state := a.engine.GetRuntimeState(time.Now())
-	return a.decorateRuntimeState(state)
+func (a *App) GetRuntimeState() state.RuntimeState {
+	runtimeState := a.engine.GetRuntimeState(time.Now())
+	return a.decorateRuntimeState(runtimeState)
 }
 
-func (a *App) Pause() (config.RuntimeState, error) {
-	state, err := a.engine.Pause(time.Now())
+func (a *App) Pause() (state.RuntimeState, error) {
+	runtimeState, err := a.engine.Pause(time.Now())
 	if err != nil {
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
-	return a.decorateRuntimeState(state), nil
+	return a.decorateRuntimeState(runtimeState), nil
 }
 
-func (a *App) Resume() config.RuntimeState {
+func (a *App) Resume() state.RuntimeState {
 	return a.decorateRuntimeState(a.engine.Resume(time.Now()))
 }
 
-func (a *App) PauseReminder(reminderID int64) (config.RuntimeState, error) {
+func (a *App) PauseReminder(reminderID int64) (state.RuntimeState, error) {
 	if reminderID <= 0 {
-		return config.RuntimeState{}, errors.New("reminder id is required")
+		return state.RuntimeState{}, errors.New("reminder id is required")
 	}
-	state, err := a.engine.PauseReminder(reminderID, time.Now())
+	runtimeState, err := a.engine.PauseReminder(reminderID, time.Now())
 	if err != nil {
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
-	return a.decorateRuntimeState(state), nil
+	return a.decorateRuntimeState(runtimeState), nil
 }
 
-func (a *App) ResumeReminder(reminderID int64) (config.RuntimeState, error) {
+func (a *App) ResumeReminder(reminderID int64) (state.RuntimeState, error) {
 	if reminderID <= 0 {
-		return config.RuntimeState{}, errors.New("reminder id is required")
+		return state.RuntimeState{}, errors.New("reminder id is required")
 	}
-	state, err := a.engine.ResumeReminder(reminderID, time.Now())
+	runtimeState, err := a.engine.ResumeReminder(reminderID, time.Now())
 	if err != nil {
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
-	return a.decorateRuntimeState(state), nil
+	return a.decorateRuntimeState(runtimeState), nil
 }
 
-func (a *App) SkipCurrentBreak() (config.RuntimeState, error) {
+func (a *App) SkipCurrentBreak() (state.RuntimeState, error) {
 	return a.skipCurrentBreakWithMode(service.SkipModeNormal)
 }
 
-func (a *App) skipCurrentBreakEmergency() (config.RuntimeState, error) {
+func (a *App) skipCurrentBreakEmergency() (state.RuntimeState, error) {
 	return a.skipCurrentBreakWithMode(service.SkipModeEmergency)
 }
 
-func (a *App) skipCurrentBreakWithMode(mode service.SkipMode) (config.RuntimeState, error) {
-	state, err := a.engine.SkipCurrentBreak(time.Now(), mode)
+func (a *App) skipCurrentBreakWithMode(mode service.SkipMode) (state.RuntimeState, error) {
+	runtimeState, err := a.engine.SkipCurrentBreak(time.Now(), mode)
 	if err != nil {
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
-	return a.decorateRuntimeState(state), nil
+	return a.decorateRuntimeState(runtimeState), nil
 }
 
-func (a *App) StartBreakNow() (config.RuntimeState, error) {
-	state, err := a.engine.StartBreakNow(time.Now())
+func (a *App) StartBreakNow() (state.RuntimeState, error) {
+	runtimeState, err := a.engine.StartBreakNow(time.Now())
 	if err != nil {
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
-	return a.decorateRuntimeState(state), nil
+	return a.decorateRuntimeState(runtimeState), nil
 }
 
-func (a *App) StartBreakNowForReason(reminderID int64) (config.RuntimeState, error) {
+func (a *App) StartBreakNowForReason(reminderID int64) (state.RuntimeState, error) {
 	if reminderID < 0 {
-		return config.RuntimeState{}, errors.New("reminder id is invalid")
+		return state.RuntimeState{}, errors.New("reminder id is invalid")
 	}
-	state, err := a.engine.StartBreakNowForReason(reminderID, time.Now())
+	runtimeState, err := a.engine.StartBreakNowForReason(reminderID, time.Now())
 	if err != nil {
-		return config.RuntimeState{}, err
+		return state.RuntimeState{}, err
 	}
-	return a.decorateRuntimeState(state), nil
+	return a.decorateRuntimeState(runtimeState), nil
 }
 
 func (a *App) GetLaunchAtLogin() (bool, error) {
@@ -296,7 +298,7 @@ func (a *App) SetLaunchAtLogin(enabled bool) (bool, error) {
 	return a.engine.SetLaunchAtLogin(enabled)
 }
 
-func (a *App) SendBreakFallbackNotification(state config.RuntimeState) {
+func (a *App) SendBreakFallbackNotification(state state.RuntimeState) {
 	if a.notifier == nil {
 		logx.Warnf("overlay.fallback_notification_skipped reason=no_notifier")
 		return
@@ -316,7 +318,7 @@ func (a *App) SendBreakFallbackNotification(state config.RuntimeState) {
 	}(reasons, notifier, body)
 }
 
-func buildBreakNotificationBody(state config.RuntimeState) string {
+func buildBreakNotificationBody(state state.RuntimeState) string {
 	if state.CurrentSession == nil {
 		return "Break started"
 	}
@@ -376,14 +378,14 @@ func appContextOrBackground(ctx context.Context) context.Context {
 	return context.Background()
 }
 
-func historyDefsToConfig(defs []history.Reminder) []config.ReminderConfig {
-	result := make([]config.ReminderConfig, 0, len(defs))
+func historyDefsToConfig(defs []history.Reminder) []reminder.ReminderConfig {
+	result := make([]reminder.ReminderConfig, 0, len(defs))
 	for _, def := range defs {
 		id := def.ID
 		if id <= 0 {
 			continue
 		}
-		result = append(result, config.ReminderConfig{
+		result = append(result, reminder.ReminderConfig{
 			ID:           id,
 			Name:         strings.TrimSpace(def.Name),
 			Enabled:      def.Enabled,
@@ -395,16 +397,16 @@ func historyDefsToConfig(defs []history.Reminder) []config.ReminderConfig {
 	return cloneReminderConfigs(result)
 }
 
-func cloneReminderConfigs(reminders []config.ReminderConfig) []config.ReminderConfig {
+func cloneReminderConfigs(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
 	if len(reminders) == 0 {
 		return nil
 	}
-	cloned := make([]config.ReminderConfig, 0, len(reminders))
+	cloned := make([]reminder.ReminderConfig, 0, len(reminders))
 	cloned = append(cloned, reminders...)
 	return cloned
 }
 
-func ensureBuiltInRemindersForFirstInstall(ctx context.Context, store *history.Store, language string) error {
+func ensureBuiltInRemindersForFirstInstall(ctx context.Context, store *history.HistoryStore, language string) error {
 	if store == nil {
 		return nil
 	}
@@ -529,7 +531,7 @@ func (a *App) Shutdown(_ context.Context) {
 	}
 }
 
-func (a *App) decorateRuntimeState(state config.RuntimeState) config.RuntimeState {
+func (a *App) decorateRuntimeState(state state.RuntimeState) state.RuntimeState {
 	settings := a.engine.GetSettings()
 	state.EffectiveLanguage = resolveEffectiveLanguage(settings.UI.Language)
 	state.EffectiveTheme = resolveEffectiveTheme(settings.UI.Theme)

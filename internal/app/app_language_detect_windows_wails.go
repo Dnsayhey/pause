@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	kernel32DLL               = syscall.NewLazyDLL("kernel32.dll")
+	kernel32DLL                  = syscall.NewLazyDLL("kernel32.dll")
 	procGetUserDefaultLocaleName = kernel32DLL.NewProc("GetUserDefaultLocaleName")
 )
 
@@ -26,4 +26,3 @@ func detectPreferredLanguage() string {
 	locale := syscall.UTF16ToString(buf)
 	return strings.TrimSpace(locale)
 }
-

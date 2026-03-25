@@ -23,4 +23,3 @@ func detectPreferredTheme() string {
 	}
 	return "light"
 }
-

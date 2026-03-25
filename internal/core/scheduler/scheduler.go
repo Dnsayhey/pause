@@ -3,7 +3,7 @@ package scheduler
 import (
 	"sort"
 
-	"pause/internal/core/config"
+	"pause/internal/core/reminder"
 )
 
 const mergeWindowSec = 60
@@ -35,7 +35,7 @@ func (s *Scheduler) ResetByID(id int64) {
 	delete(s.elapsedSec, norm)
 }
 
-func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []config.ReminderConfig) *Event {
+func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []reminder.ReminderConfig) *Event {
 	if activeSec <= 0 {
 		return nil
 	}
@@ -90,7 +90,7 @@ func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []config.ReminderCo
 	return &Event{Reasons: reasons, BreakSec: breakSec}
 }
 
-func (s *Scheduler) NextInSec(reminders []config.ReminderConfig, reminderID int64) int {
+func (s *Scheduler) NextInSec(reminders []reminder.ReminderConfig, reminderID int64) int {
 	cfg, ok := findReminderByID(reminders, reminderID)
 	if !ok || !cfg.Enabled {
 		return -1
@@ -102,7 +102,7 @@ func (s *Scheduler) NextInSec(reminders []config.ReminderConfig, reminderID int6
 	return remaining
 }
 
-func (s *Scheduler) NextByID(reminders []config.ReminderConfig) map[int64]int {
+func (s *Scheduler) NextByID(reminders []reminder.ReminderConfig) map[int64]int {
 	next := map[int64]int{}
 	for _, reminder := range reminders {
 		next[reminder.ID] = s.NextInSec(reminders, reminder.ID)
@@ -110,8 +110,8 @@ func (s *Scheduler) NextByID(reminders []config.ReminderConfig) map[int64]int {
 	return next
 }
 
-func enabledReminders(reminders []config.ReminderConfig) []config.ReminderConfig {
-	result := make([]config.ReminderConfig, 0, len(reminders))
+func enabledReminders(reminders []reminder.ReminderConfig) []reminder.ReminderConfig {
+	result := make([]reminder.ReminderConfig, 0, len(reminders))
 	for _, reminder := range reminders {
 		if !reminder.Enabled {
 			continue
@@ -128,12 +128,12 @@ func normalizeReminderID(id int64) int64 {
 	return id
 }
 
-func findReminderByID(reminders []config.ReminderConfig, id int64) (config.ReminderConfig, bool) {
+func findReminderByID(reminders []reminder.ReminderConfig, id int64) (reminder.ReminderConfig, bool) {
 	norm := normalizeReminderID(id)
 	for _, reminder := range reminders {
 		if reminder.ID == norm {
 			return reminder, true
 		}
 	}
-	return config.ReminderConfig{}, false
+	return reminder.ReminderConfig{}, false
 }

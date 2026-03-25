@@ -3,7 +3,7 @@ package scheduler
 import (
 	"testing"
 
-	"pause/internal/core/config"
+	"pause/internal/core/reminder"
 )
 
 const (
@@ -11,8 +11,8 @@ const (
 	testReminderIDStand int64 = 2
 )
 
-func defaultReminderFixtures() []config.ReminderConfig {
-	return []config.ReminderConfig{
+func defaultReminderFixtures() []reminder.ReminderConfig {
+	return []reminder.ReminderConfig{
 		{ID: testReminderIDEye, Enabled: true, IntervalSec: 20 * 60, BreakSec: 20, ReminderType: "rest"},
 		{ID: testReminderIDStand, Enabled: true, IntervalSec: 60 * 60, BreakSec: 5 * 60, ReminderType: "rest"},
 	}
@@ -42,7 +42,7 @@ func TestEyeReminderTriggersAtDefaultInterval(t *testing.T) {
 
 func TestMergeConflictWithinWindow(t *testing.T) {
 	s := New()
-	reminders := []config.ReminderConfig{
+	reminders := []reminder.ReminderConfig{
 		{ID: testReminderIDEye, Enabled: true, IntervalSec: 1200, BreakSec: 20},
 		{ID: testReminderIDStand, Enabled: true, IntervalSec: 1230, BreakSec: 300},
 	}

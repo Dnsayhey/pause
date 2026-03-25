@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func mustCreateReminder(t *testing.T, store *Store, name string) int64 {
+func mustCreateReminder(t *testing.T, store *HistoryStore, name string) int64 {
 	t.Helper()
 	id, err := store.CreateReminder(context.Background(), Reminder{
 		Name:         name,
@@ -25,9 +25,9 @@ func mustCreateReminder(t *testing.T, store *Store, name string) int64 {
 
 func TestOpenStoreMigratesWithoutSeedingDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 
@@ -42,9 +42,9 @@ func TestOpenStoreMigratesWithoutSeedingDefaults(t *testing.T) {
 
 func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 
@@ -107,9 +107,9 @@ func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 
 func TestListRemindersSkipsSoftDeletedRows(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 
@@ -131,9 +131,9 @@ func TestListRemindersSkipsSoftDeletedRows(t *testing.T) {
 
 func TestRecordBreakRejectsDuplicateReminderIDs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 
@@ -156,9 +156,9 @@ func TestRecordBreakRejectsDuplicateReminderIDs(t *testing.T) {
 
 func TestCreateReminderAndDeleteLifecycle(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 
@@ -207,9 +207,9 @@ func TestCreateReminderAndDeleteLifecycle(t *testing.T) {
 
 func TestUpdateReminderRejectsInvalidID(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 
@@ -224,9 +224,9 @@ func TestUpdateReminderRejectsInvalidID(t *testing.T) {
 
 func TestUpdateReminderRejectsUnknownReminderID(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 
@@ -239,9 +239,9 @@ func TestUpdateReminderRejectsUnknownReminderID(t *testing.T) {
 
 func TestUpdateReminderRejectsSoftDeletedReminder(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
+	store, err := OpenHistoryStore(context.Background(), path)
 	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
+		t.Fatalf("OpenHistoryStore() error = %v", err)
 	}
 	defer store.Close()
 

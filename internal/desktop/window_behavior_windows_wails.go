@@ -25,7 +25,7 @@ const (
 var (
 	windowBehaviorUser32 = syscall.NewLazyDLL("user32.dll")
 
-	procFindWindowW      = windowBehaviorUser32.NewProc("FindWindowW")
+	procFindWindowW       = windowBehaviorUser32.NewProc("FindWindowW")
 	procGetWindowLongPtrW = windowBehaviorUser32.NewProc("GetWindowLongPtrW")
 	procSetWindowLongPtrW = windowBehaviorUser32.NewProc("SetWindowLongPtrW")
 	procSetWindowPosWB    = windowBehaviorUser32.NewProc("SetWindowPos")

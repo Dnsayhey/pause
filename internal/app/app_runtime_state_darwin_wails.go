@@ -2,9 +2,9 @@
 
 package app
 
-import "pause/internal/core/config"
+import "pause/internal/core/state"
 
-func decorateRuntimeStateForPlatform(state config.RuntimeState) config.RuntimeState {
+func decorateRuntimeStateForPlatform(state state.RuntimeState) state.RuntimeState {
 	state.OverlayNative = true
 	return state
 }

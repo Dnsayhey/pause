@@ -1,21 +1,21 @@
 package app
 
-import "pause/internal/core/config"
+import "pause/internal/core/settings"
 
 func resolveEffectiveTheme(setting string) string {
 	return resolveEffectiveThemeWithSystem(setting, detectPreferredTheme())
 }
 
 func resolveEffectiveThemeWithSystem(setting string, systemTheme string) string {
-	normalized := config.NormalizeUITheme(setting)
-	if normalized == config.UIThemeLight || normalized == config.UIThemeDark {
+	normalized := settings.NormalizeUITheme(setting)
+	if normalized == settings.UIThemeLight || normalized == settings.UIThemeDark {
 		return normalized
 	}
 
-	system := config.NormalizeUITheme(systemTheme)
-	if system == config.UIThemeLight || system == config.UIThemeDark {
+	system := settings.NormalizeUITheme(systemTheme)
+	if system == settings.UIThemeLight || system == settings.UIThemeDark {
 		return system
 	}
 
-	return config.UIThemeDark
+	return settings.UIThemeDark
 }
