@@ -3,8 +3,8 @@ package bootstrap
 import (
 	"errors"
 
-	engineadapter "pause/internal/backend/adapters/engine"
 	historyadapter "pause/internal/backend/adapters/history"
+	settingsadapter "pause/internal/backend/adapters/settings"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
@@ -41,6 +41,6 @@ func NewSettingsService(engine *coreservice.Engine) (*settingsusecase.Service, e
 	if engine == nil {
 		return nil, errors.New("engine unavailable")
 	}
-	settingsRepo := engineadapter.NewSettingsRepository(engine)
+	settingsRepo := settingsadapter.NewSettingsRepository(engine)
 	return settingsusecase.NewService(settingsRepo)
 }

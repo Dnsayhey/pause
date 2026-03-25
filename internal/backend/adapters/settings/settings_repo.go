@@ -1,4 +1,4 @@
-package engineadapter
+package settingsadapter
 
 import (
 	"context"
