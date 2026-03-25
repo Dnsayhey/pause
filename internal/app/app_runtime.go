@@ -4,7 +4,6 @@ import (
 	"errors"
 	"time"
 
-	"pause/internal/core/service"
 	"pause/internal/core/state"
 )
 
@@ -48,14 +47,14 @@ func (a *App) ResumeReminder(reminderID int64) (state.RuntimeState, error) {
 }
 
 func (a *App) SkipCurrentBreak() (state.RuntimeState, error) {
-	return a.skipCurrentBreakWithMode(service.SkipModeNormal)
+	return a.skipCurrentBreakWithMode(skipModeNormal)
 }
 
 func (a *App) skipCurrentBreakEmergency() (state.RuntimeState, error) {
-	return a.skipCurrentBreakWithMode(service.SkipModeEmergency)
+	return a.skipCurrentBreakWithMode(skipModeEmergency)
 }
 
-func (a *App) skipCurrentBreakWithMode(mode service.SkipMode) (state.RuntimeState, error) {
+func (a *App) skipCurrentBreakWithMode(mode skipMode) (state.RuntimeState, error) {
 	runtimeState, err := a.engine.SkipCurrentBreak(time.Now(), mode)
 	if err != nil {
 		return state.RuntimeState{}, err

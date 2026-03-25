@@ -8,7 +8,6 @@ import (
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
 	corereminder "pause/internal/core/reminder"
-	"pause/internal/core/service"
 	"pause/internal/core/settings"
 	"pause/internal/core/state"
 	"pause/internal/platform"
@@ -34,11 +33,18 @@ type engineRuntime interface {
 	Resume(now time.Time) state.RuntimeState
 	PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
 	ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
-	SkipCurrentBreak(now time.Time, mode service.SkipMode) (state.RuntimeState, error)
+	SkipCurrentBreak(now time.Time, mode skipMode) (state.RuntimeState, error)
 	StartBreakNow(now time.Time) (state.RuntimeState, error)
 	StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error)
 	SetReminderConfigs(reminders []corereminder.ReminderConfig) []corereminder.ReminderConfig
 }
+
+type skipMode string
+
+const (
+	skipModeNormal    skipMode = "normal"
+	skipModeEmergency skipMode = "emergency"
+)
 
 type historyCloser interface {
 	Close() error

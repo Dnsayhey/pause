@@ -41,7 +41,7 @@ func newTestAppWithHistory(t *testing.T) *App {
 
 	return &App{
 		ctx:       context.Background(),
-		engine:    engine,
+		engine:    newEngineRuntime(engine),
 		history:   historyStore,
 		reminders: container.ReminderService,
 	}

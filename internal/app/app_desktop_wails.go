@@ -15,7 +15,6 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"pause/internal/core/service"
 	"pause/internal/core/settings"
 	"pause/internal/core/state"
 	"pause/internal/desktop"
@@ -70,11 +69,11 @@ func newDesktopController() desktopController {
 	return controller
 }
 
-func overlaySkipMode(settings settings.Settings) service.SkipMode {
+func overlaySkipMode(settings settings.Settings) skipMode {
 	if settings.Enforcement.OverlaySkipAllowed {
-		return service.SkipModeNormal
+		return skipModeNormal
 	}
-	return service.SkipModeEmergency
+	return skipModeEmergency
 }
 
 func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
