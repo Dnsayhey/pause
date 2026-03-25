@@ -4,13 +4,13 @@ import (
 	"errors"
 
 	analyticsdomain "pause/internal/backend/domain/analytics"
-	"pause/internal/core/history"
+	coreanalytics "pause/internal/core/analytics"
 )
 
-func analyticsWeeklyStatsToHistory(source analyticsdomain.WeeklyStats) history.AnalyticsWeeklyStats {
-	reminders := make([]history.AnalyticsReminderStat, 0, len(source.Reminders))
+func analyticsWeeklyStatsToCore(source analyticsdomain.WeeklyStats) coreanalytics.WeeklyStats {
+	reminders := make([]coreanalytics.ReminderStat, 0, len(source.Reminders))
 	for _, row := range source.Reminders {
-		reminders = append(reminders, history.AnalyticsReminderStat{
+		reminders = append(reminders, coreanalytics.ReminderStat{
 			ReminderID:          row.ReminderID,
 			ReminderName:        row.ReminderName,
 			Enabled:             row.Enabled,
@@ -24,11 +24,11 @@ func analyticsWeeklyStatsToHistory(source analyticsdomain.WeeklyStats) history.A
 		})
 	}
 
-	return history.AnalyticsWeeklyStats{
+	return coreanalytics.WeeklyStats{
 		FromSec:   source.FromSec,
 		ToSec:     source.ToSec,
 		Reminders: reminders,
-		Summary: history.AnalyticsSummaryStats{
+		Summary: coreanalytics.SummaryStats{
 			TotalSessions:       source.Summary.TotalSessions,
 			TotalCompleted:      source.Summary.TotalCompleted,
 			TotalSkipped:        source.Summary.TotalSkipped,
@@ -39,8 +39,8 @@ func analyticsWeeklyStatsToHistory(source analyticsdomain.WeeklyStats) history.A
 	}
 }
 
-func analyticsSummaryToHistory(source analyticsdomain.Summary) history.AnalyticsSummary {
-	return history.AnalyticsSummary{
+func analyticsSummaryToCore(source analyticsdomain.Summary) coreanalytics.Summary {
+	return coreanalytics.Summary{
 		FromSec:             source.FromSec,
 		ToSec:               source.ToSec,
 		TotalSessions:       source.TotalSessions,
@@ -54,10 +54,10 @@ func analyticsSummaryToHistory(source analyticsdomain.Summary) history.Analytics
 	}
 }
 
-func analyticsTrendToHistory(source analyticsdomain.Trend) history.AnalyticsTrend {
-	points := make([]history.AnalyticsTrendPoint, 0, len(source.Points))
+func analyticsTrendToCore(source analyticsdomain.Trend) coreanalytics.Trend {
+	points := make([]coreanalytics.TrendPoint, 0, len(source.Points))
 	for _, row := range source.Points {
-		points = append(points, history.AnalyticsTrendPoint{
+		points = append(points, coreanalytics.TrendPoint{
 			Day:                 row.Day,
 			TotalSessions:       row.TotalSessions,
 			TotalCompleted:      row.TotalCompleted,
@@ -69,17 +69,17 @@ func analyticsTrendToHistory(source analyticsdomain.Trend) history.AnalyticsTren
 			AvgActualBreakSec:   row.AvgActualBreakSec,
 		})
 	}
-	return history.AnalyticsTrend{
+	return coreanalytics.Trend{
 		FromSec: source.FromSec,
 		ToSec:   source.ToSec,
 		Points:  points,
 	}
 }
 
-func analyticsBreakTypeDistributionToHistory(source analyticsdomain.BreakTypeDistribution) history.AnalyticsBreakTypeDistribution {
-	items := make([]history.AnalyticsBreakTypeDistributionItem, 0, len(source.Items))
+func analyticsBreakTypeDistributionToCore(source analyticsdomain.BreakTypeDistribution) coreanalytics.BreakTypeDistribution {
+	items := make([]coreanalytics.BreakTypeDistributionItem, 0, len(source.Items))
 	for _, row := range source.Items {
-		items = append(items, history.AnalyticsBreakTypeDistributionItem{
+		items = append(items, coreanalytics.BreakTypeDistributionItem{
 			ReminderID:      row.ReminderID,
 			ReminderName:    row.ReminderName,
 			TriggeredCount:  row.TriggeredCount,
@@ -93,7 +93,7 @@ func analyticsBreakTypeDistributionToHistory(source analyticsdomain.BreakTypeDis
 			ReminderEnabled: row.ReminderEnabled,
 		})
 	}
-	return history.AnalyticsBreakTypeDistribution{
+	return coreanalytics.BreakTypeDistribution{
 		FromSec:        source.FromSec,
 		ToSec:          source.ToSec,
 		TotalTriggered: source.TotalTriggered,
@@ -101,46 +101,46 @@ func analyticsBreakTypeDistributionToHistory(source analyticsdomain.BreakTypeDis
 	}
 }
 
-func (a *App) GetAnalyticsWeeklyStats(fromSec int64, toSec int64) (history.AnalyticsWeeklyStats, error) {
+func (a *App) GetAnalyticsWeeklyStats(fromSec int64, toSec int64) (coreanalytics.WeeklyStats, error) {
 	if a == nil || a.analytics == nil {
-		return history.AnalyticsWeeklyStats{}, errors.New("analytics service unavailable")
+		return coreanalytics.WeeklyStats{}, errors.New("analytics service unavailable")
 	}
 	result, err := a.analytics.GetWeeklyStats(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
-		return history.AnalyticsWeeklyStats{}, err
+		return coreanalytics.WeeklyStats{}, err
 	}
-	return analyticsWeeklyStatsToHistory(result), nil
+	return analyticsWeeklyStatsToCore(result), nil
 }
 
-func (a *App) GetAnalyticsSummary(fromSec int64, toSec int64) (history.AnalyticsSummary, error) {
+func (a *App) GetAnalyticsSummary(fromSec int64, toSec int64) (coreanalytics.Summary, error) {
 	if a == nil || a.analytics == nil {
-		return history.AnalyticsSummary{}, errors.New("analytics service unavailable")
+		return coreanalytics.Summary{}, errors.New("analytics service unavailable")
 	}
 	result, err := a.analytics.GetSummary(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
-		return history.AnalyticsSummary{}, err
+		return coreanalytics.Summary{}, err
 	}
-	return analyticsSummaryToHistory(result), nil
+	return analyticsSummaryToCore(result), nil
 }
 
-func (a *App) GetAnalyticsTrendByDay(fromSec int64, toSec int64) (history.AnalyticsTrend, error) {
+func (a *App) GetAnalyticsTrendByDay(fromSec int64, toSec int64) (coreanalytics.Trend, error) {
 	if a == nil || a.analytics == nil {
-		return history.AnalyticsTrend{}, errors.New("analytics service unavailable")
+		return coreanalytics.Trend{}, errors.New("analytics service unavailable")
 	}
 	result, err := a.analytics.GetTrendByDay(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
-		return history.AnalyticsTrend{}, err
+		return coreanalytics.Trend{}, err
 	}
-	return analyticsTrendToHistory(result), nil
+	return analyticsTrendToCore(result), nil
 }
 
-func (a *App) GetAnalyticsBreakTypeDistribution(fromSec int64, toSec int64) (history.AnalyticsBreakTypeDistribution, error) {
+func (a *App) GetAnalyticsBreakTypeDistribution(fromSec int64, toSec int64) (coreanalytics.BreakTypeDistribution, error) {
 	if a == nil || a.analytics == nil {
-		return history.AnalyticsBreakTypeDistribution{}, errors.New("analytics service unavailable")
+		return coreanalytics.BreakTypeDistribution{}, errors.New("analytics service unavailable")
 	}
 	result, err := a.analytics.GetBreakTypeDistribution(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
-		return history.AnalyticsBreakTypeDistribution{}, err
+		return coreanalytics.BreakTypeDistribution{}, err
 	}
-	return analyticsBreakTypeDistributionToHistory(result), nil
+	return analyticsBreakTypeDistributionToCore(result), nil
 }
