@@ -6,7 +6,7 @@ import (
 
 	settingsdomain "pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
-	coreservice "pause/internal/core/service"
+	coreservice "pause/internal/backend/runtime/engine"
 )
 
 var errEngineUnavailable = errors.New("engine unavailable")

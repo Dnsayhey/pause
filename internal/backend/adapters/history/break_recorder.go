@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"pause/internal/core/service"
+	service "pause/internal/backend/runtime/engine"
 )
 
 type BreakRecorder struct {

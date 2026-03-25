@@ -5,7 +5,6 @@ package app
 import (
 	"testing"
 
-	"pause/internal/core/service"
 	"pause/internal/core/settings"
 	"pause/internal/core/state"
 )
@@ -19,8 +18,8 @@ func TestOverlaySkipMode_AllowSkipUsesNormal(t *testing.T) {
 	settings := settings.DefaultSettings()
 	settings.Enforcement.OverlaySkipAllowed = true
 
-	if got := overlaySkipMode(settings); got != service.SkipModeNormal {
-		t.Fatalf("overlaySkipMode() = %q, want %q", got, service.SkipModeNormal)
+	if got := overlaySkipMode(settings); got != skipModeNormal {
+		t.Fatalf("overlaySkipMode() = %q, want %q", got, skipModeNormal)
 	}
 }
 
@@ -28,8 +27,8 @@ func TestOverlaySkipMode_DisallowSkipUsesEmergency(t *testing.T) {
 	settings := settings.DefaultSettings()
 	settings.Enforcement.OverlaySkipAllowed = false
 
-	if got := overlaySkipMode(settings); got != service.SkipModeEmergency {
-		t.Fatalf("overlaySkipMode() = %q, want %q", got, service.SkipModeEmergency)
+	if got := overlaySkipMode(settings); got != skipModeEmergency {
+		t.Fatalf("overlaySkipMode() = %q, want %q", got, skipModeEmergency)
 	}
 }
 

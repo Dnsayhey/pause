@@ -5,11 +5,11 @@ import (
 
 	historyadapter "pause/internal/backend/adapters/history"
 	settingsadapter "pause/internal/backend/adapters/settings"
+	coreservice "pause/internal/backend/runtime/engine"
 	historydb "pause/internal/backend/storage/historydb"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
-	coreservice "pause/internal/core/service"
 )
 
 type Container struct {

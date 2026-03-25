@@ -7,12 +7,12 @@ import (
 	"strings"
 
 	historyadapter "pause/internal/backend/adapters/history"
+	service "pause/internal/backend/runtime/engine"
 	"pause/internal/backend/storage/historydb"
 	"pause/internal/backend/storage/settingsjson"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
-	"pause/internal/core/service"
 	"pause/internal/platform"
 )
 

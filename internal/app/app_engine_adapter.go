@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	service "pause/internal/backend/runtime/engine"
 	"pause/internal/core/reminder"
-	"pause/internal/core/service"
 	"pause/internal/core/settings"
 	"pause/internal/core/state"
 )
