@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	historyadapter "pause/internal/backend/adapters/history"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
@@ -48,13 +49,14 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 	}
 
 	adapters := platform.NewAdapters(bundleID)
+	breakRecorder := historyadapter.NewBreakRecorder(historyStore)
 	engine := service.NewEngine(
 		store,
 		adapters.IdleProvider,
 		adapters.LockStateProvider,
 		adapters.SoundPlayer,
 		adapters.StartupManager,
-		historyStore,
+		breakRecorder,
 	)
 	engine.SetNotifier(adapters.Notifier)
 
