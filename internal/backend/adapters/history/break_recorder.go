@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	service "pause/internal/backend/runtime/engine"
+	"pause/internal/backend/ports"
 )
 
 type BreakRecorder struct {
@@ -24,7 +24,7 @@ type HistoryStoreRef interface {
 	) error
 }
 
-var _ service.BreakHistoryRecorder = (*BreakRecorder)(nil)
+var _ ports.BreakRepository = (*BreakRecorder)(nil)
 
 func NewBreakRecorder(store HistoryStoreRef) *BreakRecorder {
 	return &BreakRecorder{store: store}

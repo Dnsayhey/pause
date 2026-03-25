@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
+	"pause/internal/backend/ports"
 	"pause/internal/backend/runtime/scheduler"
 	"pause/internal/backend/runtime/session"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/core/reminder"
 	"pause/internal/core/settings"
 	"pause/internal/logx"
-	"pause/internal/platform"
 )
 
 type SkipMode string
@@ -26,15 +26,33 @@ const (
 	SkipModeEmergency SkipMode = "emergency"
 )
 
-type BreakHistoryRecorder interface {
-	RecordBreak(ctx context.Context, startedAt time.Time, endedAt time.Time, source string, plannedBreakSec int, actualBreakSec int, skipped bool, reminderIDs []int64) error
-}
-
 type SettingsStore interface {
 	WasCreated() bool
 	Get() settings.Settings
 	Update(patch settings.SettingsPatch) (settings.Settings, error)
 }
+
+type noopIdleProvider struct{}
+
+func (noopIdleProvider) CurrentIdleSeconds() int { return 0 }
+
+type noopLockStateProvider struct{}
+
+func (noopLockStateProvider) IsScreenLocked() bool { return false }
+
+type noopSoundPlayer struct{}
+
+func (noopSoundPlayer) PlayBreakEnd(settings.SoundSettings) error { return nil }
+
+type noopNotifier struct{}
+
+func (noopNotifier) ShowReminder(_, _ string) error { return nil }
+
+type noopStartupManager struct{}
+
+func (noopStartupManager) SetLaunchAtLogin(bool) error { return nil }
+
+func (noopStartupManager) GetLaunchAtLogin() (bool, error) { return false, nil }
 
 type pendingHistoryBreak struct {
 	StartedAt       time.Time
@@ -51,13 +69,13 @@ type Engine struct {
 	reminders []reminder.ReminderConfig
 	scheduler *scheduler.Scheduler
 	session   *session.Manager
-	history   BreakHistoryRecorder
+	history   ports.BreakRepository
 
-	idleProvider   platform.IdleProvider
-	lockProvider   platform.LockStateProvider
-	soundPlayer    platform.SoundPlayer
-	notifier       platform.Notifier
-	startupManager platform.StartupManager
+	idleProvider   ports.IdleProvider
+	lockProvider   ports.LockStateProvider
+	soundPlayer    ports.SoundPlayer
+	notifier       ports.Notifier
+	startupManager ports.StartupManager
 
 	lastTick      time.Time
 	tickRemainder time.Duration
@@ -73,23 +91,23 @@ type Engine struct {
 
 func NewEngine(
 	store SettingsStore,
-	idleProvider platform.IdleProvider,
-	lockProvider platform.LockStateProvider,
-	soundPlayer platform.SoundPlayer,
-	startupManager platform.StartupManager,
-	history BreakHistoryRecorder,
+	idleProvider ports.IdleProvider,
+	lockProvider ports.LockStateProvider,
+	soundPlayer ports.SoundPlayer,
+	startupManager ports.StartupManager,
+	history ports.BreakRepository,
 ) *Engine {
 	if idleProvider == nil {
-		idleProvider = platform.NoopIdleProvider{}
+		idleProvider = noopIdleProvider{}
 	}
 	if lockProvider == nil {
-		lockProvider = platform.NoopLockStateProvider{}
+		lockProvider = noopLockStateProvider{}
 	}
 	if soundPlayer == nil {
-		soundPlayer = platform.NoopSoundPlayer{}
+		soundPlayer = noopSoundPlayer{}
 	}
 	if startupManager == nil {
-		startupManager = platform.NoopStartupManager{}
+		startupManager = noopStartupManager{}
 	}
 
 	return &Engine{
@@ -101,17 +119,17 @@ func NewEngine(
 		idleProvider:   idleProvider,
 		lockProvider:   lockProvider,
 		soundPlayer:    soundPlayer,
-		notifier:       platform.NoopNotifier{},
+		notifier:       noopNotifier{},
 		startupManager: startupManager,
 		pausedReminder: map[int64]bool{},
 	}
 }
 
-func (e *Engine) SetNotifier(notifier platform.Notifier) {
+func (e *Engine) SetNotifier(notifier ports.Notifier) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if notifier == nil {
-		e.notifier = platform.NoopNotifier{}
+		e.notifier = noopNotifier{}
 		return
 	}
 	e.notifier = notifier
@@ -965,7 +983,7 @@ func (e *Engine) notifyRemindersLocked(reminderIDs []int64, language string) {
 		keyParts = append(keyParts, strconv.FormatInt(id, 10))
 	}
 	reminderKey := strings.Join(keyParts, "+")
-	go func(n platform.Notifier, t string, b string, key string) {
+	go func(n ports.Notifier, t string, b string, key string) {
 		if err := n.ShowReminder(t, b); err != nil {
 			logx.Warnf("reminder.notification_err reminders=%s err=%v", key, err)
 			return
