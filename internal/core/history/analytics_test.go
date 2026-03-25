@@ -44,20 +44,21 @@ func prepareAnalyticsFixture(t *testing.T) (*Store, analyticsFixture) {
 	}
 
 	base := time.Unix(1_700_000_000, 0).UTC()
-	s1, err := store.StartBreak(context.Background(), base, "scheduled", 20, []int64{eyeID})
-	if err != nil {
-		t.Fatalf("StartBreak(s1) error = %v", err)
-	}
-	if err := store.CompleteBreak(context.Background(), s1, base.Add(20*time.Second), 20); err != nil {
-		t.Fatalf("CompleteBreak(s1) error = %v", err)
+	if err := store.RecordBreak(context.Background(), base, base.Add(20*time.Second), "scheduled", 20, 20, false, []int64{eyeID}); err != nil {
+		t.Fatalf("RecordBreak(s1) error = %v", err)
 	}
 
-	s2, err := store.StartBreak(context.Background(), base.Add(2*time.Hour), "manual", 300, []int64{standID})
-	if err != nil {
-		t.Fatalf("StartBreak(s2) error = %v", err)
-	}
-	if err := store.SkipBreak(context.Background(), s2, base.Add(2*time.Hour+40*time.Second), 40); err != nil {
-		t.Fatalf("SkipBreak(s2) error = %v", err)
+	if err := store.RecordBreak(
+		context.Background(),
+		base.Add(2*time.Hour),
+		base.Add(2*time.Hour+40*time.Second),
+		"manual",
+		300,
+		40,
+		true,
+		[]int64{standID},
+	); err != nil {
+		t.Fatalf("RecordBreak(s2) error = %v", err)
 	}
 
 	return store, analyticsFixture{

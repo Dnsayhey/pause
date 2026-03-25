@@ -2,7 +2,6 @@ package history
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -71,20 +70,21 @@ func TestStoreRecordsAndAggregatesSessions(t *testing.T) {
 	}
 
 	base := time.Unix(1_700_000_000, 0).UTC()
-	s1, err := store.StartBreak(context.Background(), base, "scheduled", 20, []int64{eyeID})
-	if err != nil {
-		t.Fatalf("StartBreak(s1) error = %v", err)
-	}
-	if err := store.CompleteBreak(context.Background(), s1, base.Add(20*time.Second), 20); err != nil {
-		t.Fatalf("CompleteBreak(s1) error = %v", err)
+	if err := store.RecordBreak(context.Background(), base, base.Add(20*time.Second), "scheduled", 20, 20, false, []int64{eyeID}); err != nil {
+		t.Fatalf("RecordBreak(s1) error = %v", err)
 	}
 
-	s2, err := store.StartBreak(context.Background(), base.Add(1*time.Hour), "manual", 300, []int64{standID})
-	if err != nil {
-		t.Fatalf("StartBreak(s2) error = %v", err)
-	}
-	if err := store.SkipBreak(context.Background(), s2, base.Add(1*time.Hour+40*time.Second), 40); err != nil {
-		t.Fatalf("SkipBreak(s2) error = %v", err)
+	if err := store.RecordBreak(
+		context.Background(),
+		base.Add(1*time.Hour),
+		base.Add(1*time.Hour+40*time.Second),
+		"manual",
+		300,
+		40,
+		true,
+		[]int64{standID},
+	); err != nil {
+		t.Fatalf("RecordBreak(s2) error = %v", err)
 	}
 
 	stats, err := store.QueryAnalyticsWeeklyStats(base.Add(-time.Hour), base.Add(24*time.Hour))
@@ -129,7 +129,7 @@ func TestListRemindersSkipsSoftDeletedRows(t *testing.T) {
 	}
 }
 
-func TestStartBreakEnforcesSingleRunningSession(t *testing.T) {
+func TestRecordBreakRejectsDuplicateReminderIDs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	store, err := OpenStore(context.Background(), path)
 	if err != nil {
@@ -138,47 +138,19 @@ func TestStartBreakEnforcesSingleRunningSession(t *testing.T) {
 	defer store.Close()
 
 	base := time.Unix(1_700_000_000, 0).UTC()
-	if _, err := store.StartBreak(context.Background(), base, "scheduled", 20, nil); err != nil {
-		t.Fatalf("StartBreak(run-1) error = %v", err)
-	}
-	if _, err := store.StartBreak(context.Background(), base.Add(10*time.Second), "scheduled", 20, nil); err == nil {
-		t.Fatalf("expected second running session insert to fail")
-	}
-}
-
-func TestOpenStoreCancelsDanglingRunningSessions(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	store, err := OpenStore(context.Background(), path)
-	if err != nil {
-		t.Fatalf("OpenStore() error = %v", err)
-	}
-
-	base := time.Unix(1_700_000_000, 0).UTC()
-	sessionID, err := store.StartBreak(context.Background(), base, "manual", 20, nil)
-	if err != nil {
-		t.Fatalf("StartBreak(dangling) error = %v", err)
-	}
-	if err := store.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-
-	reopened, err := OpenStore(context.Background(), path)
-	if err != nil {
-		t.Fatalf("OpenStore(reopen) error = %v", err)
-	}
-	defer reopened.Close()
-
-	var status string
-	var endedAt sql.NullInt64
-	row := reopened.db.QueryRowContext(context.Background(), `SELECT status, ended_at FROM break_sessions WHERE id = ?`, sessionID)
-	if err := row.Scan(&status, &endedAt); err != nil {
-		t.Fatalf("scan dangling session error = %v", err)
-	}
-	if status != "canceled" {
-		t.Fatalf("expected dangling running session to be canceled, got %q", status)
-	}
-	if !endedAt.Valid {
-		t.Fatalf("expected dangling running session to have ended_at after cleanup")
+	id := mustCreateReminder(t, store, "eye")
+	err = store.RecordBreak(
+		context.Background(),
+		base,
+		base.Add(20*time.Second),
+		"scheduled",
+		20,
+		20,
+		false,
+		[]int64{id, id},
+	)
+	if err == nil {
+		t.Fatalf("expected duplicate reminder ids to fail")
 	}
 }
 

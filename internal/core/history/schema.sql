@@ -22,18 +22,14 @@ CREATE TABLE IF NOT EXISTS break_sessions (
   trigger_source    TEXT NOT NULL
                     CHECK (trigger_source IN ('scheduled', 'manual')),
   status            TEXT NOT NULL
-                    CHECK (status IN ('running', 'completed', 'skipped', 'canceled')),
+                    CHECK (status IN ('completed', 'skipped', 'canceled')),
   started_at        INTEGER NOT NULL,
-  ended_at          INTEGER,
+  ended_at          INTEGER NOT NULL,
   planned_break_sec INTEGER NOT NULL CHECK (planned_break_sec > 0),
   actual_break_sec  INTEGER NOT NULL DEFAULT 0 CHECK (actual_break_sec >= 0),
   skipped_at        INTEGER,
   created_at        INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at        INTEGER NOT NULL DEFAULT (unixepoch()),
-  CHECK (
-    (status = 'running' AND ended_at IS NULL) OR
-    (status <> 'running' AND ended_at IS NOT NULL)
-  )
+  updated_at        INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE INDEX IF NOT EXISTS idx_break_sessions_started_at
@@ -41,9 +37,6 @@ CREATE INDEX IF NOT EXISTS idx_break_sessions_started_at
 
 CREATE INDEX IF NOT EXISTS idx_break_sessions_status_started_at
   ON break_sessions(status, started_at);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_break_sessions_single_running
-  ON break_sessions(status)
-  WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS break_session_reminders (
   session_id              INTEGER NOT NULL,

@@ -189,7 +189,6 @@ func (s *Store) QueryAnalyticsTrendByDay(from time.Time, to time.Time) (Analytic
 		   INNER JOIN overlay_sessions os ON os.session_id = bs.id
 		   WHERE bs.started_at >= ?
 		     AND bs.started_at < ?
-		     AND bs.status <> 'running'
 		 )
 		 SELECT
 		   strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime') AS day,
@@ -306,7 +305,6 @@ func (s *Store) QueryAnalyticsHourlyHeatmap(from time.Time, to time.Time, metric
 		   INNER JOIN overlay_sessions os ON os.session_id = bs.id
 		   WHERE bs.started_at >= ?
 		     AND bs.started_at < ?
-		     AND bs.status <> 'running'
 		 )
 		 SELECT
 		   strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime') AS day,
@@ -371,7 +369,6 @@ func (s *Store) queryReminderAggregatesByRange(startUnix int64, endUnix int64) (
 		   FROM break_sessions
 		   WHERE started_at >= ?
 		     AND started_at < ?
-		     AND status <> 'running'
 		 ),
 		 history_agg AS (
 		   SELECT
@@ -481,7 +478,6 @@ func (s *Store) querySummaryAggregateByRange(startUnix int64, endUnix int64) (An
 		   INNER JOIN overlay_sessions os ON os.session_id = bs.id
 		   WHERE bs.started_at >= ?
 		     AND bs.started_at < ?
-		     AND bs.status <> 'running'
 		 )
 		 SELECT
 		   COUNT(id) AS total_sessions,

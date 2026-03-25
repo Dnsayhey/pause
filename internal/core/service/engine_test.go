@@ -33,22 +33,17 @@ type fakeStartupManager struct {
 }
 
 type fakeHistoryRecorder struct {
-	starts    []historyStartCall
-	completes []historyFinishCall
-	skips     []historyFinishCall
-	nextID    int64
+	records []historyRecordCall
 }
 
-type historyStartCall struct {
-	sessionID       int64
+type historyRecordCall struct {
+	startedAt       time.Time
+	endedAt         time.Time
 	source          string
 	plannedBreakSec int
+	actualBreakSec  int
+	skipped         bool
 	reminderIDs     []int64
-}
-
-type historyFinishCall struct {
-	sessionID      int64
-	actualBreakSec int
 }
 
 func (f *fakeStartupManager) SetLaunchAtLogin(enabled bool) error {
@@ -62,31 +57,16 @@ func (f *fakeStartupManager) GetLaunchAtLogin() (bool, error) {
 	return f.current, nil
 }
 
-func (f *fakeHistoryRecorder) StartBreak(_ context.Context, _ time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error) {
-	f.nextID++
-	sessionID := f.nextID
+func (f *fakeHistoryRecorder) RecordBreak(_ context.Context, startedAt time.Time, endedAt time.Time, source string, plannedBreakSec int, actualBreakSec int, skipped bool, reminderIDs []int64) error {
 	copied := append([]int64(nil), reminderIDs...)
-	f.starts = append(f.starts, historyStartCall{
-		sessionID:       sessionID,
+	f.records = append(f.records, historyRecordCall{
+		startedAt:       startedAt,
+		endedAt:         endedAt,
 		source:          source,
 		plannedBreakSec: plannedBreakSec,
+		actualBreakSec:  actualBreakSec,
+		skipped:         skipped,
 		reminderIDs:     copied,
-	})
-	return sessionID, nil
-}
-
-func (f *fakeHistoryRecorder) CompleteBreak(_ context.Context, sessionID int64, _ time.Time, actualBreakSec int) error {
-	f.completes = append(f.completes, historyFinishCall{
-		sessionID:      sessionID,
-		actualBreakSec: actualBreakSec,
-	})
-	return nil
-}
-
-func (f *fakeHistoryRecorder) SkipBreak(_ context.Context, sessionID int64, _ time.Time, actualBreakSec int) error {
-	f.skips = append(f.skips, historyFinishCall{
-		sessionID:      sessionID,
-		actualBreakSec: actualBreakSec,
 	})
 	return nil
 }
@@ -577,22 +557,25 @@ func TestHistoryRecorder_ManualBreakLifecycle(t *testing.T) {
 	if state.CurrentSession == nil {
 		t.Fatalf("expected active session")
 	}
-	if len(history.starts) != 1 {
-		t.Fatalf("expected 1 history start call, got %d", len(history.starts))
-	}
-	if history.starts[0].source != "manual" {
-		t.Fatalf("expected manual source, got %q", history.starts[0].source)
-	}
-	if history.starts[0].plannedBreakSec != eyeBreak {
-		t.Fatalf("expected planned break sec %d, got %d", eyeBreak, history.starts[0].plannedBreakSec)
+	if len(history.records) != 0 {
+		t.Fatalf("expected no history records before break ends, got %d", len(history.records))
 	}
 
 	engine.Tick(base.Add(6 * time.Second))
-	if len(history.completes) != 1 {
-		t.Fatalf("expected 1 history complete call, got %d", len(history.completes))
+	if len(history.records) != 1 {
+		t.Fatalf("expected 1 history record call, got %d", len(history.records))
 	}
-	if history.completes[0].actualBreakSec != eyeBreak {
-		t.Fatalf("expected actual break sec %d, got %d", eyeBreak, history.completes[0].actualBreakSec)
+	if history.records[0].source != "manual" {
+		t.Fatalf("expected manual source, got %q", history.records[0].source)
+	}
+	if history.records[0].plannedBreakSec != eyeBreak {
+		t.Fatalf("expected planned break sec %d, got %d", eyeBreak, history.records[0].plannedBreakSec)
+	}
+	if history.records[0].actualBreakSec != eyeBreak {
+		t.Fatalf("expected actual break sec %d, got %d", eyeBreak, history.records[0].actualBreakSec)
+	}
+	if history.records[0].skipped {
+		t.Fatalf("expected completed record, got skipped=true")
 	}
 }
 
@@ -625,11 +608,14 @@ func TestHistoryRecorder_SkipBreak(t *testing.T) {
 		t.Fatalf("SkipCurrentBreak() error = %v", err)
 	}
 
-	if len(history.skips) != 1 {
-		t.Fatalf("expected 1 history skip call, got %d", len(history.skips))
+	if len(history.records) != 1 {
+		t.Fatalf("expected 1 history record call, got %d", len(history.records))
 	}
-	if history.skips[0].actualBreakSec != 10 {
-		t.Fatalf("expected skip actual sec 10, got %d", history.skips[0].actualBreakSec)
+	if history.records[0].actualBreakSec != 10 {
+		t.Fatalf("expected skip actual sec 10, got %d", history.records[0].actualBreakSec)
+	}
+	if !history.records[0].skipped {
+		t.Fatalf("expected skipped record, got skipped=false")
 	}
 }
 

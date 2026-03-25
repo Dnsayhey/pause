@@ -27,9 +27,14 @@ const (
 )
 
 type BreakHistoryRecorder interface {
-	StartBreak(ctx context.Context, startedAt time.Time, source string, plannedBreakSec int, reminderIDs []int64) (int64, error)
-	CompleteBreak(ctx context.Context, sessionID int64, endedAt time.Time, actualBreakSec int) error
-	SkipBreak(ctx context.Context, sessionID int64, skippedAt time.Time, actualBreakSec int) error
+	RecordBreak(ctx context.Context, startedAt time.Time, endedAt time.Time, source string, plannedBreakSec int, actualBreakSec int, skipped bool, reminderIDs []int64) error
+}
+
+type pendingHistoryBreak struct {
+	StartedAt       time.Time
+	Source          string
+	PlannedBreakSec int
+	ReminderIDs     []int64
 }
 
 type Engine struct {
@@ -57,7 +62,7 @@ type Engine struct {
 	currentIdleSec int
 	currentLocked  bool
 
-	activeHistorySessionID int64
+	activeHistoryBreak *pendingHistoryBreak
 }
 
 func NewEngine(
@@ -579,47 +584,49 @@ func reminderIDsFromEvent(evt *scheduler.Event) []int64 {
 }
 
 func (e *Engine) recordBreakStartedLocked(now time.Time, source string, evt *scheduler.Event) {
-	e.activeHistorySessionID = 0
+	e.activeHistoryBreak = nil
 	if e.history == nil || evt == nil || evt.BreakSec <= 0 {
 		return
 	}
 
-	sessionID, err := e.history.StartBreak(context.Background(), now, source, evt.BreakSec, reminderIDsFromEvent(evt))
-	if err != nil {
-		logx.Warnf("history.break_start_err session_id=%d source=%s err=%v", sessionID, source, err)
-		return
+	e.activeHistoryBreak = &pendingHistoryBreak{
+		StartedAt:       now,
+		Source:          source,
+		PlannedBreakSec: evt.BreakSec,
+		ReminderIDs:     reminderIDsFromEvent(evt),
 	}
-	e.activeHistorySessionID = sessionID
 }
 
 func (e *Engine) recordBreakCompletedLocked(view *config.BreakSessionView) {
-	if e.history == nil || view == nil || e.activeHistorySessionID <= 0 {
-		e.activeHistorySessionID = 0
+	if e.history == nil || view == nil || e.activeHistoryBreak == nil {
+		e.activeHistoryBreak = nil
 		return
 	}
 	actualBreakSec := int(view.EndsAt.Sub(view.StartedAt).Seconds())
 	if actualBreakSec < 0 {
 		actualBreakSec = 0
 	}
-	if err := e.history.CompleteBreak(context.Background(), e.activeHistorySessionID, view.EndsAt, actualBreakSec); err != nil {
-		logx.Warnf("history.break_complete_err session_id=%d err=%v", e.activeHistorySessionID, err)
+	record := *e.activeHistoryBreak
+	if err := e.history.RecordBreak(context.Background(), record.StartedAt, view.EndsAt, record.Source, record.PlannedBreakSec, actualBreakSec, false, record.ReminderIDs); err != nil {
+		logx.Warnf("history.break_complete_err source=%s err=%v", record.Source, err)
 	}
-	e.activeHistorySessionID = 0
+	e.activeHistoryBreak = nil
 }
 
 func (e *Engine) recordBreakSkippedLocked(now time.Time, view *config.BreakSessionView) {
-	if e.history == nil || view == nil || e.activeHistorySessionID <= 0 {
-		e.activeHistorySessionID = 0
+	if e.history == nil || view == nil || e.activeHistoryBreak == nil {
+		e.activeHistoryBreak = nil
 		return
 	}
 	actualBreakSec := int(now.Sub(view.StartedAt).Seconds())
 	if actualBreakSec < 0 {
 		actualBreakSec = 0
 	}
-	if err := e.history.SkipBreak(context.Background(), e.activeHistorySessionID, now, actualBreakSec); err != nil {
-		logx.Warnf("history.break_skip_err session_id=%d err=%v", e.activeHistorySessionID, err)
+	record := *e.activeHistoryBreak
+	if err := e.history.RecordBreak(context.Background(), record.StartedAt, now, record.Source, record.PlannedBreakSec, actualBreakSec, true, record.ReminderIDs); err != nil {
+		logx.Warnf("history.break_skip_err source=%s err=%v", record.Source, err)
 	}
-	e.activeHistorySessionID = 0
+	e.activeHistoryBreak = nil
 }
 
 func (e *Engine) logTickLocked(now time.Time, settings config.Settings, reminders []config.ReminderConfig, reason string, rawDeltaSec, appliedDeltaSec int, evt *scheduler.Event) {
