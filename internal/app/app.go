@@ -5,11 +5,9 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
-	engineadapter "pause/internal/backend/adapters/engine"
 	"pause/internal/backend/bootstrap"
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
-	settingsusecase "pause/internal/backend/usecase/settings"
 	"pause/internal/core/history"
 	"pause/internal/core/service"
 	"pause/internal/core/settings"
@@ -106,8 +104,7 @@ func NewApp(configPath string) (*App, error) {
 	engineReminders := reminderDefsToConfig(defs)
 	engine.SetReminderConfigs(engineReminders)
 	logx.Infof("app.reminders_synced source=usecase count=%d", len(engineReminders))
-	settingsRepo := engineadapter.NewSettingsRepository(engine)
-	settingsSvc, err := settingsusecase.NewService(settingsRepo)
+	settingsSvc, err := bootstrap.NewSettingsService(engine)
 	if err != nil {
 		_ = historyStore.Close()
 		return nil, err

@@ -3,10 +3,13 @@ package bootstrap
 import (
 	"errors"
 
+	engineadapter "pause/internal/backend/adapters/engine"
 	historyadapter "pause/internal/backend/adapters/history"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
+	settingsusecase "pause/internal/backend/usecase/settings"
 	corehistory "pause/internal/core/history"
+	coreservice "pause/internal/core/service"
 )
 
 type Container struct {
@@ -32,4 +35,12 @@ func NewContainer(historyStore *corehistory.HistoryStore) (*Container, error) {
 		ReminderService:  reminderService,
 		AnalyticsService: analyticsService,
 	}, nil
+}
+
+func NewSettingsService(engine *coreservice.Engine) (*settingsusecase.Service, error) {
+	if engine == nil {
+		return nil, errors.New("engine unavailable")
+	}
+	settingsRepo := engineadapter.NewSettingsRepository(engine)
+	return settingsusecase.NewService(settingsRepo)
 }
