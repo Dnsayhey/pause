@@ -89,9 +89,15 @@ func (c *wailsDesktopController) handleStatusBarEvent(ctx context.Context, app *
 	case desktop.StatusBarEventVisibilityChanged:
 		c.statusBarDetailsVisible.Store(event.Visible)
 		if event.Visible {
-			settings := app.engine.GetSettings()
-			state := app.engine.GetRuntimeState(time.Now())
-			c.syncStatusBarWithLock(state, settings)
+			// Keep native status-item click callback non-blocking.
+			// If we synchronously refresh here, we can deadlock with the runtime loop:
+			// runtime loop holds statusBarSyncMu while waiting for main-thread UI update,
+			// and this callback runs on main thread waiting for statusBarSyncMu.
+			go func() {
+				settings := app.engine.GetSettings()
+				state := app.engine.GetRuntimeState(time.Now())
+				c.syncStatusBarWithLock(state, settings)
+			}()
 		}
 	}
 }
