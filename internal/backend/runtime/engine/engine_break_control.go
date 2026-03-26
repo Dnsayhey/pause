@@ -52,7 +52,7 @@ func (e *Engine) StartBreakNowForReason(reason int64, now time.Time) (state.Runt
 	defer e.mu.Unlock()
 
 	settings := e.store.Get()
-	if !settings.GlobalEnabled {
+	if !e.globalEnabled {
 		return state.RuntimeState{}, errors.New("global reminders are disabled")
 	}
 	if e.session.IsActive() {

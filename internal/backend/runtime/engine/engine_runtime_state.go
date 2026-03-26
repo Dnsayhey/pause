@@ -38,7 +38,7 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings settings.Settings) s
 		CurrentSession:     e.session.CurrentView(now),
 		Reminders:          reminders,
 		NextBreakReason:    reasons,
-		GlobalEnabled:      settings.GlobalEnabled,
+		GlobalEnabled:      e.globalEnabled,
 		TimerMode:          settings.Timer.Mode,
 		IdleThresholdSec:   settings.Timer.IdlePauseThresholdSec,
 		LastTickActive:     e.lastTickActive,

@@ -65,6 +65,7 @@ type Engine struct {
 	tickRemainder time.Duration
 
 	pausedReminder map[int64]bool
+	globalEnabled  bool
 
 	lastTickActive bool
 	currentIdleSec int
@@ -100,6 +101,7 @@ func NewEngine(
 		soundPlayer:    soundPlayer,
 		notifier:       noopNotifier{},
 		pausedReminder: map[int64]bool{},
+		globalEnabled:  true,
 	}
 }
 

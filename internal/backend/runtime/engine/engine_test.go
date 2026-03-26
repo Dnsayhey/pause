@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"pause/internal/backend/domain/reminder"
+	settingsdomain "pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/backend/storage/settingsjson"
 )
@@ -80,6 +81,53 @@ func TestEngine_StartBreakNowRejectedWhenGlobalDisabled(t *testing.T) {
 	}
 	if _, err := eng.StartBreakNow(now.Add(time.Second)); err == nil {
 		t.Fatalf("expected StartBreakNow() fail when global disabled")
+	}
+}
+
+func TestEngine_GlobalEnabledDetachedFromSettingsStore(t *testing.T) {
+	eng := testEngine(t)
+	now := time.Unix(1_700_000_000, 0)
+	disabled := false
+	if _, err := eng.UpdateSettings(settingsdomain.SettingsPatch{GlobalEnabled: &disabled}); err != nil {
+		t.Fatalf("UpdateSettings() err=%v", err)
+	}
+
+	rs := eng.GetRuntimeState(now)
+	if !rs.GlobalEnabled {
+		t.Fatalf("expected runtime global enabled to stay true")
+	}
+	if _, err := eng.StartBreakNow(now.Add(time.Second)); err != nil {
+		t.Fatalf("expected StartBreakNow() to still work, err=%v", err)
+	}
+}
+
+func TestEngine_PauseResumeFreezesAndContinuesSchedulerProgress(t *testing.T) {
+	eng := testEngine(t)
+	base := time.Unix(1_700_000_000, 0)
+
+	eng.Tick(base) // bootstrap
+	eng.Tick(base.Add(time.Second))
+
+	beforePause := eng.GetRuntimeState(base.Add(time.Second))
+	if got := reminderByID(t, beforePause.Reminders, 1).NextInSec; got != 1 {
+		t.Fatalf("expected nextIn=1 before pause, got=%d", got)
+	}
+
+	if _, err := eng.Pause(base.Add(time.Second)); err != nil {
+		t.Fatalf("Pause() err=%v", err)
+	}
+
+	eng.Tick(base.Add(100 * time.Second))
+	duringPause := eng.GetRuntimeState(base.Add(100 * time.Second))
+	if got := reminderByID(t, duringPause.Reminders, 1).NextInSec; got != 1 {
+		t.Fatalf("expected nextIn unchanged during pause, got=%d", got)
+	}
+
+	eng.Resume(base.Add(100 * time.Second))
+	eng.Tick(base.Add(101 * time.Second))
+	afterResume := eng.GetRuntimeState(base.Add(101 * time.Second))
+	if afterResume.CurrentSession == nil {
+		t.Fatalf("expected break to trigger after resume with continued progress")
 	}
 }
 

@@ -90,7 +90,7 @@ func (e *Engine) Tick(now time.Time) {
 	}
 	e.session.ClearIfDone()
 
-	if !settings.GlobalEnabled {
+	if !e.globalEnabled {
 		e.lastTick = now
 		e.tickRemainder = 0
 		e.logTickLocked(now, settings, effectiveReminders, "global_disabled", rawDeltaSec, appliedDeltaSec, nil)
