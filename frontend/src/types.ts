@@ -34,7 +34,6 @@ export type ReminderRuntime = {
 };
 
 export type Settings = {
-  globalEnabled: boolean;
   enforcement: {
     overlaySkipAllowed: boolean;
   };
@@ -75,7 +74,6 @@ export type RuntimeState = {
 };
 
 export type SettingsPatch = Partial<{
-  globalEnabled: boolean;
   enforcement: Partial<Settings['enforcement']>;
   sound: Partial<Settings['sound']>;
   timer: Partial<Settings['timer']>;

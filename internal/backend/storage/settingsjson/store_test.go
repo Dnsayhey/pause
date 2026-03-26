@@ -36,7 +36,9 @@ func TestStore_UpdatePersists(t *testing.T) {
 	}
 
 	off := false
-	if _, err := store.Update(settingsdomain.SettingsPatch{GlobalEnabled: &off}); err != nil {
+	if _, err := store.Update(settingsdomain.SettingsPatch{
+		Enforcement: &settingsdomain.EnforcementSettingsPatch{OverlaySkipAllowed: &off},
+	}); err != nil {
 		t.Fatalf("Update() err=%v", err)
 	}
 
@@ -44,16 +46,16 @@ func TestStore_UpdatePersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore(reload) err=%v", err)
 	}
-	if reloaded.Get().GlobalEnabled {
-		t.Fatalf("expected persisted globalEnabled=false")
+	if reloaded.Get().Enforcement.OverlaySkipAllowed {
+		t.Fatalf("expected persisted overlaySkipAllowed=false")
 	}
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile() err=%v", err)
 	}
-	if !strings.Contains(string(raw), "\"globalEnabled\": false") {
-		t.Fatalf("expected persisted json contains globalEnabled=false")
+	if !strings.Contains(string(raw), "\"overlaySkipAllowed\": false") {
+		t.Fatalf("expected persisted json contains overlaySkipAllowed=false")
 	}
 }
 

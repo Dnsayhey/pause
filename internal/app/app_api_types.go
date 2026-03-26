@@ -49,11 +49,10 @@ type UISettings struct {
 }
 
 type Settings struct {
-	GlobalEnabled bool                `json:"globalEnabled"`
-	Enforcement   EnforcementSettings `json:"enforcement"`
-	Sound         SoundSettings       `json:"sound"`
-	Timer         TimerSettings       `json:"timer"`
-	UI            UISettings          `json:"ui"`
+	Enforcement EnforcementSettings `json:"enforcement"`
+	Sound       SoundSettings       `json:"sound"`
+	Timer       TimerSettings       `json:"timer"`
+	UI          UISettings          `json:"ui"`
 }
 
 type EnforcementSettingsPatch struct {
@@ -77,11 +76,10 @@ type UISettingsPatch struct {
 }
 
 type SettingsPatch struct {
-	GlobalEnabled *bool                     `json:"globalEnabled,omitempty"`
-	Enforcement   *EnforcementSettingsPatch `json:"enforcement,omitempty"`
-	Sound         *SoundSettingsPatch       `json:"sound,omitempty"`
-	Timer         *TimerSettingsPatch       `json:"timer,omitempty"`
-	UI            *UISettingsPatch          `json:"ui,omitempty"`
+	Enforcement *EnforcementSettingsPatch `json:"enforcement,omitempty"`
+	Sound       *SoundSettingsPatch       `json:"sound,omitempty"`
+	Timer       *TimerSettingsPatch       `json:"timer,omitempty"`
+	UI          *UISettingsPatch          `json:"ui,omitempty"`
 }
 
 type ReminderRuntime struct {

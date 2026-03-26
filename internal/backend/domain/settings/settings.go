@@ -26,7 +26,6 @@ type UISettings struct {
 }
 
 type Settings struct {
-	GlobalEnabled bool                `json:"globalEnabled"`
 	Enforcement   EnforcementSettings `json:"enforcement"`
 	Sound         SoundSettings       `json:"sound"`
 	Timer         TimerSettings       `json:"timer"`
@@ -54,7 +53,6 @@ type UISettingsPatch struct {
 }
 
 type SettingsPatch struct {
-	GlobalEnabled *bool                     `json:"globalEnabled,omitempty"`
 	Enforcement   *EnforcementSettingsPatch `json:"enforcement,omitempty"`
 	Sound         *SoundSettingsPatch       `json:"sound,omitempty"`
 	Timer         *TimerSettingsPatch       `json:"timer,omitempty"`
@@ -63,9 +61,8 @@ type SettingsPatch struct {
 
 func DefaultSettings() Settings {
 	return Settings{
-		GlobalEnabled: true,
-		Enforcement:   EnforcementSettings{OverlaySkipAllowed: true},
-		Sound:         SoundSettings{Enabled: true, Volume: 70},
+		Enforcement: EnforcementSettings{OverlaySkipAllowed: true},
+		Sound:       SoundSettings{Enabled: true, Volume: 70},
 		Timer: TimerSettings{
 			Mode:                  TimerModeIdlePause,
 			IdlePauseThresholdSec: 60,
@@ -103,9 +100,6 @@ func (s Settings) Normalize() Settings {
 }
 
 func (s Settings) ApplyPatch(p SettingsPatch) Settings {
-	if p.GlobalEnabled != nil {
-		s.GlobalEnabled = *p.GlobalEnabled
-	}
 	if p.Enforcement != nil {
 		if p.Enforcement.OverlaySkipAllowed != nil {
 			s.Enforcement.OverlaySkipAllowed = *p.Enforcement.OverlaySkipAllowed

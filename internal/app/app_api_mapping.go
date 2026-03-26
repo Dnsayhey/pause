@@ -32,7 +32,6 @@ func reminderPatchToDomain(patch ReminderPatch) reminderdomain.Patch {
 
 func settingsFromDomain(source settingsdomain.Settings) Settings {
 	return Settings{
-		GlobalEnabled: source.GlobalEnabled,
 		Enforcement: EnforcementSettings{
 			OverlaySkipAllowed: source.Enforcement.OverlaySkipAllowed,
 		},
@@ -53,9 +52,7 @@ func settingsFromDomain(source settingsdomain.Settings) Settings {
 }
 
 func settingsPatchToDomain(patch SettingsPatch) settingsdomain.SettingsPatch {
-	result := settingsdomain.SettingsPatch{
-		GlobalEnabled: patch.GlobalEnabled,
-	}
+	result := settingsdomain.SettingsPatch{}
 	if patch.Enforcement != nil {
 		result.Enforcement = &settingsdomain.EnforcementSettingsPatch{
 			OverlaySkipAllowed: patch.Enforcement.OverlaySkipAllowed,

@@ -88,7 +88,9 @@ func TestEngine_GlobalEnabledDetachedFromSettingsStore(t *testing.T) {
 	eng := testEngine(t)
 	now := time.Unix(1_700_000_000, 0)
 	disabled := false
-	if _, err := eng.UpdateSettings(settingsdomain.SettingsPatch{GlobalEnabled: &disabled}); err != nil {
+	if _, err := eng.UpdateSettings(settingsdomain.SettingsPatch{
+		Sound: &settingsdomain.SoundSettingsPatch{Enabled: &disabled},
+	}); err != nil {
 		t.Fatalf("UpdateSettings() err=%v", err)
 	}
 

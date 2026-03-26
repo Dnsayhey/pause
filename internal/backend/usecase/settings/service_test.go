@@ -34,14 +34,16 @@ func TestSettingsService_UpdateForwardsPatch(t *testing.T) {
 	}
 
 	enabled := false
-	updated, err := svc.Update(context.Background(), settingsdomain.SettingsPatch{GlobalEnabled: &enabled})
+	updated, err := svc.Update(context.Background(), settingsdomain.SettingsPatch{
+		Sound: &settingsdomain.SoundSettingsPatch{Enabled: &enabled},
+	})
 	if err != nil {
 		t.Fatalf("Update() err=%v", err)
 	}
-	if repo.gotPatch.GlobalEnabled == nil || *repo.gotPatch.GlobalEnabled != enabled {
+	if repo.gotPatch.Sound == nil || repo.gotPatch.Sound.Enabled == nil || *repo.gotPatch.Sound.Enabled != enabled {
 		t.Fatalf("forwarded patch mismatch")
 	}
-	if updated.GlobalEnabled != enabled {
-		t.Fatalf("updated value mismatch: got=%t want=%t", updated.GlobalEnabled, enabled)
+	if updated.Sound.Enabled != enabled {
+		t.Fatalf("updated value mismatch: got=%t want=%t", updated.Sound.Enabled, enabled)
 	}
 }
