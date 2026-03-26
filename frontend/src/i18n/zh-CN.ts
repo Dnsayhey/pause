@@ -19,6 +19,7 @@ export const zhCN = {
   deleteReminderConfirm: '确认删除这个提醒吗？',
   addReminderCardTitle: '添加提醒',
   addReminderHint: '点击加号创建新的自定义提醒',
+  remindersEmpty: '暂无提醒',
   addReminder: '添加提醒',
   addReminderCreating: '添加中...',
   addReminderCreate: '创建',

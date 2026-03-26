@@ -19,6 +19,7 @@ export const enUS = {
   deleteReminderConfirm: 'Delete this reminder?',
   addReminderCardTitle: 'Add reminder',
   addReminderHint: 'Click plus to create a custom reminder',
+  remindersEmpty: 'No reminders yet',
   addReminder: 'Add reminder',
   addReminderCreating: 'Adding...',
   addReminderCreate: 'Create',

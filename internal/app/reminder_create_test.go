@@ -77,6 +77,9 @@ func TestReminderCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeleteReminder() err=%v", err)
 	}
+	if left == nil {
+		t.Fatalf("expected non-nil reminder slice after delete")
+	}
 	if len(left) != 0 {
 		t.Fatalf("expected empty reminders after delete, got=%d", len(left))
 	}

@@ -297,8 +297,13 @@ export function RemindersPage({
 
   return (
     <>
-      <section className="mt-3 mx-auto grid w-full max-w-[760px] grid-cols-1 gap-1 px-2 sm:px-3">
-        {reminders.map((reminder) => {
+      {reminders.length === 0 ? (
+        <section className="mt-3 mx-auto flex min-h-[52vh] w-full max-w-[760px] items-center justify-center px-3 text-center">
+          <p className="m-0 text-[15px] font-medium text-[var(--text-secondary)]">{t(locale, 'remindersEmpty')}</p>
+        </section>
+      ) : (
+        <section className="mt-3 mx-auto grid w-full max-w-[760px] grid-cols-1 gap-1 px-2 sm:px-3">
+          {reminders.map((reminder) => {
           const isNotificationReminder = reminder.reminderType === 'notify';
           const spec = reminderFieldSpecByID(reminder.id);
           const unitState = editUnitsByReminderID[reminder.id] ?? deriveDefaultEditUnits(reminder);
@@ -463,8 +468,9 @@ export function RemindersPage({
               onDelete={() => onReminderDelete(reminder.id).then(() => undefined)}
             />
           );
-        })}
-      </section>
+          })}
+        </section>
+      )}
 
       {isCreateOpen ? (
         <>

@@ -49,6 +49,10 @@ function requireBackend(): Backend {
   return backend;
 }
 
+function normalizeReminderConfigs(payload: ReminderConfig[] | null | undefined): ReminderConfig[] {
+  return Array.isArray(payload) ? payload : [];
+}
+
 export async function getSettings(): Promise<Settings> {
   return requireBackend().GetSettings();
 }
@@ -58,19 +62,19 @@ export async function updateSettings(patch: SettingsPatch): Promise<Settings> {
 }
 
 export async function getReminders(): Promise<ReminderConfig[]> {
-  return requireBackend().GetReminders();
+  return normalizeReminderConfigs(await requireBackend().GetReminders());
 }
 
 export async function createReminder(input: ReminderCreateInput): Promise<ReminderConfig[]> {
-  return requireBackend().CreateReminder(input);
+  return normalizeReminderConfigs(await requireBackend().CreateReminder(input));
 }
 
 export async function deleteReminder(reminderID: number): Promise<ReminderConfig[]> {
-  return requireBackend().DeleteReminder(reminderID);
+  return normalizeReminderConfigs(await requireBackend().DeleteReminder(reminderID));
 }
 
 export async function updateReminder(patch: ReminderPatch): Promise<ReminderConfig[]> {
-  return requireBackend().UpdateReminder(patch);
+  return normalizeReminderConfigs(await requireBackend().UpdateReminder(patch));
 }
 
 export async function getLaunchAtLogin(): Promise<boolean> {

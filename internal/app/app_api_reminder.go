@@ -92,7 +92,7 @@ func reminderConfigsFromDomain(defs []reminderdomain.Reminder) []ReminderConfig 
 
 func cloneReminderConfigs(reminders []ReminderConfig) []ReminderConfig {
 	if len(reminders) == 0 {
-		return nil
+		return []ReminderConfig{}
 	}
 	cloned := make([]ReminderConfig, 0, len(reminders))
 	cloned = append(cloned, reminders...)
