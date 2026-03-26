@@ -47,8 +47,8 @@ func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings
 		return desktop.StatusBarLocaleStrings{
 			PopoverTitle:          "Pause",
 			BreakNowButton:        "立即休息",
-			PauseButton:           "关闭提醒",
-			ResumeButton:          "开启提醒",
+			PauseButton:           "暂停计时",
+			ResumeButton:          "恢复计时",
 			OpenAppButton:         "打开主界面",
 			AboutMenuItem:         "关于",
 			QuitMenuItem:          "退出",
@@ -61,8 +61,8 @@ func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings
 	return desktop.StatusBarLocaleStrings{
 		PopoverTitle:          "Pause",
 		BreakNowButton:        "Break now",
-		PauseButton:           "Disable reminders",
-		ResumeButton:          "Enable reminders",
+		PauseButton:           "Pause timer",
+		ResumeButton:          "Resume timer",
 		OpenAppButton:         "Open Main Window",
 		AboutMenuItem:         "About",
 		QuitMenuItem:          "Quit",
