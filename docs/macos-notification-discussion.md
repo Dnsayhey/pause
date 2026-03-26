@@ -107,3 +107,56 @@
 限制：
 - 无法得到与 macOS `NotDetermined` 等价的 per-app 首次授权状态。
 - 只能判断“当前可通知能力”，不能 100% 保证每条通知都以横幅等形式展示。
+
+## 实施方案（函数级清单）
+
+### 1) 新增跨平台通知能力模型
+- 目标：在不破坏现有 `ShowReminder(title, body)` 发送接口前提下，补充“可查询/可请求/可引导设置”的能力层。
+- 建议新增：
+  - `NotificationPermissionState`（如 `authorized / not_determined / denied / restricted / unknown`）
+  - `NotificationCapability`（状态、可请求、可打开设置、原因）
+  - `NotificationCapabilityProvider`（查询/请求/打开设置）
+
+### 2) App 层提供通知能力 API，并在提醒创建/启用前校验
+- 目标：在“新建或启用通知型提醒”时做权限/能力判断，失败时返回稳定错误码并引导用户。
+- 建议新增 API：
+  - `GetNotificationCapability()`
+  - `OpenNotificationSettings()`
+- 在 `CreateReminder` / `UpdateReminder` 中，当目标提醒满足 `notify + enabled` 时执行校验。
+
+### 3) macOS 适配实现（能力查询 + 请求 + 设置跳转 + 点击回调接管）
+- `darwinNotifier` 增加：
+  - 获取通知能力
+  - 请求通知权限
+  - 打开系统通知设置
+- 在通知 cgo 层补充：
+  - 授权状态查询
+  - 授权请求
+  - 打开通知设置
+  - `UNUserNotificationCenterDelegate` 点击回调接管（回调里不做窗口激活/显示，仅 `completionHandler`）。
+
+### 4) Windows 适配实现（能力查询 + 设置跳转）
+- `windowsNotifier` 增加：
+  - 获取通知能力（基于 `ToastNotifier.Setting`，可选补 `SHQueryUserNotificationState`）
+  - 请求权限接口（Windows 侧通常无 macOS 对等首次授权弹窗，可返回当前能力）
+  - 打开通知设置（`ms-settings:notifications`）
+
+### 5) 构建层修复 Dock 行为（问题 3）
+- 在受版本管理并进入产物的构建链路中写入 `LSUIElement=1`。
+- 不改 `build/` 目录下未追踪文件本体。
+
+### 6) 通知标题多语言修复（问题 2）
+- 通知标题不要仅按 `settings.UI.Language` 原值判断。
+- 统一走“有效语言”解析（包含 `auto`），确保中文场景标题为“提醒”。
+
+### 7) 前端接线
+- 新增调用：
+  - `getNotificationCapability`
+  - `openNotificationSettings`
+- 在新建/启用通知型提醒失败时，按后端错误码展示文案并提供“打开系统设置”入口。
+
+### 8) 验收标准
+- macOS：点击通知后不弹主窗口，不出现 Dock 图标。
+- macOS：首次创建/启用通知型提醒触发授权流程；拒绝后给出设置引导。
+- Windows：创建/启用通知型提醒时可识别通知不可用并提示引导。
+- 多语言：中文/英文环境下通知标题与预期一致。
