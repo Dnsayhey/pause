@@ -51,10 +51,11 @@ const inlineUnitToggleClassName =
   'inline-flex items-center gap-0.5 rounded-md border border-transparent bg-transparent px-1 py-[1px] text-[var(--text-secondary)] underline decoration-dotted underline-offset-[3px] transition-colors hover:border-[var(--surface-border)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)]';
 
 function parsePositiveInteger(value: string): number | null {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const rounded = Math.round(numeric);
-  return rounded > 0 ? rounded : null;
+  const trimmed = value.trim();
+  if (!/^[0-9]+$/.test(trimmed)) return null;
+  const numeric = Number(trimmed);
+  if (!Number.isSafeInteger(numeric)) return null;
+  return numeric > 0 ? numeric : null;
 }
 
 function unitLabel(locale: Locale, unitSec: number, value: string): string {
@@ -246,10 +247,9 @@ export function ReminderCard({
                     <input
                       aria-label={intervalLabel}
                       className={inlineNumberInputClassName}
-                      type="number"
-                      min={intervalMin}
-                      max={intervalMax}
-                      step={1}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={intervalValue}
                       onChange={(e) => onIntervalChange(e.target.value)}
                       onKeyDown={suppressEnter}
@@ -267,10 +267,9 @@ export function ReminderCard({
                     <input
                       aria-label={intervalLabel}
                       className={inlineNumberInputClassName}
-                      type="number"
-                      min={intervalMin}
-                      max={intervalMax}
-                      step={1}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={intervalValue}
                       onChange={(e) => onIntervalChange(e.target.value)}
                       onKeyDown={suppressEnter}
@@ -288,10 +287,9 @@ export function ReminderCard({
                   <input
                     aria-label={intervalLabel}
                     className={inlineNumberInputClassName}
-                    type="number"
-                    min={intervalMin}
-                    max={intervalMax}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={intervalValue}
                     onChange={(e) => onIntervalChange(e.target.value)}
                     onKeyDown={suppressEnter}
@@ -305,10 +303,9 @@ export function ReminderCard({
                   <input
                     aria-label={breakLabel}
                     className={inlineNumberInputClassName}
-                    type="number"
-                    min={breakMin}
-                    max={breakMax}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={breakValue}
                     onChange={(e) => onBreakChange(e.target.value)}
                     onKeyDown={suppressEnter}
@@ -325,10 +322,9 @@ export function ReminderCard({
                   <input
                     aria-label={breakLabel}
                     className={inlineNumberInputClassName}
-                    type="number"
-                    min={breakMin}
-                    max={breakMax}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={breakValue}
                     onChange={(e) => onBreakChange(e.target.value)}
                     onKeyDown={suppressEnter}
@@ -342,10 +338,9 @@ export function ReminderCard({
                   <input
                     aria-label={intervalLabel}
                     className={inlineNumberInputClassName}
-                    type="number"
-                    min={intervalMin}
-                    max={intervalMax}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={intervalValue}
                     onChange={(e) => onIntervalChange(e.target.value)}
                     onKeyDown={suppressEnter}

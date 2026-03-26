@@ -61,11 +61,19 @@ function reminderTitle(reminder: ReminderConfig, locale: Locale): string {
 }
 
 function parsePositiveInteger(value: string): number | null {
-  const parsed = Number.parseInt(value.trim(), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  const trimmed = value.trim();
+  if (!/^[0-9]+$/.test(trimmed)) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     return null;
   }
   return parsed;
+}
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D+/g, '');
 }
 
 function unitBounds(min: number, max: number | undefined, baseUnitSec: number, activeUnitSec: number) {
@@ -301,9 +309,9 @@ export function RemindersPage({
             unitState.intervalUnitSec
           );
           const breakBounds = unitBounds(
-            spec.breakMin,
+            1,
             spec.breakMax,
-            spec.breakUnitSec,
+            unitState.breakUnitSec,
             unitState.breakUnitSec
           );
           const draft = reminderDrafts[reminder.id];
@@ -415,9 +423,9 @@ export function RemindersPage({
                 );
                 const currentSec = currentValue * currentUnitSec;
                 const nextBounds = unitBounds(
-                  spec.breakMin,
+                  1,
                   spec.breakMax,
-                  spec.breakUnitSec,
+                  nextUnitSec,
                   nextUnitSec
                 );
                 const nextValue = parseAndClampDraft('', currentSec, nextUnitSec, nextBounds.unitMin, nextBounds.unitMax);
@@ -505,11 +513,11 @@ export function RemindersPage({
                 {t(locale, 'addReminderIntervalLabel')}
                 <div className="mt-1 flex gap-2">
                   <input
-                    type="number"
-                    min={1}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={createIntervalValue}
-                    onChange={(event) => setCreateIntervalValue(event.target.value)}
+                    onChange={(event) => setCreateIntervalValue(digitsOnly(event.target.value))}
                     className={createFieldInputClassName}
                   />
                   <select
@@ -528,11 +536,11 @@ export function RemindersPage({
                   {t(locale, 'addReminderBreakLabel')}
                   <div className="mt-1 flex gap-2">
                     <input
-                      type="number"
-                      min={1}
-                      step={1}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={createBreakValue}
-                      onChange={(event) => setCreateBreakValue(event.target.value)}
+                      onChange={(event) => setCreateBreakValue(digitsOnly(event.target.value))}
                       className={createFieldInputClassName}
                     />
                     <select

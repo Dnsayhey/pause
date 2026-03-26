@@ -28,11 +28,16 @@ type ReminderDraft = {
   break: string;
 };
 
+function digitsOnly(text: string): string {
+  return text.replace(/\D+/g, '');
+}
+
 function parseInteger(text: string): number | null {
   const trimmed = text.trim();
   if (trimmed === '') return null;
-  const value = Number.parseInt(trimmed, 10);
-  if (Number.isNaN(value)) return null;
+  if (!/^[0-9]+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value)) return null;
   return value;
 }
 
@@ -320,21 +325,23 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
   );
 
   const setReminderIntervalDraft = useCallback((id: number, value: string) => {
+    const sanitized = digitsOnly(value);
     setReminderDrafts((prev) => ({
       ...prev,
       [id]: {
-        interval: value,
+        interval: sanitized,
         break: prev[id]?.break ?? ''
       }
     }));
   }, []);
 
   const setReminderBreakDraft = useCallback((id: number, value: string) => {
+    const sanitized = digitsOnly(value);
     setReminderDrafts((prev) => ({
       ...prev,
       [id]: {
         interval: prev[id]?.interval ?? '',
-        break: value
+        break: sanitized
       }
     }));
   }, []);
