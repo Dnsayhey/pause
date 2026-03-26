@@ -210,13 +210,18 @@ runtime state
 
 ```json
 {
-  "globalEnabled": true,
   "enforcement": { "overlaySkipAllowed": true },
   "sound": { "enabled": true, "volume": 70 },
   "timer": { "mode": "idle_pause", "idlePauseThresholdSec": 60 },
   "ui": { "showTrayCountdown": true, "language": "auto", "theme": "auto" }
 }
 ```
+
+说明：
+
+- 全局调度开关不再持久化到 `settings.json`。
+- `Pause()/Resume()` 仅影响运行时计时推进（暂停时冻结进度，恢复后继续）。
+- 运行时开关状态通过 `RuntimeState.globalEnabled` 返回给前端/状态栏展示。
 
 ### 6.2 `history.db`
 

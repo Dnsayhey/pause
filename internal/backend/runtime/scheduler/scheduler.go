@@ -23,10 +23,6 @@ func New() *Scheduler {
 	return &Scheduler{elapsedSec: map[int64]int{}}
 }
 
-func (s *Scheduler) Reset() {
-	s.elapsedSec = map[int64]int{}
-}
-
 func (s *Scheduler) ResetByID(id int64) {
 	norm := normalizeReminderID(id)
 	if norm <= 0 {
