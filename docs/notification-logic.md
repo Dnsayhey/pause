@@ -272,7 +272,6 @@ Windows 当前已经改为原生实现：
 已实现能力：
 - 查询通知能力
 - 发送 toast 通知
-- toast 失败时 fallback 到 balloon notification
 - 打开系统通知设置 `ms-settings:notifications`
 - `RequestNotificationPermission()` 返回当前能力，不触发类似 macOS 的首次授权弹窗
 

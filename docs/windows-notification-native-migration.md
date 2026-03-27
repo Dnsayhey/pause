@@ -27,7 +27,6 @@
 保留项：
 
 - 运行时 `SetCurrentProcessExplicitAppUserModelID()` 保留
-- balloon notification fallback 保留
 - 前端交互策略本次不改，只修平台实现
 
 ## 里程碑
@@ -75,13 +74,11 @@
 - `ShowReminder()` 的 WinRT toast 主路径已改为原生调用
 - toast XML 改为在 Go 内构建并通过 `Windows.Data.Xml.Dom.XmlDocument` 加载
 - `ToastNotificationManager` / `ToastNotification` 已改为直接通过 WinRT activation factory 调用
-- 原有 balloon notification fallback 完全保留
 - `internal/platform/windows` 中通知相关的 PowerShell helper 已清理完成
 
 验收点：
 
 - `ShowReminder()` 的 toast 主路径不再依赖 `powershell.exe`
-- fallback 行为保持不变
 
 验证记录：
 
@@ -115,7 +112,7 @@
   - 通知能力查询
   - toast 发送
   - 系统通知设置跳转
-- 当前仍保留的降级路径只有 balloon notification fallback，这属于产品保底方案，不再属于脚本桥接。
+- Windows 通知当前仅保留 WinRT toast 主链路，不再保留 balloon notification 降级路径。
 
 ## 当前实现边界
 

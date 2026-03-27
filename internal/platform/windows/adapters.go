@@ -8,12 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
-	xwindows "golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
 	"pause/internal/backend/domain/settings"
@@ -34,39 +31,16 @@ var (
 	procMessageBeep                             = user32DLL.NewProc("MessageBeep")
 	procCreateWindowExW                         = user32DLL.NewProc("CreateWindowExW")
 	procDestroyWindow                           = user32DLL.NewProc("DestroyWindow")
-	procShellNotifyIconW                        = shell32DLL.NewProc("Shell_NotifyIconW")
 	procShellExecuteW                           = shell32DLL.NewProc("ShellExecuteW")
 	procSetCurrentProcessExplicitAppUserModelID = shell32DLL.NewProc("SetCurrentProcessExplicitAppUserModelID")
 	showToastReminder                           = showWinRTToastReminderNative
-	showBalloonNotification                     = showBalloonReminder
 	queryToastSetting                           = queryWindowsToastSettingNative
 	openNotificationSettings                    = openWindowsNotificationSettingsNative
-	balloonNotifyMu                             sync.Mutex
-	balloonActiveHWND                           uintptr
 )
 
 const (
-	nimAdd    = 0x00000000
-	nimModify = 0x00000001
-	nimDelete = 0x00000002
-
-	nifTip  = 0x00000004
-	nifInfo = 0x00000010
-	nifGUID = 0x00000020
-
-	niifInfo = 0x00000001
-
 	mbIconAsterisk = 0x00000040
-
-	hwndMessage = ^uintptr(2) // (HWND)-3
 )
-
-var pauseNotifyGUID = xwindows.GUID{
-	Data1: 0x23a58e31,
-	Data2: 0x8d36,
-	Data3: 0x43f2,
-	Data4: [8]byte{0x9c, 0x11, 0x4c, 0x6b, 0xfe, 0xc7, 0x09, 0xb4},
-}
 
 type windowsIdleProvider struct{}
 
@@ -83,24 +57,6 @@ type windowsStartupManager struct {
 type lastInputInfo struct {
 	cbSize uint32
 	dwTime uint32
-}
-
-type notifyIconData struct {
-	cbSize            uint32
-	hWnd              uintptr
-	uID               uint32
-	uFlags            uint32
-	uCallbackMessage  uint32
-	hIcon             uintptr
-	szTip             [128]uint16
-	dwState           uint32
-	dwStateMask       uint32
-	szInfo            [256]uint16
-	uTimeoutOrVersion uint32
-	szInfoTitle       [64]uint16
-	dwInfoFlags       uint32
-	guidItem          xwindows.GUID
-	hBalloonIcon      uintptr
 }
 
 func NewAdapters(appID string) api.Adapters {
@@ -154,10 +110,7 @@ func (n windowsNotifier) ShowReminder(title, body string) error {
 	}
 
 	appID := toastAppID(n.appID)
-	if err := showToastReminder(appID, title, body); err == nil {
-		return nil
-	}
-	return showBalloonNotification(title, body)
+	return showToastReminder(appID, title, body)
 }
 
 func (n windowsNotifier) GetNotificationCapability() ports.NotificationCapability {
@@ -223,93 +176,6 @@ func (n windowsNotifier) RequestNotificationPermission() (ports.NotificationCapa
 
 func (n windowsNotifier) OpenNotificationSettings() error {
 	return openNotificationSettings()
-}
-
-func showBalloonReminder(title, body string) error {
-	balloonNotifyMu.Lock()
-	defer balloonNotifyMu.Unlock()
-
-	if balloonActiveHWND != 0 {
-		cleanupBalloonIconLocked(balloonActiveHWND)
-		balloonActiveHWND = 0
-	}
-
-	className, err := syscall.UTF16PtrFromString("STATIC")
-	if err != nil {
-		return err
-	}
-	windowTitle, err := syscall.UTF16PtrFromString("pause-notify")
-	if err != nil {
-		return err
-	}
-	hwnd, _, createErr := procCreateWindowExW.Call(
-		0,
-		uintptr(unsafe.Pointer(className)),
-		uintptr(unsafe.Pointer(windowTitle)),
-		0,
-		0, 0, 0, 0,
-		hwndMessage,
-		0,
-		0,
-		0,
-	)
-	if hwnd == 0 {
-		if createErr != syscall.Errno(0) {
-			return createErr
-		}
-		return errors.New("CreateWindowExW returned null HWND")
-	}
-
-	add := notifyIconData{
-		cbSize:   uint32(unsafe.Sizeof(notifyIconData{})),
-		hWnd:     hwnd,
-		uID:      1,
-		uFlags:   nifTip | nifGUID,
-		guidItem: pauseNotifyGUID,
-	}
-	copyUTF16(add.szTip[:], "Pause")
-
-	if !shellNotifyIcon(nimAdd, &add) {
-		_, _, _ = procDestroyWindow.Call(hwnd)
-		return errors.New("Shell_NotifyIconW(NIM_ADD) failed")
-	}
-
-	mod := notifyIconData{
-		cbSize:      uint32(unsafe.Sizeof(notifyIconData{})),
-		hWnd:        hwnd,
-		uID:         1,
-		uFlags:      nifInfo | nifGUID,
-		dwInfoFlags: niifInfo,
-		guidItem:    pauseNotifyGUID,
-	}
-	copyUTF16(mod.szInfoTitle[:], title)
-	copyUTF16(mod.szInfo[:], body)
-
-	if !shellNotifyIcon(nimModify, &mod) {
-		del := notifyIconData{
-			cbSize:   uint32(unsafe.Sizeof(notifyIconData{})),
-			hWnd:     hwnd,
-			uID:      1,
-			uFlags:   nifGUID,
-			guidItem: pauseNotifyGUID,
-		}
-		shellNotifyIcon(nimDelete, &del)
-		_, _, _ = procDestroyWindow.Call(hwnd)
-		return errors.New("Shell_NotifyIconW(NIM_MODIFY) failed")
-	}
-
-	go func(targetHWND uintptr) {
-		time.Sleep(7 * time.Second)
-		balloonNotifyMu.Lock()
-		defer balloonNotifyMu.Unlock()
-		if balloonActiveHWND != targetHWND {
-			return
-		}
-		cleanupBalloonIconLocked(targetHWND)
-		balloonActiveHWND = 0
-	}(hwnd)
-	balloonActiveHWND = hwnd
-	return nil
 }
 
 func (windowsSoundPlayer) PlayBreakEnd(sound settings.SoundSettings) error {
@@ -418,36 +284,4 @@ func setCurrentProcessAppUserModelID(appID string) error {
 		return fmt.Errorf("SetCurrentProcessExplicitAppUserModelID failed: HRESULT 0x%X", uint32(hr))
 	}
 	return nil
-}
-
-func shellNotifyIcon(message uint32, data *notifyIconData) bool {
-	ret, _, _ := procShellNotifyIconW.Call(
-		uintptr(message),
-		uintptr(unsafe.Pointer(data)),
-	)
-	return ret != 0
-}
-
-func copyUTF16(dst []uint16, value string) {
-	if len(dst) == 0 {
-		return
-	}
-	encoded := syscall.StringToUTF16(value)
-	if len(encoded) > len(dst) {
-		encoded = encoded[:len(dst)]
-		encoded[len(dst)-1] = 0
-	}
-	copy(dst, encoded)
-}
-
-func cleanupBalloonIconLocked(hwnd uintptr) {
-	del := notifyIconData{
-		cbSize:   uint32(unsafe.Sizeof(notifyIconData{})),
-		hWnd:     hwnd,
-		uID:      1,
-		uFlags:   nifGUID,
-		guidItem: pauseNotifyGUID,
-	}
-	shellNotifyIcon(nimDelete, &del)
-	_, _, _ = procDestroyWindow.Call(hwnd)
 }
