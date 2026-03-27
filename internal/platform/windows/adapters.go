@@ -18,12 +18,12 @@ import (
 
 	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
+	"pause/internal/logx"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )
 
 const runKeyPath = `Software\Microsoft\Windows\CurrentVersion\Run`
-const appIDRegPathPrefix = `Software\Classes\AppUserModelId\`
 
 var (
 	user32DLL                                   = syscall.NewLazyDLL("user32.dll")
@@ -109,7 +109,9 @@ func NewAdapters(appID string) api.Adapters {
 		appID = meta.EffectiveAppBundleID()
 	}
 	toastID := toastAppID(appID)
-	_ = setCurrentProcessAppUserModelID(toastID)
+	if err := setCurrentProcessAppUserModelID(toastID); err != nil {
+		logx.Warnf("windows.notification.aumid_set_failed app_id=%s err=%v", toastID, err)
+	}
 	return api.Adapters{
 		IdleProvider:                   windowsIdleProvider{},
 		LockStateProvider:              newWindowsLockStateProvider(),
@@ -159,8 +161,10 @@ func (n windowsNotifier) ShowReminder(title, body string) error {
 }
 
 func (n windowsNotifier) GetNotificationCapability() ports.NotificationCapability {
-	setting, err := queryToastSetting(toastAppID(n.appID))
+	appID := toastAppID(n.appID)
+	setting, err := queryToastSetting(appID)
 	if err != nil {
+		logx.Warnf("windows.notification.capability_lookup_failed app_id=%s err=%v", appID, err)
 		return ports.NotificationCapability{
 			PermissionState: ports.NotificationPermissionUnknown,
 			CanRequest:      false,
@@ -398,26 +402,6 @@ func toastAppID(raw string) string {
 	}
 	raw = strings.ReplaceAll(raw, "/", ".")
 	return raw
-}
-
-func ensureToastAppIDRegistration(appID string) error {
-	appID = strings.TrimSpace(appID)
-	if appID == "" {
-		return errors.New("empty toast app id")
-	}
-	key, _, err := registry.CreateKey(registry.CURRENT_USER, appIDRegPathPrefix+appID, registry.SET_VALUE)
-	if err != nil {
-		return err
-	}
-	defer key.Close()
-
-	if err := key.SetStringValue("DisplayName", "Pause"); err != nil {
-		return err
-	}
-	if execPath, err := os.Executable(); err == nil && strings.TrimSpace(execPath) != "" {
-		_ = key.SetStringValue("IconUri", execPath)
-	}
-	return nil
 }
 
 func setCurrentProcessAppUserModelID(appID string) error {

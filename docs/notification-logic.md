@@ -1,6 +1,6 @@
 # 通知逻辑现状与当前约定
 
-更新时间：2026-03-27
+更新时间：2026-03-28
 
 ## 文档定位
 
@@ -267,6 +267,7 @@ Windows 当前已经改为原生实现：
 - 基于 WinRT `ToastNotifier.Setting` 获取通知能力
 - 基于 WinRT activation factory 发送 toast
 - 基于 `ShellExecuteW` 打开系统通知设置
+- Windows 安装器负责创建带 `AppUserModelID` 的开始菜单快捷方式
 
 已实现能力：
 - 查询通知能力
@@ -278,6 +279,7 @@ Windows 当前已经改为原生实现：
 说明：
 - Windows 仍然更接近“当前可通知能力查询”，而不是 macOS 风格的 per-app 首次授权状态机。
 - Windows 当前不再依赖 PowerShell 作为通知能力查询、toast 发送或系统设置跳转桥接。
+- Windows 安装器在创建快捷方式时会写入 `AppUserModelID`，运行时不再尝试动态补快捷方式。
 
 相关代码：
 - `internal/platform/windows/adapters.go`

@@ -186,6 +186,9 @@ cp "${WINDOWS_ICON_SOURCE}" "${WINDOWS_ICON_TARGET}"
 if [[ -f "${WINDOWS_NSIS_TEMPLATE}" ]]; then
   mkdir -p "${ROOT_DIR}/build/windows/installer"
   cp "${WINDOWS_NSIS_TEMPLATE}" "${ROOT_DIR}/build/windows/installer/project.nsi"
+  if [[ -f "${ROOT_DIR}/scripts/windows-installer/set-shortcut-app-id.ps1" ]]; then
+    cp "${ROOT_DIR}/scripts/windows-installer/set-shortcut-app-id.ps1" "${ROOT_DIR}/build/windows/installer/set-shortcut-app-id.ps1"
+  fi
   echo "using NSIS template: ${WINDOWS_NSIS_TEMPLATE}"
 else
   echo "WARNING: NSIS template not found, wails default template will be used: ${WINDOWS_NSIS_TEMPLATE}" >&2

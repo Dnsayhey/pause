@@ -11,6 +11,8 @@ import (
 	"unsafe"
 
 	"github.com/go-ole/go-ole"
+
+	"pause/internal/logx"
 )
 
 var (
@@ -195,17 +197,22 @@ func queryWindowsToastSettingNative(appID string) (string, error) {
 	err := withWindowsRuntime(func() error {
 		manager, err := getToastNotificationManagerStatics()
 		if err != nil {
+			logx.Warnf("windows.notification.winrt_activation_failed class=%s app_id=%s err=%v", "Windows.UI.Notifications.ToastNotificationManager", appID, err)
 			return err
 		}
 		defer manager.Release()
 
 		notifier, err := manager.CreateToastNotifierWithID(appID)
 		if err != nil {
+			logx.Warnf("windows.notification.create_notifier_failed app_id=%s err=%v", appID, err)
 			return err
 		}
 		defer notifier.Release()
 
 		setting, err = notifier.Setting()
+		if err != nil {
+			logx.Warnf("windows.notification.get_setting_failed app_id=%s err=%v", appID, err)
+		}
 		return err
 	})
 	if err != nil {
@@ -229,52 +236,65 @@ func queryWindowsToastSettingNative(appID string) (string, error) {
 }
 
 func openWindowsNotificationSettingsNative() error {
-	return openWindowsURI("ms-settings:notifications")
+	target := "ms-settings:notifications"
+	err := openWindowsURI(target)
+	if err != nil {
+		logx.Warnf("windows.notification.settings_open_failed target=%s err=%v", target, err)
+		return err
+	}
+	return nil
 }
 
 func showWinRTToastReminderNative(appID, title, body string) error {
-	if err := ensureToastAppIDRegistration(appID); err != nil {
-		return err
-	}
-
 	payload, err := buildWindowsToastXML(title, body)
 	if err != nil {
+		logx.Warnf("windows.notification.toast_xml_failed app_id=%s err=%v", appID, err)
 		return err
 	}
 
-	return withWindowsRuntime(func() error {
+	err = withWindowsRuntime(func() error {
 		manager, err := getToastNotificationManagerStatics()
 		if err != nil {
+			logx.Warnf("windows.notification.toast_activation_failed class=%s app_id=%s err=%v", "Windows.UI.Notifications.ToastNotificationManager", appID, err)
 			return err
 		}
 		defer manager.Release()
 
 		notifier, err := manager.CreateToastNotifierWithID(appID)
 		if err != nil {
+			logx.Warnf("windows.notification.toast_create_notifier_failed app_id=%s err=%v", appID, err)
 			return err
 		}
 		defer notifier.Release()
 
 		doc, err := createToastXMLDocument(payload)
 		if err != nil {
+			logx.Warnf("windows.notification.toast_document_failed app_id=%s err=%v", appID, err)
 			return err
 		}
 		defer doc.Release()
 
 		factory, err := getToastNotificationFactory()
 		if err != nil {
+			logx.Warnf("windows.notification.toast_factory_failed class=%s app_id=%s err=%v", "Windows.UI.Notifications.ToastNotification", appID, err)
 			return err
 		}
 		defer factory.Release()
 
 		notification, err := factory.CreateToastNotification(doc)
 		if err != nil {
+			logx.Warnf("windows.notification.toast_create_failed app_id=%s err=%v", appID, err)
 			return err
 		}
 		defer notification.Release()
 
 		return notifier.Show(notification)
 	})
+	if err != nil {
+		logx.Warnf("windows.notification.toast_send_failed app_id=%s err=%v", appID, err)
+		return err
+	}
+	return nil
 }
 
 func openWindowsURI(target string) error {

@@ -1,6 +1,6 @@
 # Windows 通知原生化改造记录
 
-更新时间：2026-03-27
+更新时间：2026-03-28
 
 ## 背景
 
@@ -17,15 +17,16 @@
 
 ## 目标
 
-本次改造的目标是把 Windows 通知相关能力全部收口为原生调用，不再依赖 PowerShell：
+本次改造的目标是把 Windows 通知相关能力全部收口为原生调用，不再依赖 PowerShell，并满足桌面 toast 的安装态要求：
 
 - `GetNotificationCapability()`：改为原生 WinRT 查询
 - `ShowReminder()` 的 toast 主链路：改为原生 WinRT 发送
 - `OpenNotificationSettings()`：改为原生 `ShellExecuteW`
+- 安装器负责创建带 `AppUserModelID` 的开始菜单快捷方式
 
 保留项：
 
-- AUMID 设置与注册逻辑保留
+- 运行时 `SetCurrentProcessExplicitAppUserModelID()` 保留
 - balloon notification fallback 保留
 - 前端交互策略本次不改，只修平台实现
 
@@ -123,3 +124,17 @@
 - 前端产品态文案调整
 - reminder 保存/启用的交互策略调整
 - macOS 通知实现
+
+补充说明：
+
+- 最终选择让 shortcut/AUMID 问题由安装器负责，而不是运行时动态补齐。
+- 运行时动态创建开始菜单快捷方式的尝试已放弃，不作为当前方案的一部分。
+- 当前安装器模板会在创建快捷方式时写入 `System.AppUserModel.ID=com.pause.app`，helper 失败时退回普通快捷方式，避免安装后没有入口。
+
+## 验证记录补充
+
+2026-03-28 新增验证：
+
+- `cd build/windows/installer && makensis -DARG_WAILS_AMD64_BINARY=/tmp/pause-placeholder.exe project.nsi`
+- `GOCACHE=$(pwd)/.cache/go-build GOOS=windows GOARCH=amd64 go build ./...`
+- `./scripts/build-windows-installer.sh --platform windows/amd64 --arch-label windows-x64 --no-portable-exe`
