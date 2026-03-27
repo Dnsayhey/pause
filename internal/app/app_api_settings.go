@@ -38,7 +38,12 @@ func (a *App) GetLaunchAtLogin() (bool, error) {
 		return false, errors.New("app unavailable")
 	}
 	if a.settingsSvc != nil {
-		return a.settingsSvc.GetLaunchAtLogin(appContextOrBackground(a.ctx))
+		actual, err := a.settingsSvc.GetLaunchAtLogin(appContextOrBackground(a.ctx))
+		if err != nil {
+			logx.Warnf("app.get_launch_at_login_err err=%v", err)
+			return false, err
+		}
+		return actual, nil
 	}
 	return false, errors.New("settings service unavailable")
 }
@@ -48,7 +53,13 @@ func (a *App) SetLaunchAtLogin(enabled bool) (bool, error) {
 		return false, errors.New("app unavailable")
 	}
 	if a.settingsSvc != nil {
-		return a.settingsSvc.SetLaunchAtLogin(appContextOrBackground(a.ctx), enabled)
+		actual, err := a.settingsSvc.SetLaunchAtLogin(appContextOrBackground(a.ctx), enabled)
+		if err != nil {
+			logx.Warnf("app.set_launch_at_login_err enabled=%t err=%v", enabled, err)
+			return false, err
+		}
+		logx.Infof("app.launch_at_login_set requested=%t actual=%t", enabled, actual)
+		return actual, nil
 	}
 	return false, errors.New("settings service unavailable")
 }

@@ -2,6 +2,8 @@ package app
 
 import (
 	"errors"
+
+	"pause/internal/logx"
 )
 
 func (a *App) GetAnalyticsWeeklyStats(fromSec int64, toSec int64) (AnalyticsWeeklyStats, error) {
@@ -10,6 +12,7 @@ func (a *App) GetAnalyticsWeeklyStats(fromSec int64, toSec int64) (AnalyticsWeek
 	}
 	stats, err := a.analytics.GetWeeklyStats(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
+		logx.Warnf("app.analytics_weekly_stats_err from_sec=%d to_sec=%d err=%v", fromSec, toSec, err)
 		return AnalyticsWeeklyStats{}, err
 	}
 	return analyticsWeeklyStatsFromDomain(stats), nil
@@ -21,6 +24,7 @@ func (a *App) GetAnalyticsSummary(fromSec int64, toSec int64) (AnalyticsSummary,
 	}
 	summary, err := a.analytics.GetSummary(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
+		logx.Warnf("app.analytics_summary_err from_sec=%d to_sec=%d err=%v", fromSec, toSec, err)
 		return AnalyticsSummary{}, err
 	}
 	return analyticsSummaryFromDomain(summary), nil
@@ -32,6 +36,7 @@ func (a *App) GetAnalyticsTrendByDay(fromSec int64, toSec int64) (AnalyticsTrend
 	}
 	trend, err := a.analytics.GetTrendByDay(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
+		logx.Warnf("app.analytics_trend_by_day_err from_sec=%d to_sec=%d err=%v", fromSec, toSec, err)
 		return AnalyticsTrend{}, err
 	}
 	return analyticsTrendFromDomain(trend), nil
@@ -43,6 +48,7 @@ func (a *App) GetAnalyticsBreakTypeDistribution(fromSec int64, toSec int64) (Ana
 	}
 	distribution, err := a.analytics.GetBreakTypeDistribution(appContextOrBackground(a.ctx), fromSec, toSec)
 	if err != nil {
+		logx.Warnf("app.analytics_break_type_distribution_err from_sec=%d to_sec=%d err=%v", fromSec, toSec, err)
 		return AnalyticsBreakTypeDistribution{}, err
 	}
 	return analyticsBreakTypeDistributionFromDomain(distribution), nil
