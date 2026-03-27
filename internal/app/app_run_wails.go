@@ -45,9 +45,9 @@ func RunWails(configPath string, assets fs.FS) error {
 	return wails.Run(&options.App{
 		Title:     "Pause",
 		Width:     820,
-		Height:    532,
+		Height:    540,
 		MinWidth:  820,
-		MinHeight: 532,
+		MinHeight: 540,
 		// Keep native title bars on macOS/Linux, but use frameless window on Windows.
 		Frameless:   runtime.GOOS == "windows",
 		StartHidden: true,
