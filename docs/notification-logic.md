@@ -280,6 +280,7 @@ Windows 当前已经改为原生实现：
 - Windows 仍然更接近“当前可通知能力查询”，而不是 macOS 风格的 per-app 首次授权状态机。
 - Windows 当前不再依赖 PowerShell 作为通知能力查询、toast 发送或系统设置跳转桥接。
 - Windows 安装器在创建快捷方式时会写入 `AppUserModelID`，运行时不再尝试动态补快捷方式。
+- 当 WinRT `ToastNotifier.Setting` 返回 `0x80070490 (Element not found)` 时，当前实现按“可通知”处理，避免首次安装阶段被误判为不可用。
 
 相关代码：
 - `internal/platform/windows/adapters.go`

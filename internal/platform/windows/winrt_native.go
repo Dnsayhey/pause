@@ -5,6 +5,7 @@ package windows
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"runtime"
 	"syscall"
@@ -28,6 +29,7 @@ const (
 	roInitSingleThreaded = 0
 	roInitMultiThreaded  = 1
 	rpcEChangedMode      = 0x80010106
+	hResultNotFound      = 0x80070490
 
 	shellExecuteSuccessThreshold = 32
 	swShowNormal                 = 1
@@ -211,6 +213,11 @@ func queryWindowsToastSettingNative(appID string) (string, error) {
 
 		setting, err = notifier.Setting()
 		if err != nil {
+			if isHResultNotFound(err) {
+				logx.Infof("windows.notification.get_setting_not_found_assume_enabled app_id=%s", appID)
+				setting = notificationSettingEnabled
+				return nil
+			}
 			logx.Warnf("windows.notification.get_setting_failed app_id=%s err=%v", appID, err)
 		}
 		return err
@@ -319,6 +326,14 @@ func openWindowsURI(target string) error {
 		return fmt.Errorf("ShellExecuteW failed: %d", ret)
 	}
 	return nil
+}
+
+func isHResultNotFound(err error) bool {
+	var oleErr *ole.OleError
+	if errors.As(err, &oleErr) {
+		return oleErr.Code() == uintptr(hResultNotFound)
+	}
+	return false
 }
 
 func getToastNotificationManagerStatics() (*toastNotificationManagerStatics, error) {
