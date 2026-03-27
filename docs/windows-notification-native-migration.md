@@ -113,6 +113,7 @@
   - toast 发送
   - 系统通知设置跳转
 - Windows 通知当前仅保留 WinRT toast 主链路，不再保留 balloon notification 降级路径。
+- 提醒发送失败日志统一由 runtime 层 `reminder.notification_err` 记录，Windows 平台实现不再在 toast 发送各中间阶段重复打印 warn。
 
 ## 当前实现边界
 

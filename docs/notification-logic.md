@@ -260,6 +260,10 @@ macOS 当前基于 `UNUserNotificationCenter`。
 当前状态：
 - 这批 `started/completed/callback` 级别的诊断日志已经移除。
 - 当前只保留必要的失败日志，便于在真正出错时定位问题。
+- 提醒发送结果在 runtime 层统一记录：
+  - 成功：`reminder.notification_sent`
+  - 失败：`reminder.notification_err`
+- 平台层仅保留能力查询、授权请求、系统设置打开等关键失败日志，避免重复刷屏。
 
 ## 6. 当前 Windows 实现
 
