@@ -21,7 +21,7 @@ type wailsDesktopController struct {
 	lastOverlayText         string
 	lastOverlayTheme        string
 	lastOverlaySessionStart time.Time
-	overlayFallbackNotified bool
+	overlayFailureLogged    bool
 	lastLanguage            string
 	reminderActionOrder     []int64
 	reminderOrderMu         sync.RWMutex
@@ -103,7 +103,7 @@ func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
 	settings := app.engine.GetSettings()
 	state := app.engine.GetRuntimeState(time.Now())
 	c.syncStatusBarWithLock(state, settings)
-	c.syncOverlay(ctx, app, state, settings)
+	c.syncOverlay(ctx, state, settings)
 
 	for {
 		select {
@@ -113,7 +113,7 @@ func (c *wailsDesktopController) runtimeLoop(ctx context.Context, app *App) {
 			settings := app.engine.GetSettings()
 			state := app.engine.GetRuntimeState(now)
 			c.syncStatusBarWithLock(state, settings)
-			c.syncOverlay(ctx, app, state, settings)
+			c.syncOverlay(ctx, state, settings)
 		}
 	}
 }

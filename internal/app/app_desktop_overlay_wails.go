@@ -4,11 +4,14 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/desktop"
+	"pause/internal/logx"
 )
 
 func overlaySkipMode(settings settings.Settings) skipMode {
@@ -18,7 +21,7 @@ func overlaySkipMode(settings settings.Settings) skipMode {
 	return skipModeEmergency
 }
 
-func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, state state.RuntimeState, settings settings.Settings) {
+func (c *wailsDesktopController) syncOverlay(ctx context.Context, state state.RuntimeState, settings settings.Settings) {
 	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting"
 	overlaySkipAllowed := overlayActive && state.OverlaySkipAllowed && state.CurrentSession != nil && state.CurrentSession.CanSkip
 	language := c.lastLanguage
@@ -28,11 +31,11 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, stat
 		overlayText = overlayCountdownText(language, state.CurrentSession.RemainingSec)
 		if !state.CurrentSession.StartedAt.Equal(c.lastOverlaySessionStart) {
 			c.lastOverlaySessionStart = state.CurrentSession.StartedAt
-			c.overlayFallbackNotified = false
+			c.overlayFailureLogged = false
 		}
 	} else {
 		c.lastOverlaySessionStart = time.Time{}
-		c.overlayFallbackNotified = false
+		c.overlayFailureLogged = false
 	}
 
 	if c.overlay.IsNative() {
@@ -42,9 +45,13 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, stat
 				// Keep native break overlay isolated from the main window.
 				desktop.HideMainWindowForOverlay(ctx)
 				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, theme) {
-					if !c.overlayFallbackNotified && app != nil {
-						app.sendBreakFallbackNotification(state)
-						c.overlayFallbackNotified = true
+					if !c.overlayFailureLogged {
+						logx.Warnf(
+							"overlay.show_failed native=true reasons=%s remaining_sec=%d",
+							overlayReasons(state),
+							overlayRemainingSec(state),
+						)
+						c.overlayFailureLogged = true
 					}
 				}
 			} else {
@@ -59,13 +66,35 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, app *App, stat
 		return
 	}
 
-	if overlayActive && !c.overlayFallbackNotified && app != nil {
-		app.sendBreakFallbackNotification(state)
-		c.overlayFallbackNotified = true
+	if overlayActive && !c.overlayFailureLogged {
+		logx.Warnf(
+			"overlay.show_failed native=false reasons=%s remaining_sec=%d",
+			overlayReasons(state),
+			overlayRemainingSec(state),
+		)
+		c.overlayFailureLogged = true
 	}
 	c.lastOverlayActive = overlayActive
 	c.lastOverlaySkip = overlaySkipAllowed
 	c.lastOverlayLang = language
 	c.lastOverlayText = overlayText
 	c.lastOverlayTheme = theme
+}
+
+func overlayReasons(state state.RuntimeState) string {
+	if state.CurrentSession == nil || len(state.CurrentSession.Reasons) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(state.CurrentSession.Reasons))
+	for _, reason := range state.CurrentSession.Reasons {
+		parts = append(parts, fmt.Sprintf("%d", reason))
+	}
+	return strings.Join(parts, "+")
+}
+
+func overlayRemainingSec(state state.RuntimeState) int {
+	if state.CurrentSession == nil {
+		return 0
+	}
+	return state.CurrentSession.RemainingSec
 }
