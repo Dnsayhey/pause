@@ -91,8 +91,9 @@ Section
     !insertmacro wails.files
     File "/oname=icon.ico" "..\..\..\assets\branding\icon.ico"
 
-    WriteRegStr SHCTX "${APP_USER_MODEL_REG_PATH}" "DisplayName" "${INFO_PRODUCTNAME}"
-    WriteRegStr SHCTX "${APP_USER_MODEL_REG_PATH}" "IconUri" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    SetRegView 64
+    WriteRegStr HKCU "${APP_USER_MODEL_REG_PATH}" "DisplayName" "${INFO_PRODUCTNAME}"
+    WriteRegStr HKCU "${APP_USER_MODEL_REG_PATH}" "IconUri" "$INSTDIR\icon.ico"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
@@ -112,7 +113,8 @@ Section "uninstall"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
-    DeleteRegKey SHCTX "${APP_USER_MODEL_REG_PATH}"
+    SetRegView 64
+    DeleteRegKey HKCU "${APP_USER_MODEL_REG_PATH}"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
