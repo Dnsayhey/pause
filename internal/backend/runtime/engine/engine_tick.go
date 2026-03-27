@@ -139,7 +139,7 @@ func (e *Engine) Tick(now time.Time) {
 
 	restEvent, notifyReminderIDs := splitReminderEventByType(evt, effectiveReminders)
 	if len(notifyReminderIDs) > 0 {
-		e.notifyRemindersLocked(notifyReminderIDs, settings.UI.Language)
+		e.notifyRemindersLocked(notifyReminderIDs, resolveEffectiveLanguage(settings.UI.Language))
 	}
 	if restEvent == nil {
 		e.logTickLocked(now, settings, effectiveReminders, "notification_event", rawDeltaSec, appliedDeltaSec, evt)

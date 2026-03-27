@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 
 	"pause/internal/backend/domain/settings"
+	"pause/internal/backend/ports"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )
@@ -109,11 +110,12 @@ func NewAdapters(appID string) api.Adapters {
 	toastID := toastAppID(appID)
 	_ = setCurrentProcessAppUserModelID(toastID)
 	return api.Adapters{
-		IdleProvider:      windowsIdleProvider{},
-		LockStateProvider: newWindowsLockStateProvider(),
-		Notifier:          windowsNotifier{appID: toastID},
-		SoundPlayer:       windowsSoundPlayer{},
-		StartupManager:    windowsStartupManager{valueName: startupValueName(appID)},
+		IdleProvider:                   windowsIdleProvider{},
+		LockStateProvider:              newWindowsLockStateProvider(),
+		Notifier:                       windowsNotifier{appID: toastID},
+		NotificationCapabilityProvider: windowsNotifier{appID: toastID},
+		SoundPlayer:                    windowsSoundPlayer{},
+		StartupManager:                 windowsStartupManager{valueName: startupValueName(appID)},
 	}
 }
 
@@ -153,6 +155,73 @@ func (n windowsNotifier) ShowReminder(title, body string) error {
 		return nil
 	}
 	return showBalloonNotification(title, body)
+}
+
+func (n windowsNotifier) GetNotificationCapability() ports.NotificationCapability {
+	setting, err := queryWindowsToastSetting(toastAppID(n.appID))
+	if err != nil {
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionUnknown,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          err.Error(),
+		}
+	}
+	switch setting {
+	case "Enabled":
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionAuthorized,
+			CanRequest:      false,
+			CanOpenSettings: true,
+		}
+	case "DisabledForApplication":
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionDenied,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          "notifications are disabled for this app",
+		}
+	case "DisabledForUser":
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionDenied,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          "notifications are disabled for the current user",
+		}
+	case "DisabledByGroupPolicy":
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionRestricted,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          "notifications are disabled by group policy",
+		}
+	case "DisabledForManifest":
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionRestricted,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          "notifications are disabled by manifest configuration",
+		}
+	default:
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionUnknown,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          "unknown toast notification setting: " + setting,
+		}
+	}
+}
+
+func (n windowsNotifier) RequestNotificationPermission() (ports.NotificationCapability, error) {
+	return n.GetNotificationCapability(), nil
+}
+
+func (n windowsNotifier) OpenNotificationSettings() error {
+	script := `
+$ErrorActionPreference = 'Stop';
+Start-Process 'ms-settings:notifications' | Out-Null;
+`
+	return runPowerShellSync(script)
 }
 
 func showWinRTToastReminder(appID, title, body string) error {
@@ -381,6 +450,27 @@ func runPowerShellCommand(script string) *exec.Cmd {
 func runPowerShellSync(script string) error {
 	cmd := runPowerShellCommand(script)
 	return cmd.Run()
+}
+
+func runPowerShellOutput(script string) (string, error) {
+	cmd := runPowerShellCommand(script)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func queryWindowsToastSetting(appID string) (string, error) {
+	script := fmt.Sprintf(`
+$ErrorActionPreference = 'Stop';
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null;
+$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('%s');
+[Console]::WriteLine($notifier.Setting.ToString());
+`,
+		escapePowerShellSingleQuoted(appID),
+	)
+	return runPowerShellOutput(script)
 }
 
 func toastAppID(raw string) string {

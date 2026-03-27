@@ -3,6 +3,7 @@ import type {
   AnalyticsSummary,
   AnalyticsTrend,
   AnalyticsWeeklyStats,
+  NotificationCapability,
   ReminderConfig,
   ReminderCreateInput,
   ReminderPatch,
@@ -28,6 +29,9 @@ type Backend = {
   Pause: () => Promise<RuntimeState>;
   Resume: () => Promise<RuntimeState>;
   SkipCurrentBreak: () => Promise<RuntimeState>;
+  GetNotificationCapability: () => Promise<NotificationCapability>;
+  RequestNotificationPermission: () => Promise<NotificationCapability>;
+  OpenNotificationSettings: () => Promise<void>;
   Quit?: () => Promise<void> | void;
   CloseWindow?: () => Promise<void> | void;
 };
@@ -107,6 +111,18 @@ export async function getAnalyticsBreakTypeDistribution(fromSec: number, toSec: 
 
 export async function skipCurrentBreak(): Promise<RuntimeState> {
   return requireBackend().SkipCurrentBreak();
+}
+
+export async function getNotificationCapability(): Promise<NotificationCapability> {
+  return requireBackend().GetNotificationCapability();
+}
+
+export async function requestNotificationPermission(): Promise<NotificationCapability> {
+  return requireBackend().RequestNotificationPermission();
+}
+
+export async function openNotificationSettings(): Promise<void> {
+  return requireBackend().OpenNotificationSettings();
 }
 
 export async function quitApp(): Promise<void> {

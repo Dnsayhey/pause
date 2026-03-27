@@ -294,6 +294,8 @@ build_one_target() {
   if [[ -f "${APP_INFO_PLIST}" ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${APP_BUNDLE_ID}" "${APP_INFO_PLIST}" >/dev/null 2>&1 \
       || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string ${APP_BUNDLE_ID}" "${APP_INFO_PLIST}" >/dev/null
+    /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "${APP_INFO_PLIST}" >/dev/null 2>&1 \
+      || /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "${APP_INFO_PLIST}" >/dev/null
   fi
   if [[ -f "${APP_INFO_PLIST}" ]]; then
     if [[ -n "${APP_VERSION_OVERRIDE}" ]]; then

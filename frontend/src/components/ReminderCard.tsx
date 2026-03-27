@@ -13,6 +13,7 @@ type ReminderCardProps = {
   locale: Locale;
   variant?: 'rest' | 'notify';
   title: string;
+  titleWarningLabel?: string;
   enabledLabel: string;
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
@@ -96,6 +97,7 @@ export function ReminderCard({
   locale,
   variant = 'rest',
   title,
+  titleWarningLabel,
   enabledLabel,
   enabled,
   onEnabledChange,
@@ -229,7 +231,18 @@ export function ReminderCard({
                 enabled ? 'bg-[var(--text-primary)] opacity-90' : 'bg-[var(--text-tertiary)] opacity-50'
               }`}
             />
-            <h3 className="m-0 text-[18px]">{title}</h3>
+            <h3 className="m-0 flex min-w-0 items-center gap-2 text-[18px]">
+              <span className="truncate">{title}</span>
+              {titleWarningLabel ? (
+                <span
+                  className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border border-[var(--error-border)] bg-[var(--error-bg)] px-1 text-[11px] font-semibold leading-none text-[var(--error-text)]"
+                  title={titleWarningLabel}
+                  aria-label={titleWarningLabel}
+                >
+                  !
+                </span>
+              ) : null}
+            </h3>
           </div>
           <ToggleSwitch ariaLabel={enabledLabel} checked={enabled} onChange={onEnabledChange} />
         </div>

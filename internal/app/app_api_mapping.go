@@ -6,6 +6,7 @@ import (
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	reminderdomain "pause/internal/backend/domain/reminder"
 	settingsdomain "pause/internal/backend/domain/settings"
+	"pause/internal/backend/ports"
 	runtimestate "pause/internal/backend/runtime/state"
 )
 
@@ -229,4 +230,13 @@ func cloneInt64Slice(values []int64) []int64 {
 	cloned := make([]int64, 0, len(values))
 	cloned = append(cloned, values...)
 	return cloned
+}
+
+func notificationCapabilityFromPorts(source ports.NotificationCapability) NotificationCapability {
+	return NotificationCapability{
+		PermissionState: string(source.PermissionState),
+		CanRequest:      source.CanRequest,
+		CanOpenSettings: source.CanOpenSettings,
+		Reason:          strings.TrimSpace(source.Reason),
+	}
 }

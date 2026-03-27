@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createReminder as createReminderAPI,
   deleteReminder as deleteReminderAPI,
+  getNotificationCapability,
   getLaunchAtLogin,
   getReminders,
   getSettings,
+  openNotificationSettings as openNotificationSettingsAPI,
+  requestNotificationPermission as requestNotificationPermissionAPI,
   setLaunchAtLogin,
   updateReminder,
   updateSettings
@@ -13,13 +16,24 @@ import {
   isReminderValueValid,
   reminderFieldSpecByID,
 } from '../reminderFields';
-import type { ReminderConfig, ReminderPatch, Settings, SettingsPatch } from '../types';
+import type {
+  NotificationCapability,
+  NotificationProductState,
+  ReminderConfig,
+  ReminderPatch,
+  Settings,
+  SettingsPatch
+} from '../types';
 
 const IDLE_THRESHOLD_OPTIONS = [60, 300, 600, 1800, 3600, 7200] as const;
 const SOUND_VOLUME_OPTIONS = [20, 40, 60, 80, 100] as const;
+const NOTIFICATION_ERROR_PERMISSION_DENIED = 'ERR_NOTIFICATION_PERMISSION_DENIED';
+const NOTIFICATION_ERROR_PERMISSION_REQUIRED = 'ERR_NOTIFICATION_PERMISSION_REQUIRED';
+const NOTIFICATION_ERROR_UNAVAILABLE = 'ERR_NOTIFICATION_UNAVAILABLE';
 
 type UseSettingsOptions = {
   setError: (message: string) => void;
+  setBootstrapError: (message: string) => void;
   refreshRuntime: () => Promise<unknown>;
 };
 
@@ -106,44 +120,127 @@ function hasNameConflict(reminders: ReminderConfig[], name: string, excludeID?: 
   });
 }
 
-export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
+function notificationProductStateFromCapability(
+  capability: NotificationCapability | null
+): NotificationProductState | null {
+  if (!capability) {
+    return null;
+  }
+  if (capability.permissionState === 'authorized') {
+    return 'available';
+  }
+  if (capability.permissionState === 'not_determined') {
+    return 'pending';
+  }
+  return 'unavailable';
+}
+
+function notificationErrorCodeFromCapability(capability: NotificationCapability | null): string {
+  const productState = notificationProductStateFromCapability(capability);
+  if (productState === 'pending') {
+    return NOTIFICATION_ERROR_PERMISSION_REQUIRED;
+  }
+  if (productState !== 'unavailable') {
+    return '';
+  }
+  if (capability?.permissionState === 'denied') {
+    return NOTIFICATION_ERROR_PERMISSION_DENIED;
+  }
+  return NOTIFICATION_ERROR_UNAVAILABLE;
+}
+
+function shouldCheckNotificationCapabilityForPatch(
+  current: ReminderConfig,
+  patch: Omit<ReminderPatch, 'id'>
+): boolean {
+  const nextEnabled = patch.enabled ?? current.enabled;
+  const nextReminderType = patch.reminderType ?? current.reminderType;
+  if (!nextEnabled || nextReminderType !== 'notify') {
+    return false;
+  }
+  return current.reminderType !== 'notify' || !current.enabled;
+}
+
+export function useSettings({ setError, setBootstrapError, refreshRuntime }: UseSettingsOptions) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [reminders, setReminders] = useState<ReminderConfig[]>([]);
   const [reminderDrafts, setReminderDrafts] = useState<Record<number, ReminderDraft>>({});
   const [launchAtLogin, setLaunchAtLoginState] = useState(false);
+  const [notificationCapability, setNotificationCapability] = useState<NotificationCapability | null>(null);
+  const [notificationPromptCode, setNotificationPromptCode] = useState('');
+  const [notificationPromptVersion, setNotificationPromptVersion] = useState(0);
+  const [showNotificationSettingsAction, setShowNotificationSettingsAction] = useState(false);
+  const notificationPromptCodeRef = useRef(notificationPromptCode);
 
   useEffect(() => {
-    let mounted = true;
+    notificationPromptCodeRef.current = notificationPromptCode;
+  }, [notificationPromptCode]);
 
-    const loadSettings = async () => {
+  const clearNotificationPrompt = useCallback(() => {
+    setNotificationPromptCode('');
+    setShowNotificationSettingsAction(false);
+  }, []);
+
+  const applyNotificationPrompt = useCallback(
+    (capability: NotificationCapability | null) => {
+      const code = notificationErrorCodeFromCapability(capability);
+      if (code === '') {
+        clearNotificationPrompt();
+        return;
+      }
+      setNotificationPromptCode(code);
+      setNotificationPromptVersion((prev) => prev + 1);
+      const productState = notificationProductStateFromCapability(capability);
+      setShowNotificationSettingsAction(productState === 'unavailable' && Boolean(capability?.canOpenSettings));
+    },
+    [clearNotificationPrompt]
+  );
+
+  const refreshNotificationCapability = useCallback(
+    async (silent = false, syncPrompt = false): Promise<NotificationCapability | null> => {
       try {
-        const [next, reminderRows] = await Promise.all([getSettings(), getReminders()]);
-        if (!mounted) return;
-        setSettings(next);
-        setReminders(reminderRows);
-
-        try {
-          const startupState = await getLaunchAtLogin();
-          if (mounted) {
-            setLaunchAtLoginState(startupState);
-          }
-        } catch (err) {
-          if (mounted) {
-            setError(String(err));
-          }
+        const capability = await getNotificationCapability();
+        setNotificationCapability(capability);
+        if (syncPrompt && notificationPromptCodeRef.current !== '') {
+          applyNotificationPrompt(capability);
         }
+        return capability;
       } catch (err) {
-        if (mounted) {
+        if (!silent) {
           setError(String(err));
         }
+        return null;
       }
-    };
+    },
+    [applyNotificationPrompt, setError]
+  );
 
-    void loadSettings();
-    return () => {
-      mounted = false;
-    };
-  }, [setError]);
+  const loadSettingsData = useCallback(async (): Promise<void> => {
+    try {
+      const [next, reminderRows, capability] = await Promise.all([
+        getSettings(),
+        getReminders(),
+        getNotificationCapability().catch(() => null)
+      ]);
+      setSettings(next);
+      setReminders(reminderRows);
+      setNotificationCapability(capability);
+      setBootstrapError('');
+
+      try {
+        const startupState = await getLaunchAtLogin();
+        setLaunchAtLoginState(startupState);
+      } catch (err) {
+        setError(String(err));
+      }
+    } catch (err) {
+      setBootstrapError(String(err));
+    }
+  }, [setBootstrapError, setError]);
+
+  useEffect(() => {
+    void loadSettingsData();
+  }, [loadSettingsData]);
 
   const refreshLaunchAtLoginState = useCallback(
     async (silent = false) => {
@@ -159,10 +256,46 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     [setError]
   );
 
+  const ensureNotificationReadyForNotifyReminder = useCallback(
+    async (): Promise<boolean> => {
+      const capability = await refreshNotificationCapability(false);
+      if (!capability) {
+        return false;
+      }
+
+      const productState = notificationProductStateFromCapability(capability);
+      if (productState === 'available') {
+        clearNotificationPrompt();
+        return true;
+      }
+
+      if (productState === 'pending') {
+        applyNotificationPrompt(capability);
+        try {
+          const requested = await requestNotificationPermissionAPI();
+          setNotificationCapability(requested);
+          if (notificationProductStateFromCapability(requested) === 'available') {
+            clearNotificationPrompt();
+            return true;
+          }
+          applyNotificationPrompt(requested);
+        } catch (err) {
+          setError(String(err));
+        }
+        return false;
+      }
+
+      applyNotificationPrompt(capability);
+      return false;
+    },
+    [applyNotificationPrompt, clearNotificationPrompt, refreshNotificationCapability, setError]
+  );
+
   useEffect(() => {
     const refreshWhenVisible = () => {
       if (document.visibilityState !== 'visible') return;
       void refreshLaunchAtLoginState(true);
+      void refreshNotificationCapability(true, true);
     };
 
     window.addEventListener('focus', refreshWhenVisible);
@@ -172,7 +305,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
       window.removeEventListener('focus', refreshWhenVisible);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [refreshLaunchAtLoginState]);
+  }, [refreshLaunchAtLoginState, refreshNotificationCapability]);
 
   useEffect(() => {
     const nextDrafts: Record<number, ReminderDraft> = {};
@@ -223,6 +356,11 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
         setError('reminder id is required');
         return;
       }
+      const current = reminderByID(reminders, id);
+      if (!current) {
+        setError('reminder id not found');
+        return;
+      }
       const nextPatch: Omit<ReminderPatch, 'id'> = { ...patch };
       if (nextPatch.name !== undefined) {
         const nextName = normalizeReminderName(nextPatch.name);
@@ -250,6 +388,12 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
       }
 
       setError('');
+      if (shouldCheckNotificationCapabilityForPatch(current, nextPatch)) {
+        const ready = await ensureNotificationReadyForNotifyReminder();
+        if (!ready) {
+          return;
+        }
+      }
       try {
         const next = await updateReminder({
           id,
@@ -261,7 +405,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
         setError(String(err));
       }
     },
-    [refreshRuntime, reminders, setError]
+    [ensureNotificationReadyForNotifyReminder, refreshRuntime, reminders, setError]
   );
 
   const createReminder = useCallback(
@@ -289,6 +433,12 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
       }
 
       setError('');
+      if (reminderType === 'notify') {
+        const ready = await ensureNotificationReadyForNotifyReminder();
+        if (!ready) {
+          return false;
+        }
+      }
       try {
         const next = await createReminderAPI({
           name: nextName,
@@ -305,7 +455,7 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
         return false;
       }
     },
-    [refreshRuntime, reminders, setError]
+    [ensureNotificationReadyForNotifyReminder, refreshRuntime, reminders, setError]
   );
 
   const deleteReminder = useCallback(
@@ -437,6 +587,19 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     [applyReminderPatch, reminders]
   );
 
+  const openSystemNotificationSettings = useCallback(async () => {
+    try {
+      await openNotificationSettingsAPI();
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [setError]);
+
+  const notificationProductState = useMemo(
+    () => notificationProductStateFromCapability(notificationCapability),
+    [notificationCapability]
+  );
+
   const resetReminderDraftToStored = useCallback(
     (id: number) => {
       const current = reminderByID(reminders, id);
@@ -491,6 +654,12 @@ export function useSettings({ setError, refreshRuntime }: UseSettingsOptions) {
     commitReminderDrafts,
     resetReminderDraftToStored,
     idleModeSelectValue,
-    soundModeSelectValue
+    soundModeSelectValue,
+    notificationProductState,
+    notificationPromptCode,
+    notificationPromptVersion,
+    showNotificationSettingsAction,
+    reloadSettingsData: loadSettingsData,
+    openSystemNotificationSettings
   };
 }

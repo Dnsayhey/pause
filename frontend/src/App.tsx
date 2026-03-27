@@ -3,7 +3,7 @@ import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { closeWindow } from './api';
 import { resolveLocale, t } from './i18n';
 import { HeroHeader } from './components/HeroHeader';
-import { CustomScrollArea, InlineError } from './components/ui';
+import { CustomScrollArea, InlineError, useToast } from './components/ui';
 import { useRuntimePolling } from './hooks/useRuntimePolling';
 import { useSettings } from './hooks/useSettings';
 import { RemindersPage } from './pages/RemindersPage';
@@ -11,6 +11,9 @@ import { SettingsPage } from './pages/SettingsPage';
 
 const AnalyticsPage = lazy(async () => import('./pages/AnalyticsPage').then((module) => ({ default: module.AnalyticsPage })));
 const DARK_THEME_VARIANT_STORAGE_KEY = 'pause.darkThemeVariant';
+const NOTIFICATION_ERROR_PERMISSION_DENIED = 'ERR_NOTIFICATION_PERMISSION_DENIED';
+const NOTIFICATION_ERROR_PERMISSION_REQUIRED = 'ERR_NOTIFICATION_PERMISSION_REQUIRED';
+const NOTIFICATION_ERROR_UNAVAILABLE = 'ERR_NOTIFICATION_UNAVAILABLE';
 type DarkThemeVariant = 'default' | 'alt';
 
 function readDarkThemeVariant(): DarkThemeVariant {
@@ -34,16 +37,32 @@ function detectPlatformClass(): string {
   return 'other';
 }
 
+function resolveInlineErrorMessage(locale: 'zh-CN' | 'en-US', message: string): string {
+  const normalized = String(message ?? '').toUpperCase();
+  if (normalized.includes(NOTIFICATION_ERROR_PERMISSION_DENIED)) {
+    return t(locale, 'notificationPermissionDeniedError');
+  }
+  if (normalized.includes(NOTIFICATION_ERROR_PERMISSION_REQUIRED)) {
+    return t(locale, 'notificationPermissionRequiredError');
+  }
+  if (normalized.includes(NOTIFICATION_ERROR_UNAVAILABLE)) {
+    return t(locale, 'notificationUnavailableError');
+  }
+  return message;
+}
+
 export function App() {
   const location = useLocation();
   const platformClass = detectPlatformClass();
   const isWindows = platformClass === 'win';
+  const { pushToast, dismissToast } = useToast();
   const dragBarHeightClass = isWindows ? 'h-8' : 'h-7';
   const contentHeightClass = isWindows ? 'h-[calc(100%-2rem)]' : 'h-[calc(100%-1.75rem)]';
   const windowsCloseButtonBaseClass =
     'absolute right-0 top-0 inline-flex h-full w-[46px] items-center justify-center rounded-none border-0 transition-colors duration-120 ease-out focus-visible:outline-none [--wails-draggable:no-drag]';
   const fallbackLocale = resolveLocale(undefined);
-  const [error, setError] = useState('');
+  const [settingsBootstrapError, setSettingsBootstrapError] = useState('');
+  const [runtimeBootstrapError, setRuntimeBootstrapError] = useState('');
   const [isWindowsCloseHovered, setIsWindowsCloseHovered] = useState(false);
   const [isWindowsClosePressed, setIsWindowsClosePressed] = useState(false);
   const [createPanelRequestId, setCreatePanelRequestId] = useState(0);
@@ -52,10 +71,55 @@ export function App() {
   const addReminderButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
   const hasAssignedInitialFocusRef = useRef(false);
+  const localeRef = useRef(fallbackLocale);
+  const resetRuntimeErrorDedupRef = useRef<() => void>(() => {});
 
-  const { runtime, refreshRuntime } = useRuntimePolling({
-    setError
+  const notifyError = useCallback(
+    (message: string) => {
+      const normalized = String(message ?? '').trim();
+      if (normalized === '') {
+        return;
+      }
+      pushToast({
+        message: resolveInlineErrorMessage(localeRef.current, normalized),
+        tone: 'error'
+      });
+    },
+    [pushToast]
+  );
+
+  const notifyRuntimeError = useCallback(
+    (message: string) => {
+      const normalized = String(message ?? '').trim();
+      if (normalized === '') {
+        return;
+      }
+      pushToast({
+        key: 'runtime-error',
+        message: resolveInlineErrorMessage(localeRef.current, normalized),
+        tone: 'error',
+        durationMs: null,
+        onDismiss: () => {
+          resetRuntimeErrorDedupRef.current();
+        }
+      });
+    },
+    [pushToast]
+  );
+
+  const clearRuntimeError = useCallback(() => {
+    dismissToast('runtime-error');
+  }, [dismissToast]);
+
+  const { runtime, refreshRuntime, resetReportedError } = useRuntimePolling({
+    setError: notifyRuntimeError,
+    setBootstrapError: setRuntimeBootstrapError,
+    clearError: clearRuntimeError
   });
+  resetRuntimeErrorDedupRef.current = resetReportedError;
+  const locale = resolveLocale(runtime?.effectiveLanguage);
+  localeRef.current = locale;
+  const bootstrapError = settingsBootstrapError || runtimeBootstrapError;
 
   const {
     settings,
@@ -74,11 +138,47 @@ export function App() {
     commitReminderDrafts,
     resetReminderDraftToStored,
     idleModeSelectValue,
-    soundModeSelectValue
+    soundModeSelectValue,
+    notificationProductState,
+    notificationPromptCode,
+    notificationPromptVersion,
+    showNotificationSettingsAction,
+    reloadSettingsData,
+    openSystemNotificationSettings
   } = useSettings({
-    setError,
+    setError: notifyError,
+    setBootstrapError: setSettingsBootstrapError,
     refreshRuntime
   });
+
+  useEffect(() => {
+    if (notificationPromptCode === '') {
+      dismissToast('notification-prompt');
+      return;
+    }
+    pushToast({
+      key: 'notification-prompt',
+      message: resolveInlineErrorMessage(locale, notificationPromptCode),
+      tone: 'error',
+      durationMs: 5000,
+      actionLabel: showNotificationSettingsAction ? t(locale, 'notificationOpenSettings') : undefined,
+      onAction: showNotificationSettingsAction ? () => void openSystemNotificationSettings() : undefined
+    });
+  }, [
+    dismissToast,
+    locale,
+    notificationPromptCode,
+    notificationPromptVersion,
+    openSystemNotificationSettings,
+    pushToast,
+    showNotificationSettingsAction
+  ]);
+
+  const retryBootstrapLoad = useCallback(async () => {
+    setSettingsBootstrapError('');
+    setRuntimeBootstrapError('');
+    await Promise.all([reloadSettingsData(), refreshRuntime()]);
+  }, [refreshRuntime, reloadSettingsData]);
 
   useEffect(() => {
     document.body.dataset.platform = platformClass;
@@ -215,14 +315,20 @@ export function App() {
         <CustomScrollArea className={contentHeightClass}>
           <div className="mx-auto max-w-[840px] p-[12px] sm:px-5 sm:py-[10px]">
             {t(fallbackLocale, 'loading')}
-            {error && <InlineError message={error} />}
+            {bootstrapError && (
+              <InlineError
+                message={resolveInlineErrorMessage(fallbackLocale, bootstrapError)}
+                actionLabel={t(fallbackLocale, 'retry')}
+                onAction={() => {
+                  void retryBootstrapLoad();
+                }}
+              />
+            )}
           </div>
         </CustomScrollArea>
       </div>
     );
   }
-
-  const locale = resolveLocale(runtime.effectiveLanguage);
   const isRemindersRoute = location.pathname === '/reminders' || location.pathname === '/';
 
   return (
@@ -337,8 +443,6 @@ export function App() {
             }
           />
 
-          {error && <InlineError message={error} />}
-
           <Routes>
             <Route
               path="/reminders"
@@ -348,6 +452,7 @@ export function App() {
                   reminders={reminders}
                   runtimeReminders={runtime.reminders}
                   reminderDrafts={reminderDrafts}
+                  notificationProductState={notificationProductState}
                   createPanelRequestId={createPanelRequestId}
                   createPanelAnchor={createPanelAnchor}
                   onReminderEnabledChange={(id, enabled) => {

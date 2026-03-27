@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"pause/internal/backend/domain/settings"
+	"pause/internal/backend/ports"
+	"pause/internal/logx"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )
@@ -29,6 +31,9 @@ type darwinIdleProvider struct {
 }
 
 type darwinNotifier struct{}
+type darwinNotificationCapabilityProvider struct {
+	appID string
+}
 
 type darwinSoundPlayer struct{}
 
@@ -46,11 +51,12 @@ func NewAdapters(appID string) api.Adapters {
 	}
 	helperBundleID := appID + ".loginhelper"
 	return api.Adapters{
-		IdleProvider:      &darwinIdleProvider{},
-		LockStateProvider: darwinLockStateProvider{},
-		Notifier:          darwinNotifier{},
-		SoundPlayer:       darwinSoundPlayer{},
-		StartupManager:    darwinStartupManager{appID: appID, helperBundleID: helperBundleID},
+		IdleProvider:                   &darwinIdleProvider{},
+		LockStateProvider:              darwinLockStateProvider{},
+		Notifier:                       darwinNotifier{},
+		NotificationCapabilityProvider: darwinNotificationCapabilityProvider{appID: appID},
+		SoundPlayer:                    darwinSoundPlayer{},
+		StartupManager:                 darwinStartupManager{appID: appID, helperBundleID: helperBundleID},
 	}
 }
 
@@ -111,6 +117,86 @@ func (darwinNotifier) ShowReminder(title, body string) error {
 		body = "Break started"
 	}
 	return showDarwinUserNotification(title, body)
+}
+
+func (p darwinNotificationCapabilityProvider) GetNotificationCapability() ports.NotificationCapability {
+	status, err := darwinNotificationAuthorizationStatus()
+	if err != nil {
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionUnknown,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          err.Error(),
+		}
+	}
+	return darwinCapabilityFromAuthorizationStatus(status)
+}
+
+func (p darwinNotificationCapabilityProvider) RequestNotificationPermission() (ports.NotificationCapability, error) {
+	current := p.GetNotificationCapability()
+	logx.Infof(
+		"darwin.notification.permission_request current_state=%s can_request=%t can_open_settings=%t reason=%q",
+		current.PermissionState,
+		current.CanRequest,
+		current.CanOpenSettings,
+		current.Reason,
+	)
+	if current.PermissionState != ports.NotificationPermissionNotDetermined || !current.CanRequest {
+		return current, nil
+	}
+	granted, err := darwinRequestNotificationAuthorization()
+	if err != nil {
+		return current, err
+	}
+	next := p.GetNotificationCapability()
+	if granted {
+		next.PermissionState = ports.NotificationPermissionAuthorized
+		next.CanRequest = false
+	}
+	logx.Infof(
+		"darwin.notification.permission_request completed granted=%t next_state=%s can_request=%t can_open_settings=%t reason=%q",
+		granted,
+		next.PermissionState,
+		next.CanRequest,
+		next.CanOpenSettings,
+		next.Reason,
+	)
+	return next, nil
+}
+
+func (p darwinNotificationCapabilityProvider) OpenNotificationSettings() error {
+	return darwinOpenNotificationSettings(p.appID)
+}
+
+func darwinCapabilityFromAuthorizationStatus(status int) ports.NotificationCapability {
+	switch status {
+	case darwinNotificationStatusNotDetermined:
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionNotDetermined,
+			CanRequest:      true,
+			CanOpenSettings: true,
+		}
+	case darwinNotificationStatusDenied:
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionDenied,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          "notification permission denied",
+		}
+	case darwinNotificationStatusAuthorized, darwinNotificationStatusProvisional, darwinNotificationStatusEphemeral:
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionAuthorized,
+			CanRequest:      false,
+			CanOpenSettings: true,
+		}
+	default:
+		return ports.NotificationCapability{
+			PermissionState: ports.NotificationPermissionUnknown,
+			CanRequest:      false,
+			CanOpenSettings: true,
+			Reason:          fmt.Sprintf("unknown notification authorization status: %d", status),
+		}
+	}
 }
 
 func (darwinSoundPlayer) PlayBreakEnd(sound settings.SoundSettings) error {

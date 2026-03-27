@@ -6,11 +6,12 @@ import (
 )
 
 type Adapters struct {
-	IdleProvider      ports.IdleProvider
-	LockStateProvider ports.LockStateProvider
-	Notifier          ports.Notifier
-	SoundPlayer       ports.SoundPlayer
-	StartupManager    ports.StartupManager
+	IdleProvider                   ports.IdleProvider
+	LockStateProvider              ports.LockStateProvider
+	Notifier                       ports.Notifier
+	NotificationCapabilityProvider ports.NotificationCapabilityProvider
+	SoundPlayer                    ports.SoundPlayer
+	StartupManager                 ports.StartupManager
 }
 
 type NoopIdleProvider struct{}
@@ -24,6 +25,25 @@ func (NoopLockStateProvider) IsScreenLocked() bool { return false }
 type NoopNotifier struct{}
 
 func (NoopNotifier) ShowReminder(_, _ string) error { return nil }
+
+type NoopNotificationCapabilityProvider struct{}
+
+func (NoopNotificationCapabilityProvider) GetNotificationCapability() ports.NotificationCapability {
+	return ports.NotificationCapability{
+		PermissionState: ports.NotificationPermissionUnknown,
+		CanRequest:      false,
+		CanOpenSettings: false,
+		Reason:          "notification capability unavailable",
+	}
+}
+
+func (NoopNotificationCapabilityProvider) RequestNotificationPermission() (ports.NotificationCapability, error) {
+	return NoopNotificationCapabilityProvider{}.GetNotificationCapability(), nil
+}
+
+func (NoopNotificationCapabilityProvider) OpenNotificationSettings() error {
+	return nil
+}
 
 type NoopSoundPlayer struct{}
 

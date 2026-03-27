@@ -73,6 +73,15 @@ export type RuntimeState = {
   effectiveTheme?: 'light' | 'dark';
 };
 
+export type NotificationCapability = {
+  permissionState: 'authorized' | 'not_determined' | 'denied' | 'restricted' | 'unknown';
+  canRequest: boolean;
+  canOpenSettings: boolean;
+  reason?: string;
+};
+
+export type NotificationProductState = 'pending' | 'available' | 'unavailable';
+
 export type SettingsPatch = Partial<{
   enforcement: Partial<Settings['enforcement']>;
   sound: Partial<Settings['sound']>;

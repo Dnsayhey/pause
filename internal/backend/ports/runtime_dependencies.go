@@ -32,6 +32,29 @@ type Notifier interface {
 	ShowReminder(title, body string) error
 }
 
+type NotificationPermissionState string
+
+const (
+	NotificationPermissionAuthorized    NotificationPermissionState = "authorized"
+	NotificationPermissionNotDetermined NotificationPermissionState = "not_determined"
+	NotificationPermissionDenied        NotificationPermissionState = "denied"
+	NotificationPermissionRestricted    NotificationPermissionState = "restricted"
+	NotificationPermissionUnknown       NotificationPermissionState = "unknown"
+)
+
+type NotificationCapability struct {
+	PermissionState NotificationPermissionState
+	CanRequest      bool
+	CanOpenSettings bool
+	Reason          string
+}
+
+type NotificationCapabilityProvider interface {
+	GetNotificationCapability() NotificationCapability
+	RequestNotificationPermission() (NotificationCapability, error)
+	OpenNotificationSettings() error
+}
+
 type SoundPlayer interface {
 	PlayBreakEnd(sound settings.SoundSettings) error
 }

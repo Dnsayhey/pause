@@ -1,7 +1,7 @@
 //go:build !wails || (!darwin && !windows)
 
-package app
+package platform
 
-func detectPreferredLanguage() string {
+func DetectPreferredLanguage() string {
 	return ""
 }

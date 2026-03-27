@@ -119,6 +119,13 @@ type RuntimeState struct {
 	EffectiveTheme     string            `json:"effectiveTheme,omitempty"`
 }
 
+type NotificationCapability struct {
+	PermissionState string `json:"permissionState"`
+	CanRequest      bool   `json:"canRequest"`
+	CanOpenSettings bool   `json:"canOpenSettings"`
+	Reason          string `json:"reason,omitempty"`
+}
+
 type AnalyticsReminderStat struct {
 	ReminderID          int64   `json:"reminderId"`
 	ReminderName        string  `json:"reminderName"`

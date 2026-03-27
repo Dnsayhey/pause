@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getAnalyticsWeeklyStats } from '../api';
 import { t, type Locale } from '../i18n';
 import { reminderFieldSpecByID, toDraftBreakValue, toDraftIntervalValue } from '../reminderFields';
-import type { ReminderConfig, ReminderRuntime } from '../types';
+import type { NotificationProductState, ReminderConfig, ReminderRuntime } from '../types';
 import { ReminderCard } from '../components/ReminderCard';
 
 type ReminderDrafts = Record<number, { interval: string; break: string }>;
@@ -12,6 +12,7 @@ type RemindersPageProps = {
   reminders: ReminderConfig[];
   runtimeReminders: ReminderRuntime[];
   reminderDrafts: ReminderDrafts;
+  notificationProductState: NotificationProductState | null;
   createPanelRequestId: number;
   createPanelAnchor: { top: number; right: number } | null;
   onReminderEnabledChange: (id: number, enabled: boolean) => void;
@@ -121,6 +122,7 @@ export function RemindersPage({
   reminders,
   runtimeReminders,
   reminderDrafts,
+  notificationProductState,
   createPanelRequestId,
   createPanelAnchor,
   onReminderEnabledChange,
@@ -348,6 +350,12 @@ export function RemindersPage({
                 locale,
                 'reminderMetaTodayRate'
               )} ${formatTodayRate(todayStat)} - ${formatTodayDone(todayStat)}`;
+          const titleWarningLabel =
+            isNotificationReminder && reminder.enabled && notificationProductState && notificationProductState !== 'available'
+              ? notificationProductState === 'pending'
+                ? t(locale, 'reminderNotificationWarningPending')
+                : t(locale, 'reminderNotificationWarningUnavailable')
+              : undefined;
 
           return (
             <ReminderCard
@@ -355,6 +363,7 @@ export function RemindersPage({
               locale={locale}
               variant={isNotificationReminder ? 'notify' : 'rest'}
               title={reminderTitle(reminder, locale)}
+              titleWarningLabel={titleWarningLabel}
               enabledLabel={t(locale, 'enabled')}
               enabled={reminder.enabled}
               onEnabledChange={(checked) => {

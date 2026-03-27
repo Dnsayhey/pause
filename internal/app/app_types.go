@@ -12,15 +12,16 @@ import (
 )
 
 type App struct {
-	ctx           context.Context
-	engine        engineRuntime
-	history       historyCloser
-	reminders     reminderService
-	analytics     analyticsService
-	settingsSvc   settingsService
-	notifier      ports.Notifier
-	desktop       desktopController
-	quitRequested atomic.Bool
+	ctx                    context.Context
+	engine                 engineRuntime
+	history                historyCloser
+	reminders              reminderService
+	analytics              analyticsService
+	settingsSvc            settingsService
+	notifier               ports.Notifier
+	notificationCapability ports.NotificationCapabilityProvider
+	desktop                desktopController
+	quitRequested          atomic.Bool
 }
 
 type engineRuntime = bootstrap.RuntimeEngine

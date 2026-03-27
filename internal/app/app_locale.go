@@ -7,39 +7,15 @@ import (
 
 	"pause/internal/backend/domain/settings"
 	"pause/internal/desktop"
+	"pause/internal/platform"
 )
 
 func resolveEffectiveLanguage(setting string) string {
-	normalized := settings.NormalizeUILanguage(setting)
-	if normalized != settings.UILanguageAuto {
-		return normalized
-	}
-
-	if preferred := languageFromLocaleValue(detectPreferredLanguage()); preferred != "" {
-		return preferred
-	}
-
+	preferredLocales := []string{platform.DetectPreferredLanguage()}
 	for _, key := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
-		if lang := languageFromLocaleValue(os.Getenv(key)); lang != "" {
-			return lang
-		}
+		preferredLocales = append(preferredLocales, os.Getenv(key))
 	}
-	return settings.UILanguageEnUS
-}
-
-func languageFromLocaleValue(value string) string {
-	cleaned := strings.TrimSpace(value)
-	if cleaned == "" {
-		return ""
-	}
-	lower := strings.ToLower(cleaned)
-	if strings.HasPrefix(lower, "zh") {
-		return settings.UILanguageZhCN
-	}
-	if strings.HasPrefix(lower, "en") {
-		return settings.UILanguageEnUS
-	}
-	return ""
+	return settings.ResolveEffectiveUILanguage(setting, preferredLocales...)
 }
 
 func buildStatusBarLocaleStrings(language string) desktop.StatusBarLocaleStrings {

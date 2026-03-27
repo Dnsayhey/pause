@@ -4,26 +4,42 @@ import type { RuntimeState } from '../types';
 
 type UseRuntimePollingOptions = {
   setError: (message: string) => void;
+  setBootstrapError: (message: string) => void;
+  clearError: () => void;
 };
 
-export function useRuntimePolling({ setError }: UseRuntimePollingOptions) {
+export function useRuntimePolling({ setError, setBootstrapError, clearError }: UseRuntimePollingOptions) {
   const [runtime, setRuntime] = useState<RuntimeState | null>(null);
   const mountedRef = useRef(false);
+  const hasLoadedRuntimeRef = useRef(false);
+  const lastReportedErrorRef = useRef('');
 
   const refreshRuntime = useCallback(async (): Promise<RuntimeState | null> => {
     try {
       const state = await getRuntimeState();
       if (mountedRef.current) {
         setRuntime(state);
+        setBootstrapError('');
+        if (lastReportedErrorRef.current !== '') {
+          lastReportedErrorRef.current = '';
+          clearError();
+        }
       }
+      hasLoadedRuntimeRef.current = true;
       return state;
     } catch (err) {
+      const message = String(err);
       if (mountedRef.current) {
-        setError(String(err));
+        if (!hasLoadedRuntimeRef.current) {
+          setBootstrapError(message);
+        } else if (lastReportedErrorRef.current !== message) {
+          lastReportedErrorRef.current = message;
+          setError(message);
+        }
       }
       return null;
     }
-  }, [setError]);
+  }, [clearError, setBootstrapError, setError]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -64,6 +80,9 @@ export function useRuntimePolling({ setError }: UseRuntimePollingOptions) {
   return {
     runtime,
     setRuntime,
-    refreshRuntime
+    refreshRuntime,
+    resetReportedError: () => {
+      lastReportedErrorRef.current = '';
+    }
   };
 }

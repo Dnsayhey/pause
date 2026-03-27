@@ -39,13 +39,14 @@ func NewApp(configPath string) (*App, error) {
 	)
 
 	return &App{
-		engine:      runtime.Engine,
-		history:     runtime.History,
-		reminders:   runtime.ReminderService,
-		analytics:   runtime.AnalyticsService,
-		settingsSvc: runtime.SettingsService,
-		notifier:    runtime.Notifier,
-		desktop:     newDesktopController(),
+		engine:                 runtime.Engine,
+		history:                runtime.History,
+		reminders:              runtime.ReminderService,
+		analytics:              runtime.AnalyticsService,
+		settingsSvc:            runtime.SettingsService,
+		notifier:               runtime.Notifier,
+		notificationCapability: runtime.NotificationCapabilityProvider,
+		desktop:                newDesktopController(),
 	}, nil
 }
 
@@ -80,7 +81,10 @@ func (a *App) Shutdown(_ context.Context) {
 	if a == nil || a.history == nil {
 		return
 	}
+	logx.Infof("app.shutdown started")
 	if err := a.history.Close(); err != nil {
 		logx.Warnf("app.shutdown history_close_err=%v", err)
+		return
 	}
+	logx.Infof("app.shutdown completed")
 }

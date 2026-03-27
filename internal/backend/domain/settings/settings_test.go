@@ -56,6 +56,28 @@ func TestNormalizeUILanguage_Table(t *testing.T) {
 	}
 }
 
+func TestResolveEffectiveUILanguage_Auto(t *testing.T) {
+	cases := []struct {
+		name    string
+		setting string
+		locales []string
+		want    string
+	}{
+		{name: "explicit zh", setting: UILanguageZhCN, locales: []string{"en-US"}, want: UILanguageZhCN},
+		{name: "auto zh locale", setting: UILanguageAuto, locales: []string{"zh-Hans-CN"}, want: UILanguageZhCN},
+		{name: "auto en locale", setting: UILanguageAuto, locales: []string{"en-US"}, want: UILanguageEnUS},
+		{name: "auto fallback", setting: UILanguageAuto, locales: []string{"fr-FR"}, want: UILanguageEnUS},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ResolveEffectiveUILanguage(tc.setting, tc.locales...); got != tc.want {
+				t.Fatalf("ResolveEffectiveUILanguage(%q, %v)=%q want=%q", tc.setting, tc.locales, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeUITheme_Table(t *testing.T) {
 	cases := []struct {
 		in   string

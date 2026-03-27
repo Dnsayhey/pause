@@ -19,14 +19,15 @@ import (
 )
 
 type Runtime struct {
-	Settings         *settingsjson.Store
-	History          *historydb.Store
-	HistoryPath      string
-	Engine           RuntimeEngine
-	ReminderService  *reminderusecase.Service
-	AnalyticsService *analyticsusecase.Service
-	SettingsService  *settingsusecase.Service
-	Notifier         ports.Notifier
+	Settings                       *settingsjson.Store
+	History                        *historydb.Store
+	HistoryPath                    string
+	Engine                         RuntimeEngine
+	ReminderService                *reminderusecase.Service
+	AnalyticsService               *analyticsusecase.Service
+	SettingsService                *settingsusecase.Service
+	Notifier                       ports.Notifier
+	NotificationCapabilityProvider ports.NotificationCapabilityProvider
 }
 
 func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
@@ -74,14 +75,15 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 	}
 
 	return &Runtime{
-		Settings:         store,
-		History:          historyStore,
-		HistoryPath:      historyPath,
-		Engine:           WrapEngine(engine),
-		ReminderService:  container.ReminderService,
-		AnalyticsService: container.AnalyticsService,
-		SettingsService:  settingsService,
-		Notifier:         adapters.Notifier,
+		Settings:                       store,
+		History:                        historyStore,
+		HistoryPath:                    historyPath,
+		Engine:                         WrapEngine(engine),
+		ReminderService:                container.ReminderService,
+		AnalyticsService:               container.AnalyticsService,
+		SettingsService:                settingsService,
+		Notifier:                       adapters.Notifier,
+		NotificationCapabilityProvider: adapters.NotificationCapabilityProvider,
 	}, nil
 }
 
