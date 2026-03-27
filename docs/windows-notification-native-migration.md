@@ -67,22 +67,30 @@
 
 ### 里程碑 2：去掉发送通知中的 PowerShell
 
-状态：未开始
+状态：已完成
 
-计划：
+结果：
 
-- 新增原生 WinRT toast 构建与发送逻辑
-- 保持现有 payload 语义不变
-- WinRT toast 失败时继续 fallback 到 balloon notification
+- `ShowReminder()` 的 WinRT toast 主路径已改为原生调用
+- toast XML 改为在 Go 内构建并通过 `Windows.Data.Xml.Dom.XmlDocument` 加载
+- `ToastNotificationManager` / `ToastNotification` 已改为直接通过 WinRT activation factory 调用
+- 原有 balloon notification fallback 完全保留
+- `internal/platform/windows` 中通知相关的 PowerShell helper 已清理完成
 
 验收点：
 
 - `ShowReminder()` 的 toast 主路径不再依赖 `powershell.exe`
 - fallback 行为保持不变
 
+验证记录：
+
+- `rg -n "powershell|runPowerShell|escapePowerShell|Start-Process|ToastNotificationManager\\]::CreateToastNotifier|New-Object Windows.Data.Xml.Dom.XmlDocument" internal/platform/windows -g '*.go'`
+- `GOCACHE=$(pwd)/.cache/go-build GOOS=windows GOARCH=amd64 go test -c ./internal/platform/windows`
+- `GOCACHE=$(pwd)/.cache/go-build GOOS=windows GOARCH=amd64 go build ./...`
+
 ### 里程碑 3：回归验证与文档收口
 
-状态：未开始
+状态：进行中
 
 计划：
 

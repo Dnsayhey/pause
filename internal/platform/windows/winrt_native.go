@@ -3,6 +3,8 @@
 package windows
 
 import (
+	"bytes"
+	"encoding/xml"
 	"fmt"
 	"runtime"
 	"syscall"
@@ -16,6 +18,7 @@ var (
 	procRoInitialize   = combaseDLL.NewProc("RoInitialize")
 	procRoUninitialize = combaseDLL.NewProc("RoUninitialize")
 	iidToastManager    = ole.NewGUID("{50AC103F-D235-4598-BBEF-98FE4D1A3AD4}")
+	iidToastFactory    = ole.NewGUID("{04124B20-82C6-4229-B109-FD9ED4662B53}")
 	iidXMLDocumentIO   = ole.NewGUID("{6CD0E74E-EE65-4489-9EBF-CA43E87BA637}")
 )
 
@@ -61,6 +64,23 @@ type toastNotifierVtbl struct {
 	GetSetting         uintptr
 	AddToSchedule      uintptr
 	RemoveFromSchedule uintptr
+}
+
+type toastNotificationFactory struct {
+	ole.IInspectable
+}
+
+type toastNotificationFactoryVtbl struct {
+	ole.IInspectableVtbl
+	CreateToastNotification uintptr
+}
+
+type toastNotification struct {
+	ole.IInspectable
+}
+
+type xmlDocument struct {
+	ole.IInspectable
 }
 
 type xmlDocumentIO struct {
@@ -114,6 +134,36 @@ func (v *toastNotifier) Setting() (notificationSetting, error) {
 		return 0, ole.NewError(hr)
 	}
 	return setting, nil
+}
+
+func (v *toastNotifier) Show(notification *toastNotification) error {
+	hr, _, _ := syscall.SyscallN(
+		v.VTable().Show,
+		uintptr(unsafe.Pointer(v)),
+		uintptr(unsafe.Pointer(notification)),
+	)
+	if hr != 0 {
+		return ole.NewError(hr)
+	}
+	return nil
+}
+
+func (v *toastNotificationFactory) VTable() *toastNotificationFactoryVtbl {
+	return (*toastNotificationFactoryVtbl)(unsafe.Pointer(v.RawVTable))
+}
+
+func (v *toastNotificationFactory) CreateToastNotification(doc *xmlDocument) (*toastNotification, error) {
+	var notification *toastNotification
+	hr, _, _ := syscall.SyscallN(
+		v.VTable().CreateToastNotification,
+		uintptr(unsafe.Pointer(v)),
+		uintptr(unsafe.Pointer(doc)),
+		uintptr(unsafe.Pointer(&notification)),
+	)
+	if hr != 0 {
+		return nil, ole.NewError(hr)
+	}
+	return notification, nil
 }
 
 func (v *xmlDocumentIO) VTable() *xmlDocumentIOVtbl {
@@ -182,6 +232,51 @@ func openWindowsNotificationSettingsNative() error {
 	return openWindowsURI("ms-settings:notifications")
 }
 
+func showWinRTToastReminderNative(appID, title, body string) error {
+	if err := ensureToastAppIDRegistration(appID); err != nil {
+		return err
+	}
+
+	payload, err := buildWindowsToastXML(title, body)
+	if err != nil {
+		return err
+	}
+
+	return withWindowsRuntime(func() error {
+		manager, err := getToastNotificationManagerStatics()
+		if err != nil {
+			return err
+		}
+		defer manager.Release()
+
+		notifier, err := manager.CreateToastNotifierWithID(appID)
+		if err != nil {
+			return err
+		}
+		defer notifier.Release()
+
+		doc, err := createToastXMLDocument(payload)
+		if err != nil {
+			return err
+		}
+		defer doc.Release()
+
+		factory, err := getToastNotificationFactory()
+		if err != nil {
+			return err
+		}
+		defer factory.Release()
+
+		notification, err := factory.CreateToastNotification(doc)
+		if err != nil {
+			return err
+		}
+		defer notification.Release()
+
+		return notifier.Show(notification)
+	})
+}
+
 func openWindowsURI(target string) error {
 	verb, err := syscall.UTF16PtrFromString("open")
 	if err != nil {
@@ -212,6 +307,60 @@ func getToastNotificationManagerStatics() (*toastNotificationManagerStatics, err
 		return nil, err
 	}
 	return (*toastNotificationManagerStatics)(unsafe.Pointer(factory)), nil
+}
+
+func getToastNotificationFactory() (*toastNotificationFactory, error) {
+	factory, err := ole.RoGetActivationFactory("Windows.UI.Notifications.ToastNotification", iidToastFactory)
+	if err != nil {
+		return nil, err
+	}
+	return (*toastNotificationFactory)(unsafe.Pointer(factory)), nil
+}
+
+func createToastXMLDocument(payload string) (*xmlDocument, error) {
+	instance, err := ole.RoActivateInstance("Windows.Data.Xml.Dom.XmlDocument")
+	if err != nil {
+		return nil, err
+	}
+
+	doc := (*xmlDocument)(unsafe.Pointer(instance))
+	var xmlIO *xmlDocumentIO
+	if err := instance.PutQueryInterface(iidXMLDocumentIO, &xmlIO); err != nil {
+		doc.Release()
+		return nil, err
+	}
+	defer xmlIO.Release()
+
+	if err := xmlIO.LoadXML(payload); err != nil {
+		doc.Release()
+		return nil, err
+	}
+	return doc, nil
+}
+
+func buildWindowsToastXML(title, body string) (string, error) {
+	escapedTitle, err := escapeXMLText(title)
+	if err != nil {
+		return "", err
+	}
+	escapedBody, err := escapeXMLText(body)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(
+		"<toast><visual><binding template=\"ToastGeneric\"><text>%s</text><text>%s</text></binding></visual></toast>",
+		escapedTitle,
+		escapedBody,
+	), nil
+}
+
+func escapeXMLText(value string) (string, error) {
+	var buf bytes.Buffer
+	if err := xml.EscapeText(&buf, []byte(value)); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func withWindowsRuntime(fn func() error) error {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -38,8 +37,7 @@ var (
 	procShellNotifyIconW                        = shell32DLL.NewProc("Shell_NotifyIconW")
 	procShellExecuteW                           = shell32DLL.NewProc("ShellExecuteW")
 	procSetCurrentProcessExplicitAppUserModelID = shell32DLL.NewProc("SetCurrentProcessExplicitAppUserModelID")
-	execCommand                                 = exec.Command
-	showToastReminder                           = showWinRTToastReminder
+	showToastReminder                           = showWinRTToastReminderNative
 	showBalloonNotification                     = showBalloonReminder
 	queryToastSetting                           = queryWindowsToastSettingNative
 	openNotificationSettings                    = openWindowsNotificationSettingsNative
@@ -223,41 +221,6 @@ func (n windowsNotifier) OpenNotificationSettings() error {
 	return openNotificationSettings()
 }
 
-func showWinRTToastReminder(appID, title, body string) error {
-	if err := ensureToastAppIDRegistration(appID); err != nil {
-		return err
-	}
-
-	// Standard Windows 10/11 notification path via WinRT Toast APIs.
-	script := fmt.Sprintf(`
-$ErrorActionPreference = 'Stop';
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null;
-[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null;
-$title = [Security.SecurityElement]::Escape('%s');
-$body = [Security.SecurityElement]::Escape('%s');
-$xml = @"
-<toast>
-  <visual>
-    <binding template='ToastGeneric'>
-      <text>$title</text>
-      <text>$body</text>
-    </binding>
-  </visual>
-</toast>
-"@;
-$doc = New-Object Windows.Data.Xml.Dom.XmlDocument;
-$doc.LoadXml($xml);
-$toast = [Windows.UI.Notifications.ToastNotification]::new($doc);
-$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('%s');
-$notifier.Show($toast);
-`,
-		escapePowerShellSingleQuoted(title),
-		escapePowerShellSingleQuoted(body),
-		escapePowerShellSingleQuoted(appID),
-	)
-	return runPowerShellSync(script)
-}
-
 func showBalloonReminder(title, body string) error {
 	balloonNotifyMu.Lock()
 	defer balloonNotifyMu.Unlock()
@@ -426,50 +389,6 @@ func quoteCommandPath(path string) string {
 		return path
 	}
 	return `"` + path + `"`
-}
-
-func escapePowerShellSingleQuoted(value string) string {
-	return strings.ReplaceAll(value, `'`, `''`)
-}
-
-func runPowerShellCommand(script string) *exec.Cmd {
-	return execCommand("powershell.exe",
-		"-NoProfile",
-		"-NonInteractive",
-		"-ExecutionPolicy",
-		"Bypass",
-		"-WindowStyle",
-		"Hidden",
-		"-STA",
-		"-Command",
-		script,
-	)
-}
-
-func runPowerShellSync(script string) error {
-	cmd := runPowerShellCommand(script)
-	return cmd.Run()
-}
-
-func runPowerShellOutput(script string) (string, error) {
-	cmd := runPowerShellCommand(script)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-func queryWindowsToastSetting(appID string) (string, error) {
-	script := fmt.Sprintf(`
-$ErrorActionPreference = 'Stop';
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null;
-$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('%s');
-[Console]::WriteLine($notifier.Setting.ToString());
-`,
-		escapePowerShellSingleQuoted(appID),
-	)
-	return runPowerShellOutput(script)
 }
 
 func toastAppID(raw string) string {
