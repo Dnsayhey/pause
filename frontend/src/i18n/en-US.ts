@@ -41,6 +41,8 @@ export const enUS = {
   notificationPermissionRequiredError: 'Please grant notification permission for Pause to enable this reminder.',
   notificationUnavailableError: 'Notification capability is unavailable right now. Open system settings and check notification status.',
   notificationOpenSettings: 'Open system settings',
+  reminderNotificationBadgePending: 'Permission needed',
+  reminderNotificationBadgeUnavailable: 'Notifications off',
   reminderNotificationWarningPending: 'Notification permission is still required for this reminder.',
   reminderNotificationWarningUnavailable: 'This reminder is enabled, but Pause cannot send notifications right now.',
   addReminderUnitHour: 'hour',

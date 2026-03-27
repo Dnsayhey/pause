@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createReminder as createReminderAPI,
   deleteReminder as deleteReminderAPI,
@@ -170,6 +170,7 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
   const [notificationPromptCode, setNotificationPromptCode] = useState('');
   const [notificationPromptVersion, setNotificationPromptVersion] = useState(0);
   const [showNotificationSettingsAction, setShowNotificationSettingsAction] = useState(false);
+  const notificationCapabilityInteractionRefreshInFlightRef = useRef(false);
 
   const clearNotificationPrompt = useCallback(() => {
     setNotificationPromptCode('');
@@ -267,7 +268,10 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
         // this action should always be blocked unless already authorized.
         void requestNotificationPermissionAPI()
           .then((requested) => {
-            setNotificationCapability(requested);
+            if (notificationProductStateFromCapability(requested) === 'available') {
+              setNotificationCapability(requested);
+              clearNotificationPrompt();
+            }
           })
           .catch((err) => {
             setError(String(err));
@@ -585,6 +589,42 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     }
   }, [setError]);
 
+  const refreshNotificationCapabilityFromInteraction = useCallback(() => {
+    if (notificationCapabilityInteractionRefreshInFlightRef.current) {
+      return;
+    }
+    notificationCapabilityInteractionRefreshInFlightRef.current = true;
+    void refreshNotificationCapability(true)
+      .then((capability) => {
+        if (notificationProductStateFromCapability(capability) === 'available') {
+          clearNotificationPrompt();
+        }
+      })
+      .finally(() => {
+        notificationCapabilityInteractionRefreshInFlightRef.current = false;
+      });
+  }, [clearNotificationPrompt, refreshNotificationCapability]);
+
+  const showNotificationPrompt = useCallback(
+    (state: Exclude<NotificationProductState, 'available'>) => {
+      applyNotificationPrompt(notificationCapability);
+      if (state !== 'pending') {
+        return;
+      }
+      void requestNotificationPermissionAPI()
+        .then((requested) => {
+          if (notificationProductStateFromCapability(requested) === 'available') {
+            setNotificationCapability(requested);
+            clearNotificationPrompt();
+          }
+        })
+        .catch((err) => {
+          setError(String(err));
+        });
+    },
+    [applyNotificationPrompt, clearNotificationPrompt, notificationCapability, setError]
+  );
+
   const notificationProductState = useMemo(
     () => notificationProductStateFromCapability(notificationCapability),
     [notificationCapability]
@@ -649,6 +689,8 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     notificationPromptCode,
     notificationPromptVersion,
     showNotificationSettingsAction,
+    showNotificationPrompt,
+    refreshNotificationCapabilityFromInteraction,
     reloadSettingsData: loadSettingsData,
     openSystemNotificationSettings
   };

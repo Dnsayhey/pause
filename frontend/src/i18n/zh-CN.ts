@@ -41,6 +41,8 @@ export const zhCN = {
   notificationPermissionRequiredError: '启用该提醒前，请先为 Pause 授予通知权限。',
   notificationUnavailableError: '当前无法使用通知能力，请打开系统设置检查通知状态。',
   notificationOpenSettings: '打开系统设置',
+  reminderNotificationBadgePending: '待授权',
+  reminderNotificationBadgeUnavailable: '通知关闭',
   reminderNotificationWarningPending: '这个提醒已启用，但还没有授予通知权限。',
   reminderNotificationWarningUnavailable: '这个提醒已启用，但 Pause 当前无法发送系统通知。',
   addReminderUnitHour: '小时',

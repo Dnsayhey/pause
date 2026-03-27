@@ -13,7 +13,10 @@ type ReminderCardProps = {
   locale: Locale;
   variant?: 'rest' | 'notify';
   title: string;
-  titleWarningLabel?: string;
+  titleStatusText?: string;
+  titleStatusLabel?: string;
+  titleStatusTone?: 'pending' | 'unavailable';
+  onTitleStatusClick?: () => void;
   enabledLabel: string;
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
@@ -97,7 +100,10 @@ export function ReminderCard({
   locale,
   variant = 'rest',
   title,
-  titleWarningLabel,
+  titleStatusText,
+  titleStatusLabel,
+  titleStatusTone = 'unavailable',
+  onTitleStatusClick,
   enabledLabel,
   enabled,
   onEnabledChange,
@@ -135,6 +141,10 @@ export function ReminderCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const unitSwitchHint = locale === 'zh-CN' ? '点击切换单位' : 'Click to switch unit';
+  const titleStatusClassName =
+    titleStatusTone === 'pending'
+      ? 'border-[var(--surface-border-strong)] bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:border-[var(--surface-border-strong)] hover:bg-[var(--seg-hover-bg)] hover:text-[var(--text-primary)]'
+      : 'border-[var(--error-border)] bg-[var(--error-bg)] text-[var(--error-text)] hover:opacity-95';
 
   useEffect(() => {
     if ((!isEditing && !isConfirmingDelete) || isSaving || isDeleting) return;
@@ -233,14 +243,16 @@ export function ReminderCard({
             />
             <h3 className="m-0 flex min-w-0 items-center gap-2 text-[18px]">
               <span className="truncate">{title}</span>
-              {titleWarningLabel ? (
-                <span
-                  className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border border-[var(--error-border)] bg-[var(--error-bg)] px-1 text-[11px] font-semibold leading-none text-[var(--error-text)]"
-                  title={titleWarningLabel}
-                  aria-label={titleWarningLabel}
+              {titleStatusText ? (
+                <button
+                  type="button"
+                  className={`inline-flex h-5 shrink-0 items-center justify-center rounded-full border px-2 text-[10px] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--control-focus-ring)] ${titleStatusClassName}`}
+                  title={titleStatusLabel}
+                  aria-label={titleStatusLabel}
+                  onClick={onTitleStatusClick}
                 >
-                  !
-                </span>
+                  {titleStatusText}
+                </button>
               ) : null}
             </h3>
           </div>

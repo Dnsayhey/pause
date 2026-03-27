@@ -13,6 +13,7 @@ type RemindersPageProps = {
   runtimeReminders: ReminderRuntime[];
   reminderDrafts: ReminderDrafts;
   notificationProductState: NotificationProductState | null;
+  onReminderNotificationWarningClick: (state: Exclude<NotificationProductState, 'available'>) => void;
   createPanelRequestId: number;
   createPanelAnchor: { top: number; right: number } | null;
   onReminderEnabledChange: (id: number, enabled: boolean) => void;
@@ -123,6 +124,7 @@ export function RemindersPage({
   runtimeReminders,
   reminderDrafts,
   notificationProductState,
+  onReminderNotificationWarningClick,
   createPanelRequestId,
   createPanelAnchor,
   onReminderEnabledChange,
@@ -350,12 +352,20 @@ export function RemindersPage({
                 locale,
                 'reminderMetaTodayRate'
               )} ${formatTodayRate(todayStat)} - ${formatTodayDone(todayStat)}`;
-          const titleWarningLabel =
+          const titleStatusLabel =
             isNotificationReminder && reminder.enabled && notificationProductState && notificationProductState !== 'available'
               ? notificationProductState === 'pending'
                 ? t(locale, 'reminderNotificationWarningPending')
                 : t(locale, 'reminderNotificationWarningUnavailable')
               : undefined;
+          const titleStatusText =
+            isNotificationReminder && reminder.enabled && notificationProductState && notificationProductState !== 'available'
+              ? notificationProductState === 'pending'
+                ? t(locale, 'reminderNotificationBadgePending')
+                : t(locale, 'reminderNotificationBadgeUnavailable')
+              : undefined;
+          const titleStatusTone =
+            notificationProductState === 'pending' ? 'pending' : 'unavailable';
 
           return (
             <ReminderCard
@@ -363,7 +373,16 @@ export function RemindersPage({
               locale={locale}
               variant={isNotificationReminder ? 'notify' : 'rest'}
               title={reminderTitle(reminder, locale)}
-              titleWarningLabel={titleWarningLabel}
+              titleStatusText={titleStatusText}
+              titleStatusLabel={titleStatusLabel}
+              titleStatusTone={titleStatusTone}
+              onTitleStatusClick={
+                titleStatusText && notificationProductState && notificationProductState !== 'available'
+                  ? () => {
+                      onReminderNotificationWarningClick(notificationProductState);
+                    }
+                  : undefined
+              }
               enabledLabel={t(locale, 'enabled')}
               enabled={reminder.enabled}
               onEnabledChange={(checked) => {

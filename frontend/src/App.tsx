@@ -143,6 +143,8 @@ export function App() {
     notificationPromptCode,
     notificationPromptVersion,
     showNotificationSettingsAction,
+    showNotificationPrompt,
+    refreshNotificationCapabilityFromInteraction,
     reloadSettingsData,
     openSystemNotificationSettings
   } = useSettings({
@@ -332,7 +334,12 @@ export function App() {
   const isRemindersRoute = location.pathname === '/reminders' || location.pathname === '/';
 
   return (
-    <div className="h-full select-none overflow-hidden">
+    <div
+      className="h-full select-none overflow-hidden"
+      onPointerDownCapture={() => {
+        refreshNotificationCapabilityFromInteraction();
+      }}
+    >
       <div className={`${dragBarHeightClass} relative select-none [--wails-draggable:drag]`}>
         {isWindows && (
           <button
@@ -453,6 +460,7 @@ export function App() {
                   runtimeReminders={runtime.reminders}
                   reminderDrafts={reminderDrafts}
                   notificationProductState={notificationProductState}
+                  onReminderNotificationWarningClick={showNotificationPrompt}
                   createPanelRequestId={createPanelRequestId}
                   createPanelAnchor={createPanelAnchor}
                   onReminderEnabledChange={(id, enabled) => {
