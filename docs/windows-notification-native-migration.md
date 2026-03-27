@@ -41,19 +41,29 @@
 
 ### 里程碑 1：去掉能力查询与打开设置中的 PowerShell
 
-状态：进行中
+状态：已完成
 
-计划：
+结果：
 
-- 新增 Windows 原生 URI 打开封装，替换 `OpenNotificationSettings()`
-- 新增 Windows 原生 WinRT 通知能力查询封装，替换 `queryWindowsToastSetting()`
-- 移除这两条链路中的 PowerShell 依赖
-- 通过 Windows 目标编译验证相关包可编译
+- 新增 `internal/platform/windows/winrt_native.go`
+- `GetNotificationCapability()` 已改为原生 WinRT 查询，不再通过 PowerShell 读取 `ToastNotifier.Setting`
+- `OpenNotificationSettings()` 已改为原生 `ShellExecuteW` 打开 `ms-settings:notifications`
+- adapter 层新增可注入入口，便于后续测试与替换
+- 原有 PowerShell toast 发送链路暂时保留到里程碑 2 再统一清理
 
 验收点：
 
 - Windows 主界面首次打开不再因为通知能力查询拉起终端窗口
 - `GetNotificationCapability()` 与 `OpenNotificationSettings()` 不再走 `powershell.exe`
+
+验证记录：
+
+- `GOOS=windows GOARCH=amd64 go test -c ./internal/platform/windows`
+- `GOCACHE=$(pwd)/.cache/go-build GOOS=windows GOARCH=amd64 go build ./...`
+
+备注：
+
+- 当前代码中仍保留 PowerShell 相关 helper，是为了支撑里程碑 2 之前的 toast 发送主链路；它们已经不再被通知能力查询和系统设置跳转调用。
 
 ### 里程碑 2：去掉发送通知中的 PowerShell
 

@@ -36,10 +36,13 @@ var (
 	procCreateWindowExW                         = user32DLL.NewProc("CreateWindowExW")
 	procDestroyWindow                           = user32DLL.NewProc("DestroyWindow")
 	procShellNotifyIconW                        = shell32DLL.NewProc("Shell_NotifyIconW")
+	procShellExecuteW                           = shell32DLL.NewProc("ShellExecuteW")
 	procSetCurrentProcessExplicitAppUserModelID = shell32DLL.NewProc("SetCurrentProcessExplicitAppUserModelID")
 	execCommand                                 = exec.Command
 	showToastReminder                           = showWinRTToastReminder
 	showBalloonNotification                     = showBalloonReminder
+	queryToastSetting                           = queryWindowsToastSettingNative
+	openNotificationSettings                    = openWindowsNotificationSettingsNative
 	balloonNotifyMu                             sync.Mutex
 	balloonActiveHWND                           uintptr
 )
@@ -158,7 +161,7 @@ func (n windowsNotifier) ShowReminder(title, body string) error {
 }
 
 func (n windowsNotifier) GetNotificationCapability() ports.NotificationCapability {
-	setting, err := queryWindowsToastSetting(toastAppID(n.appID))
+	setting, err := queryToastSetting(toastAppID(n.appID))
 	if err != nil {
 		return ports.NotificationCapability{
 			PermissionState: ports.NotificationPermissionUnknown,
@@ -217,11 +220,7 @@ func (n windowsNotifier) RequestNotificationPermission() (ports.NotificationCapa
 }
 
 func (n windowsNotifier) OpenNotificationSettings() error {
-	script := `
-$ErrorActionPreference = 'Stop';
-Start-Process 'ms-settings:notifications' | Out-Null;
-`
-	return runPowerShellSync(script)
+	return openNotificationSettings()
 }
 
 func showWinRTToastReminder(appID, title, body string) error {
