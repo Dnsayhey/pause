@@ -22,7 +22,7 @@
 - `GetNotificationCapability()`：改为原生 WinRT 查询
 - `ShowReminder()` 的 toast 主链路：改为原生 WinRT 发送
 - `OpenNotificationSettings()`：改为原生 `ShellExecuteW`
-- 安装器负责创建带 `AppUserModelID` 的开始菜单快捷方式
+- 安装器负责写入 `AppUserModelId` 元数据（`DisplayName/IconUri`）并创建普通快捷方式
 
 保留项：
 
@@ -129,7 +129,7 @@
 
 - 最终选择让 shortcut/AUMID 问题由安装器负责，而不是运行时动态补齐。
 - 运行时动态创建开始菜单快捷方式的尝试已放弃，不作为当前方案的一部分。
-- 当前安装器模板会在创建快捷方式时写入 `System.AppUserModel.ID=com.pause.app`，helper 失败时退回普通快捷方式，避免安装后没有入口。
+- 当前安装器模板不再调用 PowerShell helper 创建快捷方式，改为 NSIS 原生创建快捷方式并写入 `AppUserModelId` 元数据，避免安装阶段终端窗口闪烁。
 - 对 `ToastNotifier.Setting` 的 `0x80070490 (Element not found)` 已做平台兼容处理：按“可通知”处理，避免首次安装时能力查询误判导致前端硬拦截。
 
 ## 验证记录补充

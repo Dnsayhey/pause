@@ -34,6 +34,7 @@ Unicode true
 ####
 !include "wails_tools.nsh"
 !define APP_USER_MODEL_ID "com.pause.app"
+!define APP_USER_MODEL_REG_PATH "Software\Classes\AppUserModelId\${APP_USER_MODEL_ID}"
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -76,29 +77,8 @@ OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the inst
 InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
 ShowInstDetails show # This will always show the installation details.
 
-Var ShortcutPath
-Var ShortcutTarget
-
 Function .onInit
    !insertmacro wails.checkArchitecture
-FunctionEnd
-
-Function WriteShortcutWithAppUserModelID
-    InitPluginsDir
-    File "/oname=$PLUGINSDIR\set-shortcut-app-id.ps1" "set-shortcut-app-id.ps1"
-
-    ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\set-shortcut-app-id.ps1" -ShortcutPath "$ShortcutPath" -TargetPath "$ShortcutTarget" -AppUserModelID "${APP_USER_MODEL_ID}"' $0
-
-    StrCmp $0 0 shortcut_ok
-        DetailPrint "WARNING: failed to create shortcut with AppUserModelID (code=$0): $ShortcutPath"
-        CreateShortcut "$ShortcutPath" "$ShortcutTarget"
-        DetailPrint "created fallback shortcut without AppUserModelID: $ShortcutPath"
-        Goto shortcut_done
-
-    shortcut_ok:
-        DetailPrint "created shortcut with AppUserModelID: $ShortcutPath"
-
-    shortcut_done:
 FunctionEnd
 
 Section
@@ -111,13 +91,11 @@ Section
     !insertmacro wails.files
     File "/oname=icon.ico" "..\..\..\assets\branding\icon.ico"
 
-    StrCpy $ShortcutTarget "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    WriteRegStr SHCTX "${APP_USER_MODEL_REG_PATH}" "DisplayName" "${INFO_PRODUCTNAME}"
+    WriteRegStr SHCTX "${APP_USER_MODEL_REG_PATH}" "IconUri" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
-    StrCpy $ShortcutPath "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
-    Call WriteShortcutWithAppUserModelID
-
-    StrCpy $ShortcutPath "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
-    Call WriteShortcutWithAppUserModelID
+    CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
@@ -134,6 +112,7 @@ Section "uninstall"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
+    DeleteRegKey SHCTX "${APP_USER_MODEL_REG_PATH}"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
