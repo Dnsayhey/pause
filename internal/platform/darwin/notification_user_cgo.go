@@ -340,7 +340,6 @@ func showDarwinUserNotification(title, body string) error {
 }
 
 func darwinNotificationAuthorizationStatus() (int, error) {
-	logx.Infof("darwin.notification.status_request started")
 	var cErr *C.char
 	var status C.int
 	rc := C.pauseDarwinGetAuthorizationStatus(&status, &cErr)
@@ -357,12 +356,10 @@ func darwinNotificationAuthorizationStatus() (int, error) {
 		logx.Warnf("darwin.notification.status_request failed rc=%d err=%v", int(rc), err)
 		return 0, err
 	}
-	logx.Infof("darwin.notification.status_request completed status=%d", int(status))
 	return int(status), nil
 }
 
 func darwinRequestNotificationAuthorization() (bool, error) {
-	logx.Infof("darwin.notification.authorization_request started")
 	requestID, resultCh := registerDarwinNotificationAuthorizationWaiter()
 	var cErr *C.char
 	rc := C.pauseDarwinRequestAuthorizationAsync(C.int(requestID), &cErr)
@@ -386,7 +383,6 @@ func darwinRequestNotificationAuthorization() (bool, error) {
 			logx.Warnf("darwin.notification.authorization_request failed err=%v", result.err)
 			return false, result.err
 		}
-		logx.Infof("darwin.notification.authorization_request completed granted=%t", result.granted)
 		return result.granted, nil
 	case <-time.After(180 * time.Second):
 		cleanupDarwinNotificationAuthorizationWaiter(requestID)
@@ -397,7 +393,6 @@ func darwinRequestNotificationAuthorization() (bool, error) {
 }
 
 func darwinOpenNotificationSettings(appID string) error {
-	logx.Infof("darwin.notification.settings_open started app_id=%s", appID)
 	cAppID := C.CString(appID)
 	defer C.free(unsafe.Pointer(cAppID))
 	var cErr *C.char
@@ -415,12 +410,10 @@ func darwinOpenNotificationSettings(appID string) error {
 		logx.Warnf("darwin.notification.settings_open failed rc=%d err=%v", int(rc), err)
 		return err
 	}
-	logx.Infof("darwin.notification.settings_open completed app_id=%s", appID)
 	return nil
 }
 
 func installDarwinNotificationClickDelegate() error {
-	logx.Infof("darwin.notification.delegate_install started")
 	var cErr *C.char
 	rc := C.pauseDarwinInstallNotificationDelegate(&cErr)
 	if cErr != nil {
@@ -436,7 +429,6 @@ func installDarwinNotificationClickDelegate() error {
 		logx.Warnf("darwin.notification.delegate_install failed rc=%d err=%v", int(rc), err)
 		return err
 	}
-	logx.Infof("darwin.notification.delegate_install completed")
 	return nil
 }
 

@@ -14,36 +14,18 @@ func (a *App) GetNotificationCapability() NotificationCapability {
 }
 
 func (a *App) RequestNotificationPermission() (NotificationCapability, error) {
-	logx.Infof("notification.permission_request started")
 	if a == nil || a.notificationCapability == nil {
-		capability := notificationCapabilityFromPorts(defaultNotificationCapability())
-		logx.Infof(
-			"notification.permission_request completed permission_state=%s can_request=%t can_open_settings=%t reason=%q provider=default",
-			capability.PermissionState,
-			capability.CanRequest,
-			capability.CanOpenSettings,
-			capability.Reason,
-		)
-		return capability, nil
+		return notificationCapabilityFromPorts(defaultNotificationCapability()), nil
 	}
 	capability, err := a.notificationCapability.RequestNotificationPermission()
 	if err != nil {
 		logx.Warnf("notification.permission_request failed err=%v", err)
 		return NotificationCapability{}, err
 	}
-	result := notificationCapabilityFromPorts(normalizeNotificationCapability(capability))
-	logx.Infof(
-		"notification.permission_request completed permission_state=%s can_request=%t can_open_settings=%t reason=%q",
-		result.PermissionState,
-		result.CanRequest,
-		result.CanOpenSettings,
-		result.Reason,
-	)
-	return result, nil
+	return notificationCapabilityFromPorts(normalizeNotificationCapability(capability)), nil
 }
 
 func (a *App) OpenNotificationSettings() error {
-	logx.Infof("notification.settings_open started")
 	if a == nil || a.notificationCapability == nil {
 		err := errors.New("notification settings are unavailable on this platform")
 		logx.Warnf("notification.settings_open failed err=%v", err)
@@ -54,7 +36,6 @@ func (a *App) OpenNotificationSettings() error {
 		logx.Warnf("notification.settings_open failed err=%v", err)
 		return err
 	}
-	logx.Infof("notification.settings_open completed")
 	return nil
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createReminder as createReminderAPI,
   deleteReminder as deleteReminderAPI,
@@ -170,11 +170,6 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
   const [notificationPromptCode, setNotificationPromptCode] = useState('');
   const [notificationPromptVersion, setNotificationPromptVersion] = useState(0);
   const [showNotificationSettingsAction, setShowNotificationSettingsAction] = useState(false);
-  const notificationPromptCodeRef = useRef(notificationPromptCode);
-
-  useEffect(() => {
-    notificationPromptCodeRef.current = notificationPromptCode;
-  }, [notificationPromptCode]);
 
   const clearNotificationPrompt = useCallback(() => {
     setNotificationPromptCode('');
@@ -197,13 +192,10 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
   );
 
   const refreshNotificationCapability = useCallback(
-    async (silent = false, syncPrompt = false): Promise<NotificationCapability | null> => {
+    async (silent = false): Promise<NotificationCapability | null> => {
       try {
         const capability = await getNotificationCapability();
         setNotificationCapability(capability);
-        if (syncPrompt && notificationPromptCodeRef.current !== '') {
-          applyNotificationPrompt(capability);
-        }
         return capability;
       } catch (err) {
         if (!silent) {
@@ -212,7 +204,7 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
         return null;
       }
     },
-    [applyNotificationPrompt, setError]
+    [setError]
   );
 
   const loadSettingsData = useCallback(async (): Promise<void> => {
@@ -271,17 +263,15 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
 
       if (productState === 'pending') {
         applyNotificationPrompt(capability);
-        try {
-          const requested = await requestNotificationPermissionAPI();
-          setNotificationCapability(requested);
-          if (notificationProductStateFromCapability(requested) === 'available') {
-            clearNotificationPrompt();
-            return true;
-          }
-          applyNotificationPrompt(requested);
-        } catch (err) {
-          setError(String(err));
-        }
+        // Intentionally don't await authorization result:
+        // this action should always be blocked unless already authorized.
+        void requestNotificationPermissionAPI()
+          .then((requested) => {
+            setNotificationCapability(requested);
+          })
+          .catch((err) => {
+            setError(String(err));
+          });
         return false;
       }
 
@@ -295,7 +285,7 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     const refreshWhenVisible = () => {
       if (document.visibilityState !== 'visible') return;
       void refreshLaunchAtLoginState(true);
-      void refreshNotificationCapability(true, true);
+      void refreshNotificationCapability(true);
     };
 
     window.addEventListener('focus', refreshWhenVisible);

@@ -14,7 +14,6 @@ import (
 
 	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
-	"pause/internal/logx"
 	"pause/internal/meta"
 	"pause/internal/platform/api"
 )
@@ -134,13 +133,6 @@ func (p darwinNotificationCapabilityProvider) GetNotificationCapability() ports.
 
 func (p darwinNotificationCapabilityProvider) RequestNotificationPermission() (ports.NotificationCapability, error) {
 	current := p.GetNotificationCapability()
-	logx.Infof(
-		"darwin.notification.permission_request current_state=%s can_request=%t can_open_settings=%t reason=%q",
-		current.PermissionState,
-		current.CanRequest,
-		current.CanOpenSettings,
-		current.Reason,
-	)
 	if current.PermissionState != ports.NotificationPermissionNotDetermined || !current.CanRequest {
 		return current, nil
 	}
@@ -153,14 +145,6 @@ func (p darwinNotificationCapabilityProvider) RequestNotificationPermission() (p
 		next.PermissionState = ports.NotificationPermissionAuthorized
 		next.CanRequest = false
 	}
-	logx.Infof(
-		"darwin.notification.permission_request completed granted=%t next_state=%s can_request=%t can_open_settings=%t reason=%q",
-		granted,
-		next.PermissionState,
-		next.CanRequest,
-		next.CanOpenSettings,
-		next.Reason,
-	)
 	return next, nil
 }
 

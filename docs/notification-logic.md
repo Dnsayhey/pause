@@ -23,7 +23,7 @@
 - 前端把不同平台的底层状态收敛成三态：`待授权 / 可以通知 / 无法通知`。
 - 不在 reminder 的保存接口里做通知能力校验，只在“让 notify reminder 生效”的动作上做前端预检。
 - macOS 首次授权在用户点击“拒绝”或进入系统通知设置后，不会再导致 Pause 退出。
-- 当前仍保留了一组通知诊断日志，用于继续观察；确认稳定后可以删除。
+- 为排查首次授权异常退出而临时加入的诊断日志已移除，当前只保留必要的失败日志。
 
 ## 1. 提醒通知发送链路
 
@@ -134,8 +134,9 @@
 - 若状态为“待授权”
   - 先提示“请先授予通知权限”。
   - 然后调用 `RequestNotificationPermission()`。
-  - 若返回后状态变成“可以通知”，继续当前动作。
-  - 若返回后仍然不是“可以通知”，不继续当前动作。
+  - 不等待授权结果。
+  - 当前动作直接停止，不继续提交。
+  - 用户完成授权后，等待状态刷新，再重新执行新建或启用动作。
 
 - 若状态为“无法通知”
   - 提示“通知权限被关闭”。
@@ -248,22 +249,13 @@ macOS 当前基于 `UNUserNotificationCenter`。
 - 这不应再被当作“异常崩溃信号”。
 - 当前实现已经把 deny 场景下的这类返回正规化为 `denied` 状态处理。
 
-### 5.3 当前保留的诊断日志
+### 5.3 当前日志策略
 
-为继续观察 macOS 通知链路，当前仍保留以下日志：
-- `notification.permission_request started/completed/failed`
-- `notification.settings_open started/completed/failed`
-- `darwin.notification.status_request started/completed/failed`
-- `darwin.notification.permission_request current_state=...`
-- `darwin.notification.authorization_request started/completed/failed`
-- `darwin.notification.authorization_request callback ...`
-- `darwin.notification.delegate_install started/completed/failed`
+此前为排查 macOS 首次授权异常退出，曾临时保留一批通知诊断日志。
 
-保留原因：
-- 这一轮修复刚完成，还需要继续确认“首次授权 / 拒绝 / 打开系统设置 / 重新允许 / 切回应用”这几条路径都稳定。
-
-后续计划：
-- 若后续若干轮实机验证均稳定，可删掉这批诊断日志，只保留必要的错误日志。
+当前状态：
+- 这批 `started/completed/callback` 级别的诊断日志已经移除。
+- 当前只保留必要的失败日志，便于在真正出错时定位问题。
 
 ## 6. 当前 Windows 实现
 
