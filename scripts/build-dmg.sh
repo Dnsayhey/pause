@@ -27,6 +27,7 @@ OUTPUT_DIR_ARG=""
 
 APP_BUNDLE=""
 APP_INFO_PLIST=""
+DMG_LAYOUT_DS_STORE_TEMPLATE="${DMG_LAYOUT_DS_STORE_TEMPLATE:-${ROOT_DIR}/assets/dmg/dmg-layout.dsstore}"
 
 refresh_paths() {
   APP_BUNDLE="${ROOT_DIR}/build/bin/${APP_NAME}.app"
@@ -55,7 +56,7 @@ Options:
 Environment variables:
   APP_NAME, APP_ICON_SOURCE, APP_BUNDLE_ID, PAUSE_CODESIGN_IDENTITY,
   APP_VERSION_OVERRIDE, USE_CLEAN, MACOS_PLATFORM, MACOS_ARCH_LABEL,
-  MACOS_OUTPUT_BASE_DIR, MACOS_OUTPUT_DIR
+  MACOS_OUTPUT_BASE_DIR, MACOS_OUTPUT_DIR, DMG_LAYOUT_DS_STORE_TEMPLATE
 USAGE
 }
 
@@ -281,6 +282,7 @@ build_one_target() {
   echo "  macos_arch_label=${arch_label}"
   echo "  macos_output_dir=${output_dir}"
   echo "  dmg_output=${dmg_output}"
+  echo "  dmg_layout_template=${DMG_LAYOUT_DS_STORE_TEMPLATE}"
   echo "  use_clean=${use_clean_target}"
 
   "${WAILS_CMD[@]}" "${wails_args[@]}"
@@ -420,6 +422,11 @@ PLIST
   mkdir -p "${STAGING_DIR}"
   cp -R "${APP_BUNDLE}" "${STAGING_DIR}/"
   ln -s /Applications "${STAGING_DIR}/Applications"
+  if [[ -f "${DMG_LAYOUT_DS_STORE_TEMPLATE}" ]]; then
+    cp "${DMG_LAYOUT_DS_STORE_TEMPLATE}" "${STAGING_DIR}/.DS_Store"
+  else
+    echo "WARN: DMG layout template not found, Finder will use default layout: ${DMG_LAYOUT_DS_STORE_TEMPLATE}"
+  fi
 
   echo "[4/4] Creating DMG"
   mkdir -p "$(dirname "${dmg_output}")"

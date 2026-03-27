@@ -65,6 +65,7 @@
   - `build/bin/macos-arm64/Pause-v<version>-macos-arm64.dmg`
   - `build/bin/macos-x64/Pause-v<version>-macos-x64.dmg`
 - 图标来源：`assets/branding/app-icon-1024.png`
+- DMG Finder 布局模板：`assets/dmg/dmg-layout.dsstore`（默认把 `Pause.app` 与 `Applications` 固定为左右布局）
 - 会自动将登录项 helper 嵌入到 `.app` 并签名。
 - 优先使用本机 `wails`，缺失时回退到 `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`。
 
