@@ -90,18 +90,31 @@
 
 ### 里程碑 3：回归验证与文档收口
 
-状态：进行中
+状态：已完成
 
-计划：
+结果：
 
-- 整理最终实现结构
-- 更新 `docs/notification-logic.md` 中 Windows 部分
-- 做编译验证与必要测试
+- 已更新 `docs/notification-logic.md` 中的 Windows 实现描述
+- 已补充 Windows adapter 测试，覆盖能力映射、系统设置跳转委托、toast XML 转义
+- 已完成最后一轮 Windows 目标编译验证
 
 验收点：
 
 - Windows 通知相关 PowerShell 依赖清理完成
 - 文档与实现一致
+
+验证记录：
+
+- `GOCACHE=$(pwd)/.cache/go-build GOOS=windows GOARCH=amd64 go test -c ./internal/platform/windows`
+- `GOCACHE=$(pwd)/.cache/go-build GOOS=windows GOARCH=amd64 go build ./...`
+
+最终结论：
+
+- Windows 通知相关三条链路已经全部脱离 PowerShell：
+  - 通知能力查询
+  - toast 发送
+  - 系统通知设置跳转
+- 当前仍保留的降级路径只有 balloon notification fallback，这属于产品保底方案，不再属于脚本桥接。
 
 ## 当前实现边界
 

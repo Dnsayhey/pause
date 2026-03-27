@@ -263,18 +263,25 @@ macOS 当前基于 `UNUserNotificationCenter`。
 
 ## 6. 当前 Windows 实现
 
-Windows 当前基于 `ToastNotifier.Setting` 获取通知能力，并保留原有 toast 发送路径。
+Windows 当前已经改为原生实现：
+- 基于 WinRT `ToastNotifier.Setting` 获取通知能力
+- 基于 WinRT activation factory 发送 toast
+- 基于 `ShellExecuteW` 打开系统通知设置
 
 已实现能力：
 - 查询通知能力
+- 发送 toast 通知
+- toast 失败时 fallback 到 balloon notification
 - 打开系统通知设置 `ms-settings:notifications`
 - `RequestNotificationPermission()` 返回当前能力，不触发类似 macOS 的首次授权弹窗
 
 说明：
 - Windows 仍然更接近“当前可通知能力查询”，而不是 macOS 风格的 per-app 首次授权状态机。
+- Windows 当前不再依赖 PowerShell 作为通知能力查询、toast 发送或系统设置跳转桥接。
 
 相关代码：
 - `internal/platform/windows/adapters.go`
+- `internal/platform/windows/winrt_native.go`
 
 ## 7. 当前构建层处理
 
