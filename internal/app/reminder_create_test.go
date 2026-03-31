@@ -25,7 +25,7 @@ func newTestApp(t *testing.T) *App {
 	}
 	t.Cleanup(func() { _ = historyStore.Close() })
 
-	container, err := bootstrap.NewContainer(historyStore)
+	container, err := bootstrap.NewContainer(historyStore, nil)
 	if err != nil {
 		t.Fatalf("NewContainer() err=%v", err)
 	}

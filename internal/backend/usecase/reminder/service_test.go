@@ -49,7 +49,7 @@ func TestReminderService_EnsureDefaultsIgnoresAlreadyExists(t *testing.T) {
 	rest := "rest"
 	notify := "notify"
 	repo := &reminderRepoStub{createErrBy: map[string]error{"Eye": reminderdomain.ErrAlreadyExists}}
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, nil)
 	if err != nil {
 		t.Fatalf("NewService() err=%v", err)
 	}
@@ -70,11 +70,10 @@ func TestReminderService_CreateSetsEnabledTrueAndSyncs(t *testing.T) {
 	rest := "rest"
 	repo := &reminderRepoStub{listItems: []reminderdomain.Reminder{{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 1200, BreakSec: 20, ReminderType: "rest"}}}
 	sink := &runtimeSinkStub{}
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, sink)
 	if err != nil {
 		t.Fatalf("NewService() err=%v", err)
 	}
-	svc.SetRuntimeSink(sink)
 
 	_, err = svc.Create(context.Background(), reminderdomain.CreateInput{Name: "Eye", IntervalSec: 1200, BreakSec: 20, ReminderType: &rest})
 	if err != nil {
@@ -95,7 +94,7 @@ func TestReminderService_EnsureDefaultsUnexpectedError(t *testing.T) {
 	rest := "rest"
 	wantErr := errors.New("db down")
 	repo := &reminderRepoStub{createErrBy: map[string]error{"Eye": wantErr}}
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, nil)
 	if err != nil {
 		t.Fatalf("NewService() err=%v", err)
 	}

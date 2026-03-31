@@ -46,12 +46,6 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	container, err := NewContainer(historyStore)
-	if err != nil {
-		closeHistoryStoreOnInitError(historyStore, "new_container")
-		return nil, err
-	}
-
 	adapters := platform.NewAdapters(bundleID)
 	breakRecorder := historyadapter.NewBreakRecorder(historyStore)
 	engine := service.NewEngine(
@@ -62,7 +56,11 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		adapters.Notifier,
 		breakRecorder,
 	)
-	container.ReminderService.SetRuntimeSink(engine)
+	container, err := NewContainer(historyStore, engine)
+	if err != nil {
+		closeHistoryStoreOnInitError(historyStore, "new_container")
+		return nil, err
+	}
 	if err := container.ReminderService.Sync(context.Background()); err != nil {
 		closeHistoryStoreOnInitError(historyStore, "reminder_sync")
 		return nil, err

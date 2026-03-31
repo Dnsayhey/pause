@@ -14,18 +14,11 @@ type Service struct {
 	sink ports.ReminderRuntimeSink
 }
 
-func NewService(repo ports.ReminderRepository) (*Service, error) {
+func NewService(repo ports.ReminderRepository, sink ports.ReminderRuntimeSink) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("reminder repository is required")
 	}
-	return &Service{repo: repo}, nil
-}
-
-func (s *Service) SetRuntimeSink(sink ports.ReminderRuntimeSink) {
-	if s == nil {
-		return
-	}
-	s.sink = sink
+	return &Service{repo: repo, sink: sink}, nil
 }
 
 func (s *Service) Sync(ctx context.Context) error {

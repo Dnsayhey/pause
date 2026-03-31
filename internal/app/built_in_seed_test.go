@@ -22,7 +22,7 @@ func openSeedStore(t *testing.T) *historydb.Store {
 
 func openSeedReminderService(t *testing.T, store *historydb.Store) reminderService {
 	t.Helper()
-	container, err := bootstrap.NewContainer(store)
+	container, err := bootstrap.NewContainer(store, nil)
 	if err != nil {
 		t.Fatalf("NewContainer() err=%v", err)
 	}

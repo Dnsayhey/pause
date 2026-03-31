@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	historyadapter "pause/internal/backend/adapters/history"
+	"pause/internal/backend/ports"
 	historydb "pause/internal/backend/storage/historydb"
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
@@ -14,12 +15,12 @@ type Container struct {
 	AnalyticsService *analyticsusecase.Service
 }
 
-func NewContainer(historyStore *historydb.Store) (*Container, error) {
+func NewContainer(historyStore *historydb.Store, reminderSink ports.ReminderRuntimeSink) (*Container, error) {
 	if historyStore == nil {
 		return nil, errors.New("history store unavailable")
 	}
 	reminderRepo := historyadapter.NewReminderRepository(historyStore)
-	reminderService, err := reminderusecase.NewService(reminderRepo)
+	reminderService, err := reminderusecase.NewService(reminderRepo, reminderSink)
 	if err != nil {
 		return nil, err
 	}
