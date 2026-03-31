@@ -3,12 +3,15 @@
 package main
 
 import (
+	"os"
+
 	entry "pause/internal/entry/desktop"
 	"pause/internal/logx"
 )
 
 func main() {
 	if err := entry.RunHeadless(""); err != nil {
-		logx.Fatalf("failed to init app: %v", err)
+		logx.Errorf("failed to init app: %v", err)
+		os.Exit(1)
 	}
 }

@@ -33,7 +33,7 @@ func testEngine(t *testing.T) *Engine {
 	if err != nil {
 		t.Fatalf("OpenStore() err=%v", err)
 	}
-	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, &historyRecorderStub{})
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, nil, &historyRecorderStub{})
 	eng.SetReminderConfigs([]reminder.Reminder{
 		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 2, BreakSec: 20, ReminderType: "rest"},
 		{ID: 2, Name: "Stand", Enabled: true, IntervalSec: 3600, BreakSec: 300, ReminderType: "rest"},

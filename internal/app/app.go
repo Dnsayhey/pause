@@ -25,7 +25,9 @@ func NewApp(configPath string) (*App, error) {
 	if runtime.Settings.WasCreated() {
 		language := resolveEffectiveLanguage(runtime.Settings.Get().UI.Language)
 		if err := ensureBuiltInRemindersForFirstInstall(context.Background(), runtime.ReminderService, language); err != nil {
-			_ = runtime.Close()
+			if closeErr := runtime.Close(); closeErr != nil {
+				logx.Warnf("app.init cleanup_close_err stage=seed_builtin_reminders err=%v", closeErr)
+			}
 			return nil, err
 		}
 	}

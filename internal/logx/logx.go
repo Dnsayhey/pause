@@ -45,11 +45,6 @@ func Infof(format string, args ...any)  { logf(LevelInfo, format, args...) }
 func Warnf(format string, args ...any)  { logf(LevelWarn, format, args...) }
 func Errorf(format string, args ...any) { logf(LevelError, format, args...) }
 
-func Fatalf(format string, args ...any) {
-	logf(LevelError, format, args...)
-	os.Exit(1)
-}
-
 func SetSink(sink Sink) {
 	l := get()
 	l.mu.Lock()

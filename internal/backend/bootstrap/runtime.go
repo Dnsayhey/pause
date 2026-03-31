@@ -15,6 +15,7 @@ import (
 	analyticsusecase "pause/internal/backend/usecase/analytics"
 	reminderusecase "pause/internal/backend/usecase/reminder"
 	settingsusecase "pause/internal/backend/usecase/settings"
+	"pause/internal/logx"
 	"pause/internal/platform"
 )
 
@@ -47,7 +48,7 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 	}
 	container, err := NewContainer(historyStore)
 	if err != nil {
-		_ = historyStore.Close()
+		closeHistoryStoreOnInitError(historyStore, "new_container")
 		return nil, err
 	}
 
@@ -58,19 +59,19 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		adapters.IdleProvider,
 		adapters.LockStateProvider,
 		adapters.SoundPlayer,
+		adapters.Notifier,
 		breakRecorder,
 	)
-	engine.SetNotifier(adapters.Notifier)
 	container.ReminderService.SetRuntimeSink(engine)
 	if err := container.ReminderService.Sync(context.Background()); err != nil {
-		_ = historyStore.Close()
+		closeHistoryStoreOnInitError(historyStore, "reminder_sync")
 		return nil, err
 	}
 
 	settingsRepo := settingsadapter.NewSettingsRepository(store, adapters.StartupManager)
 	settingsService, err := settingsusecase.NewService(settingsRepo)
 	if err != nil {
-		_ = historyStore.Close()
+		closeHistoryStoreOnInitError(historyStore, "settings_service")
 		return nil, err
 	}
 
@@ -96,4 +97,13 @@ func (r *Runtime) Close() error {
 
 func defaultHistoryPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "history.db")
+}
+
+func closeHistoryStoreOnInitError(historyStore *historydb.Store, stage string) {
+	if historyStore == nil {
+		return
+	}
+	if err := historyStore.Close(); err != nil {
+		logx.Warnf("runtime.init cleanup_close_err stage=%s err=%v", stage, err)
+	}
 }

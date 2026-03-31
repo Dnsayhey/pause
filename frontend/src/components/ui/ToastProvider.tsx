@@ -1,38 +1,12 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
   type PropsWithChildren
 } from 'react';
-
-type ToastTone = 'error' | 'info';
-
-type ToastInput = {
-  key?: string;
-  message: string;
-  tone?: ToastTone;
-  actionLabel?: string;
-  onAction?: () => void;
-  onDismiss?: () => void;
-  durationMs?: number | null;
-};
-
-type ToastRecord = ToastInput & {
-  id: string;
-  tone: ToastTone;
-  durationMs: number | null;
-};
-
-type ToastContextValue = {
-  pushToast: (input: ToastInput) => string;
-  dismissToast: (target: string) => void;
-};
-
-const ToastContext = createContext<ToastContextValue | null>(null);
+import { ToastContext, type ToastContextValue, type ToastInput, type ToastRecord } from './toastContext';
 
 let toastCounter = 0;
 
@@ -101,11 +75,12 @@ export function ToastProvider({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
+    const timers = timersRef.current;
     return () => {
-      for (const timer of timersRef.current.values()) {
+      for (const timer of timers.values()) {
         window.clearTimeout(timer);
       }
-      timersRef.current.clear();
+      timers.clear();
     };
   }, []);
 
@@ -177,12 +152,4 @@ export function ToastProvider({ children }: PropsWithChildren) {
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToast(): ToastContextValue {
-  const value = useContext(ToastContext);
-  if (!value) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return value;
 }

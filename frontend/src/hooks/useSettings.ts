@@ -1,35 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  createReminder as createReminderAPI,
-  deleteReminder as deleteReminderAPI,
-  getNotificationCapability,
-  getLaunchAtLogin,
-  getReminders,
-  getSettings,
-  openNotificationSettings as openNotificationSettingsAPI,
-  requestNotificationPermission as requestNotificationPermissionAPI,
-  setLaunchAtLogin,
-  updateReminder,
-  updateSettings
-} from '../api';
-import {
-  isReminderValueValid,
-  reminderFieldSpecByID,
-} from '../reminderFields';
-import type {
-  NotificationCapability,
-  NotificationProductState,
-  ReminderConfig,
-  ReminderPatch,
-  Settings,
-  SettingsPatch
-} from '../types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getLaunchAtLogin, getNotificationCapability, getReminders, getSettings, setLaunchAtLogin, updateSettings } from '../api';
+import type { ReminderConfig, Settings, SettingsPatch } from '../types';
+import { useNotificationState } from './useNotificationState';
+import { useReminderManager } from './useReminderManager';
+import { nearestOptionValue } from './settings/helpers';
 
 const IDLE_THRESHOLD_OPTIONS = [60, 300, 600, 1800, 3600, 7200] as const;
 const SOUND_VOLUME_OPTIONS = [20, 40, 60, 80, 100] as const;
-const NOTIFICATION_ERROR_PERMISSION_DENIED = 'ERR_NOTIFICATION_PERMISSION_DENIED';
-const NOTIFICATION_ERROR_PERMISSION_REQUIRED = 'ERR_NOTIFICATION_PERMISSION_REQUIRED';
-const NOTIFICATION_ERROR_UNAVAILABLE = 'ERR_NOTIFICATION_UNAVAILABLE';
 
 type UseSettingsOptions = {
   setError: (message: string) => void;
@@ -37,176 +14,41 @@ type UseSettingsOptions = {
   refreshRuntime: () => Promise<unknown>;
 };
 
-type ReminderDraft = {
-  interval: string;
-  break: string;
-};
-
-function digitsOnly(text: string): string {
-  return text.replace(/\D+/g, '');
-}
-
-function parseInteger(text: string): number | null {
-  const trimmed = text.trim();
-  if (trimmed === '') return null;
-  if (!/^[0-9]+$/.test(trimmed)) return null;
-  const value = Number(trimmed);
-  if (!Number.isSafeInteger(value)) return null;
-  return value;
-}
-
-function deriveUnitBounds(min: number, max: number | undefined, baseUnitSec: number, activeUnitSec: number) {
-  const minSec = min * baseUnitSec;
-  const maxSec = max === undefined ? undefined : max * baseUnitSec;
-  const unitMin = Math.max(1, Math.ceil(minSec / activeUnitSec));
-  const unitMax =
-    maxSec === undefined ? undefined : Math.max(unitMin, Math.floor(maxSec / activeUnitSec));
-  return { unitMin, unitMax, minSec };
-}
-
-function deriveCustomDraftUnitSec(totalSec: number, primaryUnitSec: number, secondaryUnitSec: number): number {
-  if (totalSec >= primaryUnitSec && totalSec % primaryUnitSec === 0) {
-    return primaryUnitSec;
-  }
-  return secondaryUnitSec;
-}
-
-function clampReminderDraftValue(value: number, min: number, max?: number): number {
-  if (value < min) return min;
-  if (max !== undefined && value > max) return max;
-  return value;
-}
-
-function nearestOptionValue(value: number, options: readonly number[]): number {
-  let nearest = options[0];
-  let minDiff = Math.abs(value - nearest);
-  for (let i = 1; i < options.length; i += 1) {
-    const candidate = options[i];
-    const diff = Math.abs(value - candidate);
-    if (diff < minDiff) {
-      minDiff = diff;
-      nearest = candidate;
-    }
-  }
-  return nearest;
-}
-
-function reminderByID(reminders: ReminderConfig[], id: number) {
-  return reminders.find((reminder) => reminder.id === id);
-}
-
-function normalizeReminderName(name: string): string {
-  return name.trim();
-}
-
-function isValidReminderType(value: unknown): value is 'rest' | 'notify' {
-  return value === 'rest' || value === 'notify';
-}
-
-function isPositiveInt(value: unknown): value is number {
-  return Number.isInteger(value) && Number(value) > 0;
-}
-
-function hasNameConflict(reminders: ReminderConfig[], name: string, excludeID?: number): boolean {
-  const expected = normalizeReminderName(name).toLowerCase();
-  if (expected === '') {
-    return false;
-  }
-  return reminders.some((reminder) => {
-    if (excludeID !== undefined && reminder.id === excludeID) {
-      return false;
-    }
-    return normalizeReminderName(reminder.name).toLowerCase() === expected;
-  });
-}
-
-function notificationProductStateFromCapability(
-  capability: NotificationCapability | null
-): NotificationProductState | null {
-  if (!capability) {
-    return null;
-  }
-  if (capability.permissionState === 'authorized') {
-    return 'available';
-  }
-  if (capability.permissionState === 'not_determined') {
-    return 'pending';
-  }
-  return 'unavailable';
-}
-
-function notificationErrorCodeFromCapability(capability: NotificationCapability | null): string {
-  const productState = notificationProductStateFromCapability(capability);
-  if (productState === 'pending') {
-    return NOTIFICATION_ERROR_PERMISSION_REQUIRED;
-  }
-  if (productState !== 'unavailable') {
-    return '';
-  }
-  if (capability?.permissionState === 'denied') {
-    return NOTIFICATION_ERROR_PERMISSION_DENIED;
-  }
-  return NOTIFICATION_ERROR_UNAVAILABLE;
-}
-
-function shouldCheckNotificationCapabilityForPatch(
-  current: ReminderConfig,
-  patch: Omit<ReminderPatch, 'id'>
-): boolean {
-  const nextEnabled = patch.enabled ?? current.enabled;
-  const nextReminderType = patch.reminderType ?? current.reminderType;
-  if (!nextEnabled || nextReminderType !== 'notify') {
-    return false;
-  }
-  return current.reminderType !== 'notify' || !current.enabled;
-}
-
 export function useSettings({ setError, setBootstrapError, refreshRuntime }: UseSettingsOptions) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [reminders, setReminders] = useState<ReminderConfig[]>([]);
-  const [reminderDrafts, setReminderDrafts] = useState<Record<number, ReminderDraft>>({});
   const [launchAtLogin, setLaunchAtLoginState] = useState(false);
-  const [notificationCapability, setNotificationCapability] = useState<NotificationCapability | null>(null);
-  const [notificationPromptCode, setNotificationPromptCode] = useState('');
-  const [notificationPromptVersion, setNotificationPromptVersion] = useState(0);
-  const [showNotificationSettingsAction, setShowNotificationSettingsAction] = useState(false);
-  const notificationCapabilityInteractionRefreshInFlightRef = useRef(false);
 
-  const clearNotificationPrompt = useCallback(() => {
-    setNotificationPromptCode('');
-    setShowNotificationSettingsAction(false);
-  }, []);
+  const {
+    setNotificationCapability,
+    ensureNotificationReadyForNotifyReminder,
+    notificationProductState,
+    notificationPromptCode,
+    notificationPromptVersion,
+    showNotificationSettingsAction,
+    showNotificationPrompt,
+    refreshNotificationCapabilityFromInteraction,
+    openSystemNotificationSettings
+  } = useNotificationState({ setError });
 
-  const applyNotificationPrompt = useCallback(
-    (capability: NotificationCapability | null) => {
-      const code = notificationErrorCodeFromCapability(capability);
-      if (code === '') {
-        clearNotificationPrompt();
-        return;
-      }
-      setNotificationPromptCode(code);
-      setNotificationPromptVersion((prev) => prev + 1);
-      const productState = notificationProductStateFromCapability(capability);
-      setShowNotificationSettingsAction(productState === 'unavailable' && Boolean(capability?.canOpenSettings));
-    },
-    [clearNotificationPrompt]
-  );
-
-  const refreshNotificationCapability = useCallback(
-    async (silent = false): Promise<NotificationCapability | null> => {
-      try {
-        const capability = await getNotificationCapability();
-        setNotificationCapability(capability);
-        return capability;
-      } catch (err) {
-        if (!silent) {
-          setError(String(err));
-        }
-        return null;
-      }
-    },
-    [setError]
-  );
+  const {
+    reminderDrafts,
+    applyReminderPatch,
+    createReminder,
+    deleteReminder,
+    setReminderIntervalDraft,
+    setReminderBreakDraft,
+    normalizeReminderIntervalDraft,
+    normalizeReminderBreakDraft,
+    commitReminderDrafts,
+    resetReminderDraftToStored
+  } = useReminderManager({
+    reminders,
+    setReminders,
+    setError,
+    refreshRuntime,
+    ensureNotificationReadyForNotifyReminder
+  });
 
   const loadSettingsData = useCallback(async (): Promise<void> => {
     try {
@@ -229,7 +71,7 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     } catch (err) {
       setBootstrapError(String(err));
     }
-  }, [setBootstrapError, setError]);
+  }, [setBootstrapError, setError, setNotificationCapability]);
 
   useEffect(() => {
     void loadSettingsData();
@@ -249,47 +91,10 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     [setError]
   );
 
-  const ensureNotificationReadyForNotifyReminder = useCallback(
-    async (): Promise<boolean> => {
-      const capability = await refreshNotificationCapability(false);
-      if (!capability) {
-        return false;
-      }
-
-      const productState = notificationProductStateFromCapability(capability);
-      if (productState === 'available') {
-        clearNotificationPrompt();
-        return true;
-      }
-
-      if (productState === 'pending') {
-        applyNotificationPrompt(capability);
-        // Intentionally don't await authorization result:
-        // this action should always be blocked unless already authorized.
-        void requestNotificationPermissionAPI()
-          .then((requested) => {
-            if (notificationProductStateFromCapability(requested) === 'available') {
-              setNotificationCapability(requested);
-              clearNotificationPrompt();
-            }
-          })
-          .catch((err) => {
-            setError(String(err));
-          });
-        return false;
-      }
-
-      applyNotificationPrompt(capability);
-      return false;
-    },
-    [applyNotificationPrompt, clearNotificationPrompt, refreshNotificationCapability, setError]
-  );
-
   useEffect(() => {
     const refreshWhenVisible = () => {
       if (document.visibilityState !== 'visible') return;
       void refreshLaunchAtLoginState(true);
-      void refreshNotificationCapability(true);
     };
 
     window.addEventListener('focus', refreshWhenVisible);
@@ -299,20 +104,7 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
       window.removeEventListener('focus', refreshWhenVisible);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [refreshLaunchAtLoginState, refreshNotificationCapability]);
-
-  useEffect(() => {
-    const nextDrafts: Record<number, ReminderDraft> = {};
-    for (const reminder of reminders) {
-      const intervalUnitSec = deriveCustomDraftUnitSec(reminder.intervalSec, 3600, 60);
-      const breakUnitSec = deriveCustomDraftUnitSec(reminder.breakSec, 60, 1);
-      nextDrafts[reminder.id] = {
-        interval: String(Math.max(1, Math.round(reminder.intervalSec / intervalUnitSec))),
-        break: String(Math.max(1, Math.round(reminder.breakSec / breakUnitSec)))
-      };
-    }
-    setReminderDrafts(nextDrafts);
-  }, [reminders]);
+  }, [refreshLaunchAtLoginState]);
 
   const applyPatch = useCallback(
     async (patch: SettingsPatch) => {
@@ -337,323 +129,10 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
         setLaunchAtLoginState(actual);
       } catch (err) {
         setError(String(err));
-        // Keep toggle state synced with real system state when mutation fails.
         void refreshLaunchAtLoginState(true);
       }
     },
     [refreshLaunchAtLoginState, setError]
-  );
-
-  const applyReminderPatch = useCallback(
-    async (id: number, patch: Omit<ReminderPatch, 'id'>) => {
-      if (!isPositiveInt(id)) {
-        setError('reminder id is required');
-        return;
-      }
-      const current = reminderByID(reminders, id);
-      if (!current) {
-        setError('reminder id not found');
-        return;
-      }
-      const nextPatch: Omit<ReminderPatch, 'id'> = { ...patch };
-      if (nextPatch.name !== undefined) {
-        const nextName = normalizeReminderName(nextPatch.name);
-        if (nextName === '') {
-          setError('reminder name is required');
-          return;
-        }
-        if (hasNameConflict(reminders, nextName, id)) {
-          setError('reminder already exists');
-          return;
-        }
-        nextPatch.name = nextName;
-      }
-      if (nextPatch.intervalSec !== undefined && !isPositiveInt(nextPatch.intervalSec)) {
-        setError('reminder intervalSec must be > 0');
-        return;
-      }
-      if (nextPatch.breakSec !== undefined && !isPositiveInt(nextPatch.breakSec)) {
-        setError('reminder breakSec must be > 0');
-        return;
-      }
-      if (nextPatch.reminderType !== undefined && !isValidReminderType(nextPatch.reminderType)) {
-        setError('reminder reminderType must be rest or notify');
-        return;
-      }
-
-      setError('');
-      if (shouldCheckNotificationCapabilityForPatch(current, nextPatch)) {
-        const ready = await ensureNotificationReadyForNotifyReminder();
-        if (!ready) {
-          return;
-        }
-      }
-      try {
-        const next = await updateReminder({
-          id,
-          ...nextPatch
-        });
-        setReminders(next);
-        await refreshRuntime();
-      } catch (err) {
-        setError(String(err));
-      }
-    },
-    [ensureNotificationReadyForNotifyReminder, refreshRuntime, reminders, setError]
-  );
-
-  const createReminder = useCallback(
-    async (name: string, intervalSec: number, breakSec: number, reminderType: 'rest' | 'notify'): Promise<boolean> => {
-      const nextName = normalizeReminderName(name);
-      if (nextName === '') {
-        setError('reminder name is required');
-        return false;
-      }
-      if (hasNameConflict(reminders, nextName)) {
-        setError('reminder already exists');
-        return false;
-      }
-      if (!isPositiveInt(intervalSec)) {
-        setError('reminder intervalSec must be > 0');
-        return false;
-      }
-      if (!isPositiveInt(breakSec)) {
-        setError('reminder breakSec must be > 0');
-        return false;
-      }
-      if (!isValidReminderType(reminderType)) {
-        setError('reminder reminderType must be rest or notify');
-        return false;
-      }
-
-      setError('');
-      if (reminderType === 'notify') {
-        const ready = await ensureNotificationReadyForNotifyReminder();
-        if (!ready) {
-          return false;
-        }
-      }
-      try {
-        const next = await createReminderAPI({
-          name: nextName,
-          intervalSec,
-          breakSec,
-          enabled: true,
-          reminderType
-        });
-        setReminders(next);
-        await refreshRuntime();
-        return true;
-      } catch (err) {
-        setError(String(err));
-        return false;
-      }
-    },
-    [ensureNotificationReadyForNotifyReminder, refreshRuntime, reminders, setError]
-  );
-
-  const deleteReminder = useCallback(
-    async (id: number): Promise<boolean> => {
-      setError('');
-      try {
-        const next = await deleteReminderAPI(id);
-        setReminders(next);
-        await refreshRuntime();
-        return true;
-      } catch (err) {
-        setError(String(err));
-        return false;
-      }
-    },
-    [refreshRuntime, setError]
-  );
-
-  const setReminderIntervalDraft = useCallback((id: number, value: string) => {
-    const sanitized = digitsOnly(value);
-    setReminderDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        interval: sanitized,
-        break: prev[id]?.break ?? ''
-      }
-    }));
-  }, []);
-
-  const setReminderBreakDraft = useCallback((id: number, value: string) => {
-    const sanitized = digitsOnly(value);
-    setReminderDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        interval: prev[id]?.interval ?? '',
-        break: sanitized
-      }
-    }));
-  }, []);
-
-  const normalizeReminderIntervalDraft = useCallback(
-    (id: number, raw: string, unitSec?: number) => {
-      const spec = reminderFieldSpecByID(id);
-      const activeUnitSec = unitSec ?? spec.intervalUnitSec;
-      const { unitMin, unitMax, minSec } = deriveUnitBounds(1, undefined, activeUnitSec, activeUnitSec);
-      const parsed = parseInteger(raw);
-      const current = reminderByID(reminders, id);
-      const fallback = clampReminderDraftValue(
-        Math.round((current?.intervalSec ?? minSec) / activeUnitSec),
-        unitMin,
-        unitMax
-      );
-      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, unitMin, unitMax);
-      setReminderIntervalDraft(id, String(nextValue));
-      return nextValue;
-    },
-    [reminders, setReminderIntervalDraft]
-  );
-
-  const normalizeReminderBreakDraft = useCallback(
-    (id: number, raw: string, unitSec?: number) => {
-      const spec = reminderFieldSpecByID(id);
-      const activeUnitSec = unitSec ?? spec.breakUnitSec;
-      const { unitMin, unitMax, minSec } = deriveUnitBounds(1, undefined, activeUnitSec, activeUnitSec);
-      const parsed = parseInteger(raw);
-      const current = reminderByID(reminders, id);
-      const fallback = clampReminderDraftValue(
-        Math.round((current?.breakSec ?? minSec) / activeUnitSec),
-        unitMin,
-        unitMax
-      );
-      const nextValue = parsed === null ? fallback : clampReminderDraftValue(parsed, unitMin, unitMax);
-      setReminderBreakDraft(id, String(nextValue));
-      return nextValue;
-    },
-    [reminders, setReminderBreakDraft]
-  );
-
-  const commitReminderDrafts = useCallback(
-    async (id: number, intervalRaw: string, breakRaw: string, intervalUnitSec?: number, breakUnitSec?: number) => {
-      const spec = reminderFieldSpecByID(id);
-      const current = reminderByID(reminders, id);
-      if (!current) {
-        setError('reminder id not found');
-        return;
-      }
-      const activeIntervalUnitSec = intervalUnitSec ?? spec.intervalUnitSec;
-      const activeBreakUnitSec = breakUnitSec ?? spec.breakUnitSec;
-
-      const intervalBounds = deriveUnitBounds(1, undefined, activeIntervalUnitSec, activeIntervalUnitSec);
-      const breakBounds = deriveUnitBounds(1, undefined, activeBreakUnitSec, activeBreakUnitSec);
-
-      const parsedInterval = parseInteger(intervalRaw);
-      if (!isReminderValueValid(parsedInterval, intervalBounds.unitMin, intervalBounds.unitMax)) {
-        setError('reminder intervalSec must be > 0');
-        return;
-      }
-      const nextInterval = parsedInterval;
-
-      const parsedBreak = parseInteger(breakRaw);
-      if (!isReminderValueValid(parsedBreak, breakBounds.unitMin, breakBounds.unitMax)) {
-        setError('reminder breakSec must be > 0');
-        return;
-      }
-      const nextBreak = parsedBreak;
-
-      setReminderDrafts((prev) => ({
-        ...prev,
-        [id]: {
-          interval: String(nextInterval),
-          break: String(nextBreak)
-        }
-      }));
-
-      const nextIntervalSec = Math.max(1, Math.round(nextInterval) * activeIntervalUnitSec);
-      const nextBreakSec = Math.max(1, Math.round(nextBreak) * activeBreakUnitSec);
-      const hasNoChange =
-        current.intervalSec === nextIntervalSec && current.breakSec === nextBreakSec;
-
-      if (hasNoChange) {
-        return;
-      }
-
-      await applyReminderPatch(id, {
-        intervalSec: nextIntervalSec,
-        breakSec: nextBreakSec
-      });
-    },
-    [applyReminderPatch, reminders]
-  );
-
-  const openSystemNotificationSettings = useCallback(async () => {
-    try {
-      await openNotificationSettingsAPI();
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [setError]);
-
-  const refreshNotificationCapabilityFromInteraction = useCallback(() => {
-    if (notificationCapabilityInteractionRefreshInFlightRef.current) {
-      return;
-    }
-    notificationCapabilityInteractionRefreshInFlightRef.current = true;
-    void refreshNotificationCapability(true)
-      .then((capability) => {
-        if (notificationProductStateFromCapability(capability) === 'available') {
-          clearNotificationPrompt();
-        }
-      })
-      .finally(() => {
-        notificationCapabilityInteractionRefreshInFlightRef.current = false;
-      });
-  }, [clearNotificationPrompt, refreshNotificationCapability]);
-
-  const showNotificationPrompt = useCallback(
-    (state: Exclude<NotificationProductState, 'available'>) => {
-      applyNotificationPrompt(notificationCapability);
-      if (state !== 'pending') {
-        return;
-      }
-      void requestNotificationPermissionAPI()
-        .then((requested) => {
-          if (notificationProductStateFromCapability(requested) === 'available') {
-            setNotificationCapability(requested);
-            clearNotificationPrompt();
-          }
-        })
-        .catch((err) => {
-          setError(String(err));
-        });
-    },
-    [applyNotificationPrompt, clearNotificationPrompt, notificationCapability, setError]
-  );
-
-  const notificationProductState = useMemo(
-    () => notificationProductStateFromCapability(notificationCapability),
-    [notificationCapability]
-  );
-
-  const resetReminderDraftToStored = useCallback(
-    (id: number) => {
-      const current = reminderByID(reminders, id);
-      if (current) {
-        const intervalUnitSec = deriveCustomDraftUnitSec(current.intervalSec, 3600, 60);
-        const breakUnitSec = deriveCustomDraftUnitSec(current.breakSec, 60, 1);
-        setReminderDrafts((prev) => ({
-          ...prev,
-          [id]: {
-            interval: String(Math.max(1, Math.round(current.intervalSec / intervalUnitSec))),
-            break: String(Math.max(1, Math.round(current.breakSec / breakUnitSec)))
-          }
-        }));
-        return;
-      }
-      setReminderDrafts((prev) => ({
-        ...prev,
-        [id]: {
-          interval: '1',
-          break: '1'
-        }
-      }));
-    },
-    [reminders]
   );
 
   const idleModeSelectValue = useMemo(() => {

@@ -29,7 +29,7 @@ func newTestApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("NewContainer() err=%v", err)
 	}
-	engine := service.NewEngine(settingsStore, nil, nil, nil, historyStore)
+	engine := service.NewEngine(settingsStore, nil, nil, nil, nil, historyStore)
 	defs, err := container.ReminderService.List(context.Background())
 	if err != nil {
 		t.Fatalf("ReminderService.List() err=%v", err)

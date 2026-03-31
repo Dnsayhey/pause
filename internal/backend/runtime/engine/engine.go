@@ -79,6 +79,7 @@ func NewEngine(
 	idleProvider ports.IdleProvider,
 	lockProvider ports.LockStateProvider,
 	soundPlayer ports.SoundPlayer,
+	notifier ports.Notifier,
 	history ports.BreakRepository,
 ) *Engine {
 	if idleProvider == nil {
@@ -90,6 +91,9 @@ func NewEngine(
 	if soundPlayer == nil {
 		soundPlayer = noopSoundPlayer{}
 	}
+	if notifier == nil {
+		notifier = noopNotifier{}
+	}
 	return &Engine{
 		store:          store,
 		reminders:      cloneReminderConfigs(nil),
@@ -99,18 +103,8 @@ func NewEngine(
 		idleProvider:   idleProvider,
 		lockProvider:   lockProvider,
 		soundPlayer:    soundPlayer,
-		notifier:       noopNotifier{},
+		notifier:       notifier,
 		pausedReminder: map[int64]bool{},
 		globalEnabled:  true,
 	}
-}
-
-func (e *Engine) SetNotifier(notifier ports.Notifier) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if notifier == nil {
-		e.notifier = noopNotifier{}
-		return
-	}
-	e.notifier = notifier
 }

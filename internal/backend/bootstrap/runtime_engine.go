@@ -9,11 +9,11 @@ import (
 	"pause/internal/backend/runtime/state"
 )
 
-type SkipMode string
+type SkipMode = service.SkipMode
 
 const (
-	SkipModeNormal    SkipMode = "normal"
-	SkipModeEmergency SkipMode = "emergency"
+	SkipModeNormal    SkipMode = service.SkipModeNormal
+	SkipModeEmergency SkipMode = service.SkipModeEmergency
 )
 
 type RuntimeEngine interface {
@@ -69,7 +69,7 @@ func (a *runtimeEngineAdapter) ResumeReminder(reminderID int64, now time.Time) (
 }
 
 func (a *runtimeEngineAdapter) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error) {
-	return a.engine.SkipCurrentBreak(now, service.SkipMode(mode))
+	return a.engine.SkipCurrentBreak(now, mode)
 }
 
 func (a *runtimeEngineAdapter) StartBreakNow(now time.Time) (state.RuntimeState, error) {

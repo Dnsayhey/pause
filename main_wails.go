@@ -4,6 +4,7 @@ package main
 
 import (
 	"embed"
+	"os"
 
 	entry "pause/internal/entry/desktop"
 	"pause/internal/logx"
@@ -14,6 +15,7 @@ var bundledAssets embed.FS
 
 func main() {
 	if err := entry.RunWailsFromEmbedded("", bundledAssets, "frontend/dist"); err != nil {
-		logx.Fatalf("failed to init app: %v", err)
+		logx.Errorf("failed to init app: %v", err)
+		os.Exit(1)
 	}
 }

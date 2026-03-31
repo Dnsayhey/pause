@@ -3,8 +3,30 @@ package logx
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
+
+func resetGlobalLoggerState() {
+	if base != nil {
+		base.mu.Lock()
+		file := base.file
+		base.file = nil
+		base.sink = nil
+		base.mu.Unlock()
+		if file != nil {
+			_ = file.Close()
+		}
+	}
+	base = nil
+	once = sync.Once{}
+}
+
+func resetLoggerForTest(t *testing.T) {
+	t.Helper()
+	resetGlobalLoggerState()
+	t.Cleanup(resetGlobalLoggerState)
+}
 
 func TestParseLogLevel_FromEnv(t *testing.T) {
 	t.Setenv("PAUSE_LOG_LEVEL", "warn")
@@ -21,6 +43,8 @@ func TestParseLogLevel_DefaultInfo(t *testing.T) {
 }
 
 func TestRotateIfNeededLocked_ReplacesSingleBackup(t *testing.T) {
+	resetLoggerForTest(t)
+
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "app.log")
 	payload := make([]byte, maxLogSize)
@@ -54,5 +78,54 @@ func TestRotateIfNeededLocked_ReplacesSingleBackup(t *testing.T) {
 	}
 	if info.Size() != 0 {
 		t.Fatalf("log size mismatch got=%d want=0", info.Size())
+	}
+}
+
+func TestSetSink_CapturesLogMessage(t *testing.T) {
+	resetLoggerForTest(t)
+	t.Setenv("PAUSE_LOG_LEVEL", "debug")
+
+	var gotLevel Level
+	var gotMessage string
+	SetSink(func(level Level, message string) {
+		gotLevel = level
+		gotMessage = message
+	})
+
+	Warnf("hello %s", "sink")
+
+	if gotLevel != LevelWarn {
+		t.Fatalf("sink level=%v want=%v", gotLevel, LevelWarn)
+	}
+	if gotMessage != "hello sink" {
+		t.Fatalf("sink message=%q want=%q", gotMessage, "hello sink")
+	}
+}
+
+func TestResetGlobalLoggerState_AllowsFreshInitialization(t *testing.T) {
+	resetLoggerForTest(t)
+	t.Setenv("PAUSE_LOG_LEVEL", "debug")
+
+	var firstCalls int
+	SetSink(func(level Level, message string) {
+		firstCalls++
+	})
+	Infof("first init")
+	if firstCalls != 1 {
+		t.Fatalf("first sink calls=%d want=1", firstCalls)
+	}
+
+	resetGlobalLoggerState()
+	t.Setenv("PAUSE_LOG_LEVEL", "error")
+
+	var secondCalls int
+	SetSink(func(level Level, message string) {
+		secondCalls++
+	})
+	Infof("filtered after reset")
+	Errorf("kept after reset")
+
+	if secondCalls != 1 {
+		t.Fatalf("second sink calls=%d want=1", secondCalls)
 	}
 }

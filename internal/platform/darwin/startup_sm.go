@@ -88,6 +88,24 @@ static CFStringRef pauseCreateHelperID(const char *helperBundleID, char **errorO
 	return helper;
 }
 
+// The legacy login-item API remains as a fallback for older macOS versions,
+// but it is deprecated on current SDKs. Keep the warning suppression scoped
+// only to the compatibility shims so the rest of the file still surfaces
+// meaningful deprecation warnings in the future.
+static Boolean pauseSMLegacySetEnabled(CFStringRef helper, Boolean enabled) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+	return SMLoginItemSetEnabled(helper, enabled);
+#pragma clang diagnostic pop
+}
+
+static CFDictionaryRef pauseSMLegacyCopyJobDictionary(CFStringRef helper) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+	return SMJobCopyDictionary(kSMDomainUserLaunchd, helper);
+#pragma clang diagnostic pop
+}
+
 int pauseSMSetLaunchAtLogin(const char *helperBundleID, int enabled, char **errorOut) {
 	@autoreleasepool {
 		int mode = pauseSMStartupMode();
@@ -121,7 +139,7 @@ int pauseSMSetLaunchAtLogin(const char *helperBundleID, int enabled, char **erro
 			if (helper == NULL) {
 				return -1;
 			}
-			Boolean ok = SMLoginItemSetEnabled(helper, enabled ? true : false);
+			Boolean ok = pauseSMLegacySetEnabled(helper, enabled ? true : false);
 			CFRelease(helper);
 			if (!ok) {
 				NSString *msg = enabled
@@ -173,7 +191,7 @@ int pauseSMGetLaunchAtLogin(const char *helperBundleID, int *enabledOut, char **
 			if (helper == NULL) {
 				return -1;
 			}
-			CFDictionaryRef job = SMJobCopyDictionary(kSMDomainUserLaunchd, helper);
+			CFDictionaryRef job = pauseSMLegacyCopyJobDictionary(helper);
 			CFRelease(helper);
 			if (enabledOut != NULL) {
 				*enabledOut = (job != NULL) ? 1 : 0;
