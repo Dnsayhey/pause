@@ -40,3 +40,11 @@ type NoopNotificationCapabilityProvider struct{}
 func (NoopNotificationCapabilityProvider) GetNotificationCapability() ports.NotificationCapability {
 	return DisabledNotificationCapabilityProvider{Reason: "notification capability unavailable"}.GetNotificationCapability()
 }
+
+func (NoopNotificationCapabilityProvider) RequestNotificationPermission() (ports.NotificationCapability, error) {
+	return DisabledNotificationCapabilityProvider{Reason: "notification capability unavailable"}.RequestNotificationPermission()
+}
+
+func (NoopNotificationCapabilityProvider) OpenNotificationSettings() error {
+	return nil
+}
