@@ -14,6 +14,7 @@ package darwin
 #import <string.h>
 
 extern void pauseDarwinCaptureAuthorizationResult(int requestID, int granted, char *error);
+extern void pauseDarwinCaptureAuthorizationStatusResult(int requestID, int status, char *error);
 
 static char *pauseNotifyCopyCString(NSString *value) {
 	if (value == nil) {
@@ -98,41 +99,34 @@ static int pauseDarwinInstallNotificationDelegate(char **errorOut) {
 	}
 }
 
-static int pauseDarwinGetAuthorizationStatus(int *statusOut, char **errorOut) {
+static int pauseDarwinGetAuthorizationStatusAsync(int requestID, char **errorOut) {
 	@autoreleasepool {
 		if (!@available(macOS 10.14, *)) {
 			pauseNotifySetError(errorOut, @"UserNotifications framework requires macOS 10.14+");
 			return -1;
 		}
-		__block UNUserNotificationCenter *center = nil;
-		pauseRunOnMainSync(^{
-			center = [UNUserNotificationCenter currentNotificationCenter];
-		});
-		if (center == nil) {
-			pauseNotifySetError(errorOut, @"UNUserNotificationCenter unavailable");
-			return -1;
-		}
-
-		__block UNAuthorizationStatus authStatus = UNAuthorizationStatusNotDetermined;
-		__block BOOL loaded = NO;
-		dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-		pauseRunOnMainSync(^{
-			[center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
-				if (settings != nil) {
-					authStatus = settings.authorizationStatus;
-					loaded = YES;
+		pauseRunOnMainAsync(^{
+			UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+			if (center == nil) {
+				char *message = pauseNotifyCopyCString(@"UNUserNotificationCenter unavailable");
+				pauseDarwinCaptureAuthorizationStatusResult(requestID, 0, message);
+				if (message != NULL) {
+					free(message);
 				}
-				dispatch_semaphore_signal(sem);
+				return;
+			}
+			[center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
+				if (settings == nil) {
+					char *message = pauseNotifyCopyCString(@"Notification settings unavailable");
+					pauseDarwinCaptureAuthorizationStatusResult(requestID, 0, message);
+					if (message != NULL) {
+						free(message);
+					}
+					return;
+				}
+				pauseDarwinCaptureAuthorizationStatusResult(requestID, (int)settings.authorizationStatus, NULL);
 			}];
 		});
-		long waitResult = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
-		if (waitResult != 0 || !loaded) {
-			pauseNotifySetError(errorOut, @"Notification settings request timed out");
-			return -1;
-		}
-		if (statusOut != NULL) {
-			*statusOut = (int)authStatus;
-		}
 		return 0;
 	}
 }
@@ -220,16 +214,6 @@ static int pauseDarwinShowUserNotification(const char *titleC, const char *bodyC
 			return -1;
 		}
 
-		int authStatus = 0;
-		if (pauseDarwinGetAuthorizationStatus(&authStatus, errorOut) != 0) {
-			return -1;
-		}
-		if (!(authStatus == UNAuthorizationStatusAuthorized ||
-		      authStatus == UNAuthorizationStatusProvisional)) {
-			pauseNotifySetError(errorOut, @"Notification permission not granted");
-			return -1;
-		}
-
 		NSString *title = @"Pause";
 		if (titleC != NULL && titleC[0] != '\0') {
 			NSString *tmp = [NSString stringWithUTF8String:titleC];
@@ -313,13 +297,30 @@ type darwinNotificationAuthorizationResult struct {
 	err     error
 }
 
+type darwinNotificationStatusResult struct {
+	status int
+	err    error
+}
+
 var (
 	darwinNotificationAuthorizationMu      sync.Mutex
 	darwinNotificationAuthorizationNextID  int
 	darwinNotificationAuthorizationWaiters = map[int]chan darwinNotificationAuthorizationResult{}
+
+	darwinNotificationStatusMu      sync.Mutex
+	darwinNotificationStatusNextID  int
+	darwinNotificationStatusWaiters = map[int]chan darwinNotificationStatusResult{}
 )
 
 func showDarwinUserNotification(title, body string) error {
+	authStatus, err := darwinNotificationAuthorizationStatus()
+	if err != nil {
+		return err
+	}
+	if !(authStatus == darwinNotificationStatusAuthorized || authStatus == darwinNotificationStatusProvisional) {
+		return fmt.Errorf("darwin user notification failed: notification permission not granted")
+	}
+
 	cTitle := C.CString(title)
 	defer C.free(unsafe.Pointer(cTitle))
 	cBody := C.CString(body)
@@ -340,13 +341,14 @@ func showDarwinUserNotification(title, body string) error {
 }
 
 func darwinNotificationAuthorizationStatus() (int, error) {
+	requestID, resultCh := registerDarwinNotificationStatusWaiter()
 	var cErr *C.char
-	var status C.int
-	rc := C.pauseDarwinGetAuthorizationStatus(&status, &cErr)
+	rc := C.pauseDarwinGetAuthorizationStatusAsync(C.int(requestID), &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 	}
 	if rc != 0 {
+		cleanupDarwinNotificationStatusWaiter(requestID)
 		if cErr != nil {
 			err := fmt.Errorf("darwin notification status failed: %s", C.GoString(cErr))
 			logx.Warnf("darwin.notification.status_request failed rc=%d err=%v", int(rc), err)
@@ -356,7 +358,19 @@ func darwinNotificationAuthorizationStatus() (int, error) {
 		logx.Warnf("darwin.notification.status_request failed rc=%d err=%v", int(rc), err)
 		return 0, err
 	}
-	return int(status), nil
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			logx.Warnf("darwin.notification.status_request failed err=%v", result.err)
+			return 0, result.err
+		}
+		return result.status, nil
+	case <-time.After(5 * time.Second):
+		cleanupDarwinNotificationStatusWaiter(requestID)
+		err := fmt.Errorf("darwin notification status request timed out")
+		logx.Warnf("darwin.notification.status_request failed err=%v", err)
+		return 0, err
+	}
 }
 
 func darwinRequestNotificationAuthorization() (bool, error) {
@@ -464,6 +478,46 @@ func completeDarwinNotificationAuthorizationWaiter(requestID int, result darwinN
 		delete(darwinNotificationAuthorizationWaiters, requestID)
 	}
 	darwinNotificationAuthorizationMu.Unlock()
+
+	if !ok {
+		return
+	}
+	resultCh <- result
+	close(resultCh)
+}
+
+func registerDarwinNotificationStatusWaiter() (int, chan darwinNotificationStatusResult) {
+	darwinNotificationStatusMu.Lock()
+	defer darwinNotificationStatusMu.Unlock()
+
+	requestID := darwinNotificationStatusNextID
+	darwinNotificationStatusNextID++
+
+	resultCh := make(chan darwinNotificationStatusResult, 1)
+	darwinNotificationStatusWaiters[requestID] = resultCh
+	return requestID, resultCh
+}
+
+func cleanupDarwinNotificationStatusWaiter(requestID int) {
+	darwinNotificationStatusMu.Lock()
+	resultCh, ok := darwinNotificationStatusWaiters[requestID]
+	if ok {
+		delete(darwinNotificationStatusWaiters, requestID)
+	}
+	darwinNotificationStatusMu.Unlock()
+
+	if ok {
+		close(resultCh)
+	}
+}
+
+func completeDarwinNotificationStatusWaiter(requestID int, result darwinNotificationStatusResult) {
+	darwinNotificationStatusMu.Lock()
+	resultCh, ok := darwinNotificationStatusWaiters[requestID]
+	if ok {
+		delete(darwinNotificationStatusWaiters, requestID)
+	}
+	darwinNotificationStatusMu.Unlock()
 
 	if !ok {
 		return

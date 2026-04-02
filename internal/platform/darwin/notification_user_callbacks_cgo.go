@@ -21,3 +21,15 @@ func pauseDarwinCaptureAuthorizationResult(requestID C.int, granted C.int, error
 		err:     err,
 	})
 }
+
+//export pauseDarwinCaptureAuthorizationStatusResult
+func pauseDarwinCaptureAuthorizationStatusResult(requestID C.int, status C.int, errorMsg *C.char) {
+	var err error
+	if errorMsg != nil {
+		err = fmt.Errorf("%s", C.GoString(errorMsg))
+	}
+	completeDarwinNotificationStatusWaiter(int(requestID), darwinNotificationStatusResult{
+		status: int(status),
+		err:    err,
+	})
+}
