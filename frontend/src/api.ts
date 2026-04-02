@@ -10,6 +10,8 @@ import type {
   RuntimeState,
   Settings,
   SettingsPatch,
+  PlatformInfo,
+  UpdateAsset,
   UpdateCheckResult
 } from './types';
 
@@ -33,6 +35,7 @@ type Backend = {
   GetNotificationCapability: () => Promise<NotificationCapability>;
   RequestNotificationPermission: () => Promise<NotificationCapability>;
   OpenNotificationSettings: () => Promise<void>;
+  GetPlatformInfo?: () => Promise<PlatformInfo>;
   Quit?: () => Promise<void> | void;
   CloseWindow?: () => Promise<void> | void;
 };
@@ -176,30 +179,7 @@ function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-function detectUpdatePlatform(): { os: string; arch: string } {
-  if (typeof navigator === 'undefined') {
-    return { os: 'unknown', arch: 'unknown' };
-  }
-  const nav = navigator as Navigator & { userAgentData?: { platform?: string; architecture?: string } };
-  const platform = (nav.userAgentData?.platform || navigator.platform || '').toLowerCase();
-  const architectureHint = (nav.userAgentData?.architecture || '').toLowerCase();
-  const ua = (navigator.userAgent || '').toLowerCase();
-
-  let os = 'unknown';
-  if (platform.includes('mac') || ua.includes('mac os')) os = 'macos';
-  else if (platform.includes('win') || ua.includes('windows')) os = 'windows';
-  else if (platform.includes('linux') || ua.includes('linux')) os = 'linux';
-
-  let arch = 'unknown';
-  if (architectureHint.includes('arm')) arch = 'arm64';
-  else if (architectureHint.includes('x86') || architectureHint.includes('x64')) arch = 'x64';
-  else if (ua.includes('aarch64') || ua.includes('arm64')) arch = 'arm64';
-  else if (ua.includes('x86_64') || ua.includes('win64') || ua.includes('wow64') || ua.includes('intel')) arch = 'x64';
-
-  return { os, arch };
-}
-
-function selectBestAsset(assets: UpdateCheckResult['selectedAsset'][] | undefined, os: string, arch: string) {
+function selectBestAsset(assets: UpdateAsset[] | undefined, os: string, arch: string) {
   const rows = Array.isArray(assets) ? assets.filter(Boolean) : [];
   const exact = rows.find((asset) => asset.os === os && asset.arch === arch && typeof asset.url === 'string');
   if (exact) {
@@ -232,22 +212,18 @@ type UpdatesFeed = {
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.0.0';
 const UPDATES_URL = import.meta.env.VITE_UPDATES_URL || '';
+const UPDATE_FETCH_TIMEOUT_MS = 10_000;
 
-function deriveReleasesPageURL(updatesURL: string): string | null {
-  const normalized = String(updatesURL ?? '').trim();
-  if (normalized === '') {
-    return null;
+async function getPlatformInfo(): Promise<PlatformInfo> {
+  const backend = requireBackend();
+  if (!backend.GetPlatformInfo) {
+    return { os: 'unknown', arch: 'unknown' };
   }
   try {
-    const url = new URL(normalized);
-    const parts = url.pathname.split('/').filter(Boolean);
-    if (url.hostname.endsWith('.github.io') && parts.length >= 2) {
-      return `https://github.com/${url.hostname.replace(/\.github\.io$/i, '')}/${parts[0]}/releases`;
-    }
+    return await backend.GetPlatformInfo();
   } catch {
-    return null;
+    return { os: 'unknown', arch: 'unknown' };
   }
-  return null;
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
@@ -255,16 +231,29 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     throw new Error('Update feed URL is not configured.');
   }
 
-  const response = await fetch(UPDATES_URL, {
-    cache: 'no-store'
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), UPDATE_FETCH_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(UPDATES_URL, {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Update feed request timed out.');
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) {
     throw new Error(`Failed to fetch update feed: HTTP ${response.status}`);
   }
 
   const payload = (await response.json()) as UpdatesFeed;
   const latestVersion = String(payload.release?.version ?? '').trim();
-  const { os, arch } = detectUpdatePlatform();
+  const { os, arch } = await getPlatformInfo();
   const selectedAsset = selectBestAsset(payload.assets as UpdateAsset[] | undefined, os, arch);
 
   return {
@@ -274,7 +263,6 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     checkedAt: new Date().toISOString(),
     updateAvailable: latestVersion !== '' && compareVersions(latestVersion, APP_VERSION) > 0,
     releaseUrl: payload.release?.url?.trim() || selectedAsset?.url || null,
-    releasesPageUrl: deriveReleasesPageURL(UPDATES_URL),
     selectedAsset
   };
 }

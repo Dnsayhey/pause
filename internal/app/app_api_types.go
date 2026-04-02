@@ -126,6 +126,11 @@ type NotificationCapability struct {
 	Reason          string `json:"reason,omitempty"`
 }
 
+type PlatformInfo struct {
+	OS   string `json:"os"`
+	Arch string `json:"arch"`
+}
+
 type AnalyticsReminderStat struct {
 	ReminderID          int64   `json:"reminderId"`
 	ReminderName        string  `json:"reminderName"`

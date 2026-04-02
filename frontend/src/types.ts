@@ -80,6 +80,11 @@ export type NotificationCapability = {
   reason?: string;
 };
 
+export type PlatformInfo = {
+  os: string;
+  arch: string;
+};
+
 export type UpdateAsset = {
   name: string;
   path: string;
@@ -98,7 +103,6 @@ export type UpdateCheckResult = {
   checkedAt: string;
   updateAvailable: boolean;
   releaseUrl: string | null;
-  releasesPageUrl: string | null;
   selectedAsset: UpdateAsset | null;
 };
 

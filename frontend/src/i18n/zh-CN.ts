@@ -86,6 +86,7 @@ export const zhCN = {
   updateUnknownVersion: '未知版本',
   updateFeedNotConfiguredError: '当前构建没有配置更新源。',
   updateFetchFailedError: '暂时无法获取更新信息',
+  updateFetchTimeoutError: '检查更新超时了，请稍后再试。',
   updateDownloadUnavailableError: '这个版本暂时没有可直接下载的安装包。',
   updateReleasePageUnavailableError: '当前无法打开发布页链接。',
   language: '语言',

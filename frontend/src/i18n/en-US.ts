@@ -86,6 +86,7 @@ export const enUS = {
   updateUnknownVersion: 'Unknown version',
   updateFeedNotConfiguredError: 'Update source is not configured for this build.',
   updateFetchFailedError: 'Unable to fetch update information right now',
+  updateFetchTimeoutError: 'Update check timed out. Please try again shortly.',
   updateDownloadUnavailableError: 'No direct download is available for this update yet.',
   updateReleasePageUnavailableError: 'The release page link is unavailable right now.',
   language: 'Language',

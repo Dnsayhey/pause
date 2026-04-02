@@ -16,7 +16,7 @@ const NOTIFICATION_ERROR_PERMISSION_REQUIRED = 'ERR_NOTIFICATION_PERMISSION_REQU
 const NOTIFICATION_ERROR_UNAVAILABLE = 'ERR_NOTIFICATION_UNAVAILABLE';
 const UPDATE_ERROR_FEED_NOT_CONFIGURED = 'UPDATE FEED URL IS NOT CONFIGURED.';
 const UPDATE_ERROR_DOWNLOAD_URL_MISSING = 'ERR_UPDATE_DOWNLOAD_URL_MISSING';
-const UPDATE_ERROR_RELEASES_PAGE_MISSING = 'ERR_UPDATE_RELEASES_PAGE_MISSING';
+const UPDATE_ERROR_FEED_TIMEOUT = 'UPDATE FEED REQUEST TIMED OUT.';
 type DarkThemeVariant = 'default' | 'alt';
 
 function readDarkThemeVariant(): DarkThemeVariant {
@@ -57,8 +57,8 @@ function resolveInlineErrorMessage(locale: 'zh-CN' | 'en-US', message: string): 
   if (normalized.includes(UPDATE_ERROR_DOWNLOAD_URL_MISSING)) {
     return t(locale, 'updateDownloadUnavailableError');
   }
-  if (normalized.includes(UPDATE_ERROR_RELEASES_PAGE_MISSING)) {
-    return t(locale, 'updateReleasePageUnavailableError');
+  if (normalized.includes(UPDATE_ERROR_FEED_TIMEOUT)) {
+    return t(locale, 'updateFetchTimeoutError');
   }
   if (normalized.startsWith('FAILED TO FETCH UPDATE FEED: HTTP ')) {
     return `${t(locale, 'updateFetchFailedError')} (${String(message).replace(/^.*HTTP\s+/i, 'HTTP ')})`;
