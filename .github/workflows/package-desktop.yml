@@ -78,6 +78,8 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build macOS DMG
+        env:
+          VITE_UPDATES_URL: ${{ needs.validate.outputs.updates_url }}
         run: ./scripts/build-dmg.sh --version "${{ needs.validate.outputs.version }}" --clean
 
       - name: Upload macOS arm64 artifact
@@ -138,6 +140,8 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build Windows installer
+        env:
+          VITE_UPDATES_URL: ${{ needs.validate.outputs.updates_url }}
         run: ./scripts/build-windows-installer.sh --platform windows/amd64 --output-dir build/bin/windows-x64 --version "${{ needs.validate.outputs.version }}" --clean --no-portable-exe
 
       - name: Upload Windows artifacts

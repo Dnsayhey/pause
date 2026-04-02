@@ -168,7 +168,7 @@ export function SystemSettingsCard({
             <span className="text-xs font-medium text-[var(--text-tertiary)]">v{currentVersion}</span>
             <button
               type="button"
-              className="cursor-pointer rounded-[8px] border border-transparent px-1.5 py-1 text-xs font-medium leading-[1.2] text-[var(--text-secondary)] transition-colors hover:border-[var(--surface-border)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="cursor-pointer border-0 bg-transparent p-0 text-xs font-medium leading-[1.2] text-[var(--text-secondary)] underline decoration-[var(--surface-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isCheckingForUpdates}
               onClick={() => {
                 void onCheckForUpdates();
@@ -179,7 +179,7 @@ export function SystemSettingsCard({
             {updateState?.updateAvailable && (updateState.selectedAsset?.url || updateState.releaseUrl) ? (
               <button
                 type="button"
-                className="cursor-pointer rounded-[8px] border border-transparent px-1.5 py-1 text-xs font-medium leading-[1.2] text-[var(--text-secondary)] transition-colors hover:border-[var(--surface-border)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="cursor-pointer border-0 bg-transparent p-0 text-xs font-medium leading-[1.2] text-[var(--text-secondary)] underline decoration-[var(--surface-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={onOpenUpdateDownload}
               >
                 {t(locale, 'updateDownload')}

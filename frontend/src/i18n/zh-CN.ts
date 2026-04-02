@@ -74,7 +74,7 @@ export const zhCN = {
   soundVolume: '提示音音量',
   launchAtLogin: '开机启动',
   showTrayCountdown: '图标旁显示倒计时',
-  updateSectionTitle: '更新',
+  updateSectionTitle: '版本更新',
   updateCurrentVersion: '当前版本',
   updateCheckHint: '检查新版本并打开对应平台下载页。',
   updateCheckNow: '检查更新',

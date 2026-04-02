@@ -17,6 +17,7 @@ WINDOWS_WEBVIEW2="${WINDOWS_WEBVIEW2:-download}"
 WAILS_TAGS="${WAILS_TAGS:-wails}"
 USE_CLEAN="${USE_CLEAN:-0}"
 INCLUDE_PORTABLE_EXE="${INCLUDE_PORTABLE_EXE:-0}"
+VITE_UPDATES_URL="${VITE_UPDATES_URL:-}"
 ARTIFACT_VERSION=""
 
 print_help() {
@@ -43,7 +44,7 @@ Options:
 Environment variables:
   APP_ICON_SOURCE, WINDOWS_ICON_SOURCE, WINDOWS_PLATFORM, WINDOWS_ARCH_LABEL,
   WINDOWS_OUTPUT_DIR, APP_VERSION_OVERRIDE, WINDOWS_WEBVIEW2, WINDOWS_NSIS_TEMPLATE, WAILS_TAGS,
-  USE_CLEAN, INCLUDE_PORTABLE_EXE
+  USE_CLEAN, INCLUDE_PORTABLE_EXE, VITE_UPDATES_URL
 EOF
 }
 
@@ -217,7 +218,11 @@ if [[ "${USE_CLEAN}" == "1" ]]; then
 fi
 
 echo "[1/2] Building ${APP_NAME} Windows installer (${WINDOWS_PLATFORM})"
-"${WAILS_CMD[@]}" "${WAILS_ARGS[@]}"
+if [[ -n "${VITE_UPDATES_URL}" ]]; then
+  VITE_UPDATES_URL="${VITE_UPDATES_URL}" "${WAILS_CMD[@]}" "${WAILS_ARGS[@]}"
+else
+  "${WAILS_CMD[@]}" "${WAILS_ARGS[@]}"
+fi
 
 echo "[2/2] Collecting Windows artifacts into ${WINDOWS_OUTPUT_DIR}"
 # Wails -clean can remove build/bin (including the custom output dir), so ensure it exists again.

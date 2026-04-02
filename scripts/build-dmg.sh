@@ -28,6 +28,7 @@ OUTPUT_DIR_ARG=""
 APP_BUNDLE=""
 APP_INFO_PLIST=""
 DMG_LAYOUT_DS_STORE_TEMPLATE="${DMG_LAYOUT_DS_STORE_TEMPLATE:-${ROOT_DIR}/assets/dmg/dmg-layout.dsstore}"
+VITE_UPDATES_URL="${VITE_UPDATES_URL:-}"
 
 refresh_paths() {
   APP_BUNDLE="${ROOT_DIR}/build/bin/${APP_NAME}.app"
@@ -56,7 +57,8 @@ Options:
 Environment variables:
   APP_NAME, APP_ICON_SOURCE, APP_BUNDLE_ID, PAUSE_CODESIGN_IDENTITY,
   APP_VERSION_OVERRIDE, USE_CLEAN, MACOS_PLATFORM, MACOS_ARCH_LABEL,
-  MACOS_OUTPUT_BASE_DIR, MACOS_OUTPUT_DIR, DMG_LAYOUT_DS_STORE_TEMPLATE
+  MACOS_OUTPUT_BASE_DIR, MACOS_OUTPUT_DIR, DMG_LAYOUT_DS_STORE_TEMPLATE,
+  VITE_UPDATES_URL
 USAGE
 }
 
@@ -285,7 +287,11 @@ build_one_target() {
   echo "  dmg_layout_template=${DMG_LAYOUT_DS_STORE_TEMPLATE}"
   echo "  use_clean=${use_clean_target}"
 
-  "${WAILS_CMD[@]}" "${wails_args[@]}"
+  if [[ -n "${VITE_UPDATES_URL}" ]]; then
+    VITE_UPDATES_URL="${VITE_UPDATES_URL}" "${WAILS_CMD[@]}" "${wails_args[@]}"
+  else
+    "${WAILS_CMD[@]}" "${wails_args[@]}"
+  fi
 
   if [[ ! -d "${APP_BUNDLE}" ]]; then
     echo "ERROR: app bundle not found: ${APP_BUNDLE}" >&2
