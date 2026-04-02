@@ -35,11 +35,10 @@ export function SystemSettingsCard({
   onThemeLabelDoubleClick
 }: SystemSettingsCardProps) {
   const currentVersion = (updateState?.currentVersion ?? import.meta.env.VITE_APP_VERSION) || '0.0.0';
-  const versionStatus = updateState
-    ? updateState.updateAvailable
-      ? `${t(locale, 'updateAvailableLabel')}: ${updateState.latestVersion ?? t(locale, 'updateUnknownVersion')}`
-      : t(locale, 'updateUpToDate')
-    : null;
+  const versionDisplay =
+    updateState?.updateAvailable && updateState.latestVersion
+      ? `v${currentVersion} > v${updateState.latestVersion}`
+      : `v${currentVersion}`;
 
   return (
     <section>
@@ -160,12 +159,12 @@ export function SystemSettingsCard({
           />
         )}
         <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
-          <div className="min-w-0">
-            <div className="text-[var(--text-primary)]">{t(locale, 'updateSectionTitle')}</div>
-            {versionStatus ? <div className="mt-1 text-xs leading-[1.4] text-[var(--text-secondary)]">{versionStatus}</div> : null}
-          </div>
+          <span className="text-[var(--text-primary)]">{t(locale, 'updateSectionTitle')}</span>
           <div className="flex flex-wrap items-center justify-end gap-3 self-stretch sm:self-auto">
-            <span className="text-xs font-medium text-[var(--text-tertiary)]">v{currentVersion}</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-tertiary)]">
+              {updateState?.updateAvailable ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" aria-hidden="true" /> : null}
+              <span>{versionDisplay}</span>
+            </span>
             <button
               type="button"
               className="cursor-pointer border-0 bg-transparent p-0 text-xs font-medium leading-[1.2] text-[var(--text-secondary)] underline decoration-[var(--surface-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
