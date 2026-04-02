@@ -27,6 +27,7 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state state.Ru
 	language := c.lastLanguage
 	theme := resolveEffectiveTheme(settings.UI.Theme)
 	overlayText := ""
+	overlayMessage := overlayMessageText(language)
 	if overlayActive && state.CurrentSession != nil {
 		overlayText = overlayCountdownText(language, state.CurrentSession.RemainingSec)
 		if !state.CurrentSession.StartedAt.Equal(c.lastOverlaySessionStart) {
@@ -44,7 +45,7 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state state.Ru
 			if overlayActive {
 				// Keep native break overlay isolated from the main window.
 				desktop.HideMainWindowForOverlay(ctx)
-				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, theme) {
+				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, overlayMessage, theme) {
 					if !c.overlayFailureLogged {
 						logx.Warnf(
 							"overlay.show_failed native=true reasons=%s remaining_sec=%d",

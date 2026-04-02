@@ -13,6 +13,7 @@ extern void overlaySkipCallbackGo(void);
 
 static NSMutableArray<NSWindow *> *pauseOverlayWindows;
 static NSMutableArray<NSTextField *> *pauseOverlayCountdownLabels;
+static NSMutableArray<NSTextField *> *pauseOverlayMessageLabels;
 static NSMutableArray<NSButton *> *pauseOverlaySkipButtons;
 static BOOL pauseOverlayVisible;
 static BOOL pauseOverlayAllowSkip;
@@ -20,6 +21,7 @@ static BOOL pauseOverlayEmergencySkipUnlocked;
 static id pauseOverlayKeyMonitor;
 static NSString *pauseOverlaySkipButtonTitle;
 static NSString *pauseOverlayCountdownText;
+static NSString *pauseOverlayMessageText;
 static NSString *pauseOverlayTheme;
 static const NSTimeInterval pauseOverlayFadeDuration = 1.0;
 static const NSTimeInterval pauseOverlayCmdQDoublePressWindow = 1.0;
@@ -158,6 +160,13 @@ static NSColor *PauseOverlayCountdownColorForTheme(NSString *theme) {
         return [NSColor colorWithSRGBRed:0.90 green:0.91 blue:0.93 alpha:1.0];
     }
     return [NSColor colorWithSRGBRed:0.08 green:0.08 blue:0.08 alpha:1.0];
+}
+
+static NSColor *PauseOverlayMessageColorForTheme(NSString *theme) {
+    if (PauseOverlayThemeIsDark(theme)) {
+        return [NSColor colorWithSRGBRed:0.71 green:0.75 blue:0.81 alpha:0.88];
+    }
+    return [NSColor colorWithSRGBRed:0.20 green:0.24 blue:0.29 alpha:0.78];
 }
 
 static NSColor *PauseOverlayButtonBackgroundColorForTheme(NSString *theme, BOOL hovered, BOOL pressed) {
@@ -303,13 +312,36 @@ static void PauseOverlayUpdateCountdownTextOnMain(NSString *countdownText) {
     }
 }
 
+static void PauseOverlayUpdateMessageTextOnMain(NSString *messageText) {
+    if (messageText == nil) {
+        messageText = @"";
+    }
+
+    BOOL sameText = (pauseOverlayMessageText != nil && [pauseOverlayMessageText isEqualToString:messageText]);
+    if (!sameText) {
+        if (pauseOverlayMessageText != nil) {
+            [pauseOverlayMessageText release];
+        }
+        pauseOverlayMessageText = [messageText copy];
+    }
+
+    if (pauseOverlayMessageLabels == nil) {
+        return;
+    }
+    for (NSTextField *label in pauseOverlayMessageLabels) {
+        [label setStringValue:pauseOverlayMessageText];
+    }
+}
+
 static NSWindow *PauseOverlayBuildWindowForScreen(
     NSScreen *screen,
     BOOL allowSkip,
     NSString *skipButtonTitle,
     NSString *countdownText,
+    NSString *messageText,
     NSString *theme,
     NSTextField **outCountdownLabel,
+    NSTextField **outMessageLabel,
     NSButton **outSkipButton
 ) {
     NSRect screenFrame = [screen frame];
@@ -328,6 +360,7 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
 
     NSView *contentView = [window contentView];
     NSTextField *countdownLabel = nil;
+    NSTextField *messageLabel = nil;
     NSButton *skipButton = nil;
     if (contentView != nil) {
         countdownLabel = [NSTextField labelWithString:(countdownText != nil ? countdownText : @"")];
@@ -336,13 +369,21 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
         [countdownLabel setAlignment:NSTextAlignmentCenter];
         [countdownLabel setLineBreakMode:NSLineBreakByTruncatingTail];
         [countdownLabel setTranslatesAutoresizingMaskIntoConstraints:NO];
+        messageLabel = [NSTextField labelWithString:(messageText != nil ? messageText : @"")];
+        [messageLabel setFont:[NSFont systemFontOfSize:16 weight:NSFontWeightRegular]];
+        [messageLabel setTextColor:PauseOverlayMessageColorForTheme(theme)];
+        [messageLabel setAlignment:NSTextAlignmentCenter];
+        [messageLabel setLineBreakMode:NSLineBreakByWordWrapping];
+        [messageLabel setMaximumNumberOfLines:2];
+        [messageLabel setTranslatesAutoresizingMaskIntoConstraints:NO];
+        [messageLabel setPreferredMaxLayoutWidth:520.0];
         skipButton = PauseOverlayBuildSkipButton(skipButtonTitle, theme);
         [skipButton setHidden:!allowSkip];
 
-        NSStackView *stack = [NSStackView stackViewWithViews:@[countdownLabel, skipButton]];
+        NSStackView *stack = [NSStackView stackViewWithViews:@[countdownLabel, messageLabel, skipButton]];
         [stack setOrientation:NSUserInterfaceLayoutOrientationVertical];
         [stack setAlignment:NSLayoutAttributeCenterX];
-        [stack setSpacing:16.0];
+        [stack setSpacing:14.0];
         [stack setTranslatesAutoresizingMaskIntoConstraints:NO];
         [stack setDetachesHiddenViews:YES];
         [contentView addSubview:stack];
@@ -350,6 +391,7 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
         [NSLayoutConstraint activateConstraints:@[
             [stack.centerXAnchor constraintEqualToAnchor:contentView.centerXAnchor],
             [stack.centerYAnchor constraintEqualToAnchor:contentView.centerYAnchor],
+            [messageLabel.widthAnchor constraintLessThanOrEqualToConstant:560],
             [skipButton.heightAnchor constraintEqualToConstant:36],
             [skipButton.widthAnchor constraintGreaterThanOrEqualToConstant:170],
         ]];
@@ -357,6 +399,9 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
 
     if (outCountdownLabel != NULL) {
         *outCountdownLabel = countdownLabel;
+    }
+    if (outMessageLabel != NULL) {
+        *outMessageLabel = messageLabel;
     }
     if (outSkipButton != NULL) {
         *outSkipButton = skipButton;
@@ -414,6 +459,12 @@ static void PauseOverlayUpdateThemeOnMain(NSString *theme) {
             [label setTextColor:countdownColor];
         }
     }
+    if (pauseOverlayMessageLabels != nil) {
+        NSColor *messageColor = PauseOverlayMessageColorForTheme(pauseOverlayTheme);
+        for (NSTextField *label in pauseOverlayMessageLabels) {
+            [label setTextColor:messageColor];
+        }
+    }
     if (pauseOverlaySkipButtons != nil) {
         for (NSButton *button in pauseOverlaySkipButtons) {
             if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
@@ -449,12 +500,15 @@ static void PauseOverlayUpdateSkipButtonTitleOnMain(NSString *title) {
     }
 }
 
-static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle, NSString *countdown, NSString *overlayTheme) {
+static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle, NSString *countdown, NSString *message, NSString *overlayTheme) {
     if (skipTitle == nil) {
         skipTitle = @"Emergency Skip";
     }
     if (countdown == nil) {
         countdown = @"";
+    }
+    if (message == nil) {
+        message = @"";
     }
     if (overlayTheme == nil) {
         overlayTheme = @"dark";
@@ -474,23 +528,29 @@ static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle
 
     pauseOverlayWindows = [[NSMutableArray alloc] init];
     pauseOverlayCountdownLabels = [[NSMutableArray alloc] init];
+    pauseOverlayMessageLabels = [[NSMutableArray alloc] init];
     pauseOverlaySkipButtons = [[NSMutableArray alloc] init];
     pauseOverlayAllowSkip = allowSkip;
     pauseOverlaySkipButtonTitle = [skipTitle copy];
     pauseOverlayCountdownText = [countdown copy];
+    pauseOverlayMessageText = [message copy];
     pauseOverlayTheme = [overlayTheme copy];
 
     for (NSUInteger i = 0; i < [screens count]; i++) {
         NSScreen *screen = [screens objectAtIndex:i];
         NSTextField *countdownLabel = nil;
+        NSTextField *messageLabel = nil;
         NSButton *skipButton = nil;
-        NSWindow *window = PauseOverlayBuildWindowForScreen(screen, allowSkip, skipTitle, countdown, overlayTheme, &countdownLabel, &skipButton);
+        NSWindow *window = PauseOverlayBuildWindowForScreen(screen, allowSkip, skipTitle, countdown, message, overlayTheme, &countdownLabel, &messageLabel, &skipButton);
         if (window == nil) {
             continue;
         }
         [pauseOverlayWindows addObject:window];
         if (countdownLabel != nil) {
             [pauseOverlayCountdownLabels addObject:countdownLabel];
+        }
+        if (messageLabel != nil) {
+            [pauseOverlayMessageLabels addObject:messageLabel];
         }
         if (skipButton != nil) {
             [pauseOverlaySkipButtons addObject:skipButton];
@@ -576,6 +636,10 @@ static void PauseOverlayHideOnMain(void) {
         [pauseOverlayCountdownText release];
         pauseOverlayCountdownText = nil;
     }
+    if (pauseOverlayMessageText != nil) {
+        [pauseOverlayMessageText release];
+        pauseOverlayMessageText = nil;
+    }
     if (pauseOverlayTheme != nil) {
         [pauseOverlayTheme release];
         pauseOverlayTheme = nil;
@@ -583,6 +647,10 @@ static void PauseOverlayHideOnMain(void) {
     if (pauseOverlayCountdownLabels != nil) {
         [pauseOverlayCountdownLabels release];
         pauseOverlayCountdownLabels = nil;
+    }
+    if (pauseOverlayMessageLabels != nil) {
+        [pauseOverlayMessageLabels release];
+        pauseOverlayMessageLabels = nil;
     }
     if (pauseOverlaySkipButtons != nil) {
         for (NSButton *button in pauseOverlaySkipButtons) {
@@ -627,9 +695,10 @@ void PauseBreakOverlayInit(void) {
     });
 }
 
-int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *theme) {
+int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *messageText, const char *theme) {
     NSString *skipTitle = skipButtonTitle ? [NSString stringWithUTF8String:skipButtonTitle] : @"Emergency Skip";
     NSString *countdown = countdownText ? [NSString stringWithUTF8String:countdownText] : @"";
+    NSString *message = messageText ? [NSString stringWithUTF8String:messageText] : @"";
     NSString *overlayTheme = theme ? [NSString stringWithUTF8String:theme] : @"dark";
     BOOL shouldAllowSkip = allowSkip != 0;
     __block BOOL didShow = NO;
@@ -646,12 +715,13 @@ int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char
 
         BOOL needsRebuild = (pauseOverlayVisible == NO || pauseOverlayWindows == nil || [pauseOverlayWindows count] != [screens count]);
         if (needsRebuild) {
-            PauseOverlayRebuildWindowsOnMain(effectiveAllowSkip, skipTitle, countdown, overlayTheme);
+            PauseOverlayRebuildWindowsOnMain(effectiveAllowSkip, skipTitle, countdown, message, overlayTheme);
         } else {
             PauseOverlaySetAllowSkipOnMain(effectiveAllowSkip);
             PauseOverlayUpdateSkipButtonTitleOnMain(skipTitle);
             PauseOverlayUpdateThemeOnMain(overlayTheme);
             PauseOverlayUpdateCountdownTextOnMain(countdown);
+            PauseOverlayUpdateMessageTextOnMain(message);
         }
         didShow = pauseOverlayVisible;
         if (didShow) {

@@ -133,6 +133,7 @@ type windowsBreakOverlayController struct {
 	allowSkip             bool
 	skipButtonTitle       string
 	countdownText         string
+	messageText           string
 	theme                 string
 	visible               bool
 	className             string
@@ -253,12 +254,13 @@ func (c *windowsBreakOverlayController) Init(onSkip func()) {
 	}
 }
 
-func (c *windowsBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, countdownText string, theme string) bool {
+func (c *windowsBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, countdownText string, messageText string, theme string) bool {
 	c.mu.Lock()
 	wasVisible := c.visible
 	c.allowSkip = allowSkip
 	c.skipButtonTitle = fallbackOverlay(skipButtonTitle, "Emergency Skip")
 	c.countdownText = strings.TrimSpace(countdownText)
+	c.messageText = strings.TrimSpace(messageText)
 	c.theme = normalizeOverlayTheme(theme)
 	c.visible = true
 	if !wasVisible {
@@ -596,6 +598,7 @@ func (c *windowsBreakOverlayController) handleSkipClick() {
 func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 	c.mu.RLock()
 	text := c.countdownText
+	message := c.messageText
 	theme := c.theme
 	allowSkip := c.allowSkip || c.emergencySkipVisible
 	skipText := fallbackOverlay(c.skipButtonTitle, "Emergency Skip")
@@ -607,12 +610,14 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 
 	bg := colorBlack
 	fg := colorWhite
+	messageFg := blendOverlayColor(fg, bg, 170)
 	buttonBg := colorButtonDarkBg
 	buttonFg := colorButtonDarkFg
 	buttonAlpha := byte(alphaButtonBase)
 	if theme == "light" {
 		bg = colorWhite
 		fg = colorBlack
+		messageFg = blendOverlayColor(fg, bg, 150)
 		buttonBg = colorButtonLightBg
 		buttonFg = colorButtonLightFg
 	}
@@ -661,9 +666,9 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 
 	textRect := ovlRect{
 		left:   client.left,
-		top:    client.top + 48,
+		top:    client.top + 24,
 		right:  client.right,
-		bottom: client.bottom - 160,
+		bottom: client.top + 170,
 	}
 	utf16Text := syscall.StringToUTF16(text)
 	if len(utf16Text) == 0 {
@@ -689,6 +694,42 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 			uintptr(unsafe.Pointer(&textRect)),
 			dtCenter|dtVCenter|dtSingleLine|dtNoPrefix,
 		)
+	}
+
+	if strings.TrimSpace(message) != "" {
+		_, _, _ = procSetTextColor.Call(hdc, uintptr(messageFg))
+		messageRect := ovlRect{
+			left:   client.left + 72,
+			top:    textRect.bottom + 12,
+			right:  client.right - 72,
+			bottom: textRect.bottom + 92,
+		}
+		utf16Message := syscall.StringToUTF16(message)
+		if len(utf16Message) == 0 {
+			utf16Message = []uint16{0}
+		}
+		messageFont := createOverlayFont(-28, 500)
+		if messageFont != 0 {
+			oldMessageFont, _, _ := procSelectObject.Call(hdc, messageFont)
+			_, _, _ = procDrawTextW.Call(
+				hdc,
+				uintptr(unsafe.Pointer(&utf16Message[0])),
+				^uintptr(0),
+				uintptr(unsafe.Pointer(&messageRect)),
+				dtCenter|dtWordBreak|dtNoPrefix,
+			)
+			_, _, _ = procSelectObject.Call(hdc, oldMessageFont)
+			_, _, _ = procDeleteObject.Call(messageFont)
+		} else {
+			_, _, _ = procDrawTextW.Call(
+				hdc,
+				uintptr(unsafe.Pointer(&utf16Message[0])),
+				^uintptr(0),
+				uintptr(unsafe.Pointer(&messageRect)),
+				dtCenter|dtWordBreak|dtNoPrefix,
+			)
+		}
+		_, _, _ = procSetTextColor.Call(hdc, uintptr(fg))
 	}
 
 	if allowSkip {

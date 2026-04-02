@@ -73,6 +73,13 @@ func overlayCountdownText(language string, remainingSec int) string {
 	return formatOverlayCountdown(remainingSec)
 }
 
+func overlayMessageText(language string) string {
+	if language == settings.UILanguageZhCN {
+		return "短暂休息，是为了更长时间地专注。"
+	}
+	return "A short break helps you stay focused longer."
+}
+
 func formatOverlayCountdown(sec int) string {
 	if sec < 0 {
 		sec = 0
