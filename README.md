@@ -4,9 +4,10 @@ Pause 是一个跨平台休息提醒应用（macOS / Windows / Linux）。
 
 ## 文档索引
 
+- [文档总索引](./docs/README.md)
 - [架构与代码结构](./docs/architecture.md)
+- [打包、发版与更新源](./docs/packaging.md)
 - [通知能力与前端策略](./docs/notification-logic.md)
-- [打包与发布](./docs/packaging.md)
 
 ## 开发环境
 
@@ -60,7 +61,7 @@ go test -tags wails ./...
 
 ## 打包与发布
 
-完整规范见：`docs/packaging.md`
+完整规范见：[docs/packaging.md](./docs/packaging.md)
 
 ```bash
 # macOS DMG
@@ -79,13 +80,16 @@ go test -tags wails ./...
 - `SHA256SUMS`
 - `updates.json`（供客户端“检查更新”消费）
 
-桌面端前端构建时需要注入：
+桌面端前端构建时需要注入稳定更新源：
 
 ```bash
 VITE_UPDATES_URL=https://dnsayhey.github.io/pause/updates/stable.json
 ```
 
-正式发版后，GitHub Actions 会把 `updates.json` 自动部署到 GitHub Pages。
+正式发版后，GitHub Actions 会自动：
+
+- 发布 GitHub Release
+- 生成并部署 `updates/stable.json` 到 GitHub Pages
 
 ## 清理脚本
 

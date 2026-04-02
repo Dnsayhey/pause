@@ -1,14 +1,12 @@
-# 通知逻辑（当前实现）
+# Pause 通知能力与前端策略
 
-更新时间：2026-03-28
+最后更新：2026-04-02
 
-## 文档定位
+本文档记录 Pause 当前通知能力的实现边界、前端交互策略与平台差异。
 
-这份文档是 Pause 通知能力的单一事实来源（single source of truth）。
+只记录当前实现，不记录历史排障过程和临时迁移方案。
 
-只记录当前实现，不记录历史排障过程和迁移过程。
-
-## 1. 当前结论（TL;DR）
+## 当前结论
 
 - 通知链路已统一为「运行时发送 + 前端启用前预检」。
 - 前端产品态统一为三态：`pending / available / unavailable`（UI 文案：待授权 / 可以通知 / 通知关闭）。
@@ -17,7 +15,7 @@
 - Windows 使用原生 WinRT + ShellExecute 路径，通知能力查询/发送/设置跳转均走原生实现。
 - 通知发送成败由 runtime 统一记日志，平台层只保留关键失败日志。
 
-## 2. 端到端发送链路
+## 端到端链路
 
 运行时行为：
 - engine 每秒 tick。
@@ -34,7 +32,7 @@
 - 成功：`reminder.notification_sent`
 - 失败：`reminder.notification_err`
 
-## 3. 跨平台能力抽象
+## 后端能力模型
 
 后端抽象：
 - `NotificationPermissionState`
@@ -57,7 +55,7 @@
 - `internal/backend/ports/runtime_dependencies.go`
 - `internal/platform/api/platform.go`
 
-## 4. 前端产品态与映射
+## 前端产品态
 
 前端统一暴露三态：
 - `pending`（待授权）
@@ -75,9 +73,9 @@
 关键代码：
 - `frontend/src/hooks/useSettings.ts`
 
-## 5. 前端交互策略
+## 前端交互策略
 
-### 5.1 何时预检通知能力
+### 何时预检通知能力
 
 只在“让 notify reminder 生效”的动作前预检：
 - 新建 `notify` 类型 reminder
@@ -89,14 +87,14 @@
 - 关闭 reminder
 - 其他不导致 notify 生效的保存动作
 
-### 5.2 三态下动作
+### 三态下动作
 
 当用户尝试新建或启用通知提醒：
 - `available`：直接继续提交。
 - `pending`：弹权限提示 + 发起 `RequestNotificationPermission()`，不依赖结果；本次提交中止。
 - `unavailable`：弹“通知关闭”提示，并提供“打开系统设置” action；本次提交中止。
 
-### 5.3 列表状态标签
+### 列表状态标签
 
 当 reminder 满足：
 - `reminderType=notify`
@@ -115,7 +113,7 @@
 - `frontend/src/pages/RemindersPage.tsx`
 - `frontend/src/hooks/useSettings.ts`
 
-### 5.4 通知状态刷新时机
+### 刷新时机
 
 当前刷新触发点：
 - 提醒页初始化加载
@@ -128,9 +126,9 @@
 - `frontend/src/hooks/useSettings.ts`
 - `frontend/src/App.tsx`
 
-## 6. 平台实现
+## 平台实现
 
-### 6.1 macOS
+### macOS
 
 基础能力（`UNUserNotificationCenter`）：
 - 查询授权状态
@@ -146,7 +144,7 @@
 - `internal/platform/darwin/adapters.go`
 - `internal/platform/darwin/notification_user_cgo.go`
 
-### 6.2 Windows
+### Windows
 
 基础能力（原生实现）：
 - WinRT `ToastNotifier.Setting` 查询通知能力
@@ -164,7 +162,7 @@
 - `internal/platform/windows/winrt_native.go`
 - `scripts/windows-installer/project.nsi`
 
-## 7. 日志策略
+## 日志策略
 
 统一原则：
 - runtime 记录业务通知发送成功/失败。
@@ -178,7 +176,7 @@
 - `windows.notification.capability_lookup_failed`
 - `windows.notification.settings_open_failed`
 
-## 8. 非目标与边界
+## 非目标与边界
 
 - 不在提醒保存接口里绑定权限校验或权限申请。
 - 不为平台差异强行做“假一致”状态机；统一产品态即可。

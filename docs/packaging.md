@@ -1,12 +1,15 @@
-# Pause 打包规范（macOS / Windows）
+# Pause 打包、发版与更新源
 
-本文档定义 Pause 桌面端的打包规范与发布产物约定，用于统一本地发版与 CI 发版流程。
+最后更新：2026-04-02
+
+本文档定义 Pause 当前桌面端的打包规范、GitHub Release 流程以及稳定更新源（stable feed）约定。
 
 ## 目标
 
 - 统一 macOS 与 Windows 的打包入口和参数语义。
 - 固化发布物清单（产物 + 校验和 + 元数据）。
 - 保证构建过程可追溯、可复现、可排障。
+- 保证客户端“检查更新”只依赖一个稳定地址。
 
 ## 脚本入口
 
@@ -144,6 +147,22 @@
 
 建议把 `updates.json` 部署到一个稳定 URL，比如 GitHub Pages 或独立静态站点；客户端只请求这个固定地址，而不是直接依赖 GitHub `latest release` API。
 
+## 当前更新源约定
+
+Pause 当前只维护一个渠道：`stable`。
+
+- 客户端固定请求：`https://dnsayhey.github.io/pause/updates/stable.json`
+- `updates.json` 在 Pages 部署时会被复制为：`updates/stable.json`
+- 桌面端构建时通过 `VITE_UPDATES_URL` 注入这个固定地址
+
+客户端当前行为：
+
+- 启动后会静默检查一次更新
+- 设置页可手动再次检查
+- 如果发现更新，会根据当前平台信息匹配最合适的安装包下载地址
+
+平台信息不再由前端 `userAgent` 猜测，而是由 Wails 后端提供 `GetPlatformInfo()`，用于提高 macOS / Windows 包匹配准确性。
+
 当前 GitHub Actions 约定的 Pages 地址格式：
 
 - `stable`：`https://dnsayhey.github.io/pause/updates/stable.json`
@@ -171,7 +190,27 @@
   - `pause-windows-x64`：Windows 安装包与校验文件
   - `pause-release-manifest`：`release-manifest.txt` + `SHA256SUMS` + `updates.json`
 - Pages：
-  - `stable` tag 发版成功后自动部署 `updates/stable.json`
+  - tag 发版成功后自动部署 `updates/stable.json`
+  - 同时生成根页 `index.html`，方便人工检查 Pages 是否正常可访问
+
+## 推荐发布动作
+
+### 本地准备
+
+1. 执行 `./scripts/bump-version.sh <new_version>`
+2. 执行 `./scripts/check-version-sync.sh`
+3. 运行必要测试与构建校验
+4. 提交代码并创建 tag：`v<new_version>`
+
+### 远端发布
+
+1. push `main`
+2. push tag `v<new_version>`
+3. 等待 GitHub Actions 完成：
+   - 桌面安装包构建
+   - Release 发布
+   - `stable.json` 更新
+   - GitHub Pages 部署
 
 ## 验收清单
 
@@ -180,3 +219,4 @@
 - Windows：安装、启动、清理流程正常，桌面/开始菜单快捷方式正确。
 - Windows：WebView2 策略与目标环境一致（`download`/`browser`/`embed`）。
 - 校验：`SHA256SUMS` 与实际上传文件一致。
+- 更新：`https://dnsayhey.github.io/pause/updates/stable.json` 可访问且版本号正确。
