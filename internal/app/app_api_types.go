@@ -34,7 +34,6 @@ type EnforcementSettings struct {
 
 type SoundSettings struct {
 	Enabled bool `json:"enabled"`
-	Volume  int  `json:"volume"`
 }
 
 type TimerSettings struct {
@@ -61,7 +60,6 @@ type EnforcementSettingsPatch struct {
 
 type SoundSettingsPatch struct {
 	Enabled *bool `json:"enabled,omitempty"`
-	Volume  *int  `json:"volume,omitempty"`
 }
 
 type TimerSettingsPatch struct {

@@ -132,20 +132,11 @@ export function SystemSettingsCard({
                 void onPatch({ sound: { enabled: false } });
                 return;
               }
-              void onPatch({
-                sound: {
-                  enabled: true,
-                  volume: Number(next)
-                }
-              });
+              void onPatch({ sound: { enabled: true } });
             }}
             options={[
               { value: 'off', label: t(locale, 'off') },
-              { value: '20', label: '20%' },
-              { value: '40', label: '40%' },
-              { value: '60', label: '60%' },
-              { value: '80', label: '80%' },
-              { value: '100', label: '100%' }
+              { value: 'on', label: t(locale, 'on') }
             ]}
           />
         </div>

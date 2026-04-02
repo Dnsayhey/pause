@@ -38,7 +38,6 @@ func settingsFromDomain(source settingsdomain.Settings) Settings {
 		},
 		Sound: SoundSettings{
 			Enabled: source.Sound.Enabled,
-			Volume:  source.Sound.Volume,
 		},
 		Timer: TimerSettings{
 			Mode:                  source.Timer.Mode,
@@ -62,7 +61,6 @@ func settingsPatchToDomain(patch SettingsPatch) settingsdomain.SettingsPatch {
 	if patch.Sound != nil {
 		result.Sound = &settingsdomain.SoundSettingsPatch{
 			Enabled: patch.Sound.Enabled,
-			Volume:  patch.Sound.Volume,
 		}
 	}
 	if patch.Timer != nil {

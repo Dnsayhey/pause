@@ -71,7 +71,6 @@ export const enUS = {
   idleOption1Hour: '1 hour',
   idleOption2Hours: '2 hours',
   endSoundEnabled: 'End sound enabled',
-  soundVolume: 'Sound volume',
   launchAtLogin: 'Launch at login',
   showTrayCountdown: 'Show countdown next to icon',
   updateSectionTitle: 'Updates',

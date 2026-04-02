@@ -71,7 +71,6 @@ export const zhCN = {
   idleOption1Hour: '1 小时',
   idleOption2Hours: '2 小时',
   endSoundEnabled: '休息结束提示音',
-  soundVolume: '提示音音量',
   launchAtLogin: '开机启动',
   showTrayCountdown: '图标旁显示倒计时',
   updateSectionTitle: '版本更新',

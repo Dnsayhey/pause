@@ -39,7 +39,6 @@ export type Settings = {
   };
   sound: {
     enabled: boolean;
-    volume: number;
   };
   timer: {
     mode: 'idle_pause' | 'real_time';

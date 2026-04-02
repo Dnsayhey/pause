@@ -11,7 +11,6 @@ type EnforcementSettings struct {
 
 type SoundSettings struct {
 	Enabled bool `json:"enabled"`
-	Volume  int  `json:"volume"`
 }
 
 type TimerSettings struct {
@@ -26,10 +25,10 @@ type UISettings struct {
 }
 
 type Settings struct {
-	Enforcement   EnforcementSettings `json:"enforcement"`
-	Sound         SoundSettings       `json:"sound"`
-	Timer         TimerSettings       `json:"timer"`
-	UI            UISettings          `json:"ui"`
+	Enforcement EnforcementSettings `json:"enforcement"`
+	Sound       SoundSettings       `json:"sound"`
+	Timer       TimerSettings       `json:"timer"`
+	UI          UISettings          `json:"ui"`
 }
 
 type EnforcementSettingsPatch struct {
@@ -38,7 +37,6 @@ type EnforcementSettingsPatch struct {
 
 type SoundSettingsPatch struct {
 	Enabled *bool `json:"enabled,omitempty"`
-	Volume  *int  `json:"volume,omitempty"`
 }
 
 type TimerSettingsPatch struct {
@@ -53,16 +51,16 @@ type UISettingsPatch struct {
 }
 
 type SettingsPatch struct {
-	Enforcement   *EnforcementSettingsPatch `json:"enforcement,omitempty"`
-	Sound         *SoundSettingsPatch       `json:"sound,omitempty"`
-	Timer         *TimerSettingsPatch       `json:"timer,omitempty"`
-	UI            *UISettingsPatch          `json:"ui,omitempty"`
+	Enforcement *EnforcementSettingsPatch `json:"enforcement,omitempty"`
+	Sound       *SoundSettingsPatch       `json:"sound,omitempty"`
+	Timer       *TimerSettingsPatch       `json:"timer,omitempty"`
+	UI          *UISettingsPatch          `json:"ui,omitempty"`
 }
 
 func DefaultSettings() Settings {
 	return Settings{
 		Enforcement: EnforcementSettings{OverlaySkipAllowed: true},
-		Sound:       SoundSettings{Enabled: true, Volume: 70},
+		Sound:       SoundSettings{Enabled: true},
 		Timer: TimerSettings{
 			Mode:                  TimerModeIdlePause,
 			IdlePauseThresholdSec: 60,
@@ -78,9 +76,6 @@ func DefaultSettings() Settings {
 func (s Settings) Normalize() Settings {
 	d := DefaultSettings()
 
-	if s.Sound.Volume <= 0 || s.Sound.Volume > 100 {
-		s.Sound.Volume = d.Sound.Volume
-	}
 	if s.Timer.IdlePauseThresholdSec <= 0 {
 		s.Timer.IdlePauseThresholdSec = d.Timer.IdlePauseThresholdSec
 	}
@@ -108,9 +103,6 @@ func (s Settings) ApplyPatch(p SettingsPatch) Settings {
 	if p.Sound != nil {
 		if p.Sound.Enabled != nil {
 			s.Sound.Enabled = *p.Sound.Enabled
-		}
-		if p.Sound.Volume != nil {
-			s.Sound.Volume = *p.Sound.Volume
 		}
 	}
 	if p.Timer != nil {

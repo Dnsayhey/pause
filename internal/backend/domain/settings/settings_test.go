@@ -5,20 +5,15 @@ import "testing"
 func TestSettingsApplyPatch_NormalizeInvalidValues(t *testing.T) {
 	base := DefaultSettings()
 	badMode := "wrong"
-	badVolume := 101
 	badThreshold := -3
 	badLanguage := "ja-JP"
 	badTheme := "sepia"
 
 	got := base.ApplyPatch(SettingsPatch{
-		Sound: &SoundSettingsPatch{Volume: &badVolume},
 		Timer: &TimerSettingsPatch{Mode: &badMode, IdlePauseThresholdSec: &badThreshold},
 		UI:    &UISettingsPatch{Language: &badLanguage, Theme: &badTheme},
 	})
 
-	if got.Sound.Volume != base.Sound.Volume {
-		t.Fatalf("volume fallback mismatch: got=%d want=%d", got.Sound.Volume, base.Sound.Volume)
-	}
 	if got.Timer.Mode != TimerModeIdlePause {
 		t.Fatalf("timer mode fallback mismatch: got=%q", got.Timer.Mode)
 	}

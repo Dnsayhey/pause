@@ -15,7 +15,6 @@ import { useReminderManager } from './useReminderManager';
 import { nearestOptionValue } from './settings/helpers';
 
 const IDLE_THRESHOLD_OPTIONS = [60, 300, 600, 1800, 3600, 7200] as const;
-const SOUND_VOLUME_OPTIONS = [20, 40, 60, 80, 100] as const;
 
 type UseSettingsOptions = {
   setError: (message: string) => void;
@@ -154,7 +153,7 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
 
   const soundModeSelectValue = useMemo(() => {
     if (!settings || !settings.sound.enabled) return 'off';
-    return String(nearestOptionValue(settings.sound.volume, SOUND_VOLUME_OPTIONS));
+    return 'on';
   }, [settings]);
 
   const runUpdateCheck = useCallback(

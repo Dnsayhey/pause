@@ -187,14 +187,7 @@ func (darwinSoundPlayer) PlayBreakEnd(sound settings.SoundSettings) error {
 	if !sound.Enabled {
 		return nil
 	}
-	volume := float64(sound.Volume) / 100.0
-	if volume < 0 {
-		volume = 0
-	}
-	if volume > 1 {
-		volume = 1
-	}
-	return exec.Command("afplay", "-v", fmt.Sprintf("%.2f", volume), defaultMacSound).Start()
+	return exec.Command("afplay", defaultMacSound).Start()
 }
 
 func (s darwinStartupManager) SetLaunchAtLogin(enabled bool) error {
