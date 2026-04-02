@@ -8,5 +8,5 @@ import (
 )
 
 func NewAdapters(appID string) api.Adapters {
-	return withNotificationCapabilityOverride(windows.NewAdapters(appID))
+	return withNotificationCapabilityOverride(windows.NewAdapters(appID)).WithDefaults()
 }

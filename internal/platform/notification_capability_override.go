@@ -4,19 +4,48 @@ import (
 	"os"
 	"strings"
 
+	"pause/internal/backend/ports"
 	"pause/internal/platform/api"
-	"pause/internal/platform/fallbacks"
 )
+
+type disabledNotificationCapabilityProvider struct {
+	reason string
+}
+
+func disabledNotificationCapability(reason string) ports.NotificationCapability {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "notification capability disabled"
+	}
+	return ports.NotificationCapability{
+		PermissionState: ports.NotificationPermissionUnknown,
+		CanRequest:      false,
+		CanOpenSettings: false,
+		Reason:          reason,
+	}
+}
 
 func withNotificationCapabilityOverride(adapters api.Adapters) api.Adapters {
 	if reason, disabled := notificationCapabilityDisabledByBuild(); disabled {
-		adapters.NotificationCapabilityProvider = fallbacks.DisabledNotificationCapabilityProvider{Reason: reason}
+		adapters.NotificationCapabilityProvider = disabledNotificationCapabilityProvider{reason: reason}
 		return adapters
 	}
 	if reason, disabled := notificationCapabilityDisabledByEnv(); disabled {
-		adapters.NotificationCapabilityProvider = fallbacks.DisabledNotificationCapabilityProvider{Reason: reason}
+		adapters.NotificationCapabilityProvider = disabledNotificationCapabilityProvider{reason: reason}
 	}
 	return adapters
+}
+
+func (p disabledNotificationCapabilityProvider) GetNotificationCapability() ports.NotificationCapability {
+	return disabledNotificationCapability(p.reason)
+}
+
+func (p disabledNotificationCapabilityProvider) RequestNotificationPermission() (ports.NotificationCapability, error) {
+	return disabledNotificationCapability(p.reason), nil
+}
+
+func (p disabledNotificationCapabilityProvider) OpenNotificationSettings() error {
+	return api.ErrNotificationSettingsUnavailable
 }
 
 func notificationCapabilityDisabledByEnv() (string, bool) {

@@ -1,20 +1,33 @@
 package platform
 
-import "testing"
+import (
+	"errors"
+	"testing"
 
-func TestNotificationCapabilityDisabledByEnv(t *testing.T) {
-	t.Setenv("PAUSE_DISABLE_NOTIFICATION_CAPABILITY", "")
-	if reason, disabled := notificationCapabilityDisabledByEnv(); disabled || reason != "" {
-		t.Fatalf("expected notification capability to stay enabled by default")
+	"pause/internal/backend/ports"
+	"pause/internal/platform/api"
+)
+
+func TestDisabledNotificationCapabilityProvider(t *testing.T) {
+	provider := disabledNotificationCapabilityProvider{reason: "dev disabled"}
+	got := provider.GetNotificationCapability()
+	if got.PermissionState != ports.NotificationPermissionUnknown {
+		t.Fatalf("permissionState=%q want=%q", got.PermissionState, ports.NotificationPermissionUnknown)
 	}
-
-	t.Setenv("PAUSE_DISABLE_NOTIFICATION_CAPABILITY", "1")
-	if reason, disabled := notificationCapabilityDisabledByEnv(); !disabled || reason == "" {
-		t.Fatalf("expected env flag to disable notification capability")
+	if got.CanRequest {
+		t.Fatalf("CanRequest should be false")
 	}
+	if got.CanOpenSettings {
+		t.Fatalf("CanOpenSettings should be false")
+	}
+	if got.Reason != "dev disabled" {
+		t.Fatalf("Reason=%q want=%q", got.Reason, "dev disabled")
+	}
+}
 
-	t.Setenv("PAUSE_DISABLE_NOTIFICATION_CAPABILITY", "false")
-	if reason, disabled := notificationCapabilityDisabledByEnv(); disabled || reason != "" {
-		t.Fatalf("expected false value to keep notification capability enabled")
+func TestDisabledNotificationCapabilityProvider_OpenSettingsUnavailable(t *testing.T) {
+	provider := disabledNotificationCapabilityProvider{reason: "dev disabled"}
+	if err := provider.OpenNotificationSettings(); !errors.Is(err, api.ErrNotificationSettingsUnavailable) {
+		t.Fatalf("OpenNotificationSettings() err=%v want=%v", err, api.ErrNotificationSettingsUnavailable)
 	}
 }
