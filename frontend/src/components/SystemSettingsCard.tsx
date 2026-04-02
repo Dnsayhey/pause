@@ -8,7 +8,6 @@ type SystemSettingsCardProps = {
   settings: Settings;
   launchAtLogin: boolean;
   idleModeSelectValue: string;
-  soundModeSelectValue: string;
   showTrayCountdownOption: boolean;
   updateState: UpdateCheckResult | null;
   isCheckingForUpdates: boolean;
@@ -24,7 +23,6 @@ export function SystemSettingsCard({
   settings,
   launchAtLogin,
   idleModeSelectValue,
-  soundModeSelectValue,
   showTrayCountdownOption,
   updateState,
   isCheckingForUpdates,
@@ -121,25 +119,13 @@ export function SystemSettingsCard({
             ]}
           />
         </div>
-        <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
-          <span className="text-[var(--text-primary)]">{t(locale, 'endSoundEnabled')}</span>
-          <PillSelect
-            variant="minimal"
-            value={soundModeSelectValue}
-            onChange={(e) => {
-              const next = e.target.value;
-              if (next === 'off') {
-                void onPatch({ sound: { enabled: false } });
-                return;
-              }
-              void onPatch({ sound: { enabled: true } });
-            }}
-            options={[
-              { value: 'off', label: t(locale, 'off') },
-              { value: 'on', label: t(locale, 'on') }
-            ]}
-          />
-        </div>
+        <ToggleSwitchRow
+          label={t(locale, 'endSoundEnabled')}
+          checked={settings.sound.enabled}
+          onChange={(checked) => {
+            void onPatch({ sound: { enabled: checked } });
+          }}
+        />
         {showTrayCountdownOption && (
           <ToggleSwitchRow
             label={t(locale, 'showTrayCountdown')}

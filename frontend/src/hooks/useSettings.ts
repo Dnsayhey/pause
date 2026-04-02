@@ -151,11 +151,6 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     return String(nearestOptionValue(settings.timer.idlePauseThresholdSec, IDLE_THRESHOLD_OPTIONS));
   }, [settings]);
 
-  const soundModeSelectValue = useMemo(() => {
-    if (!settings || !settings.sound.enabled) return 'off';
-    return 'on';
-  }, [settings]);
-
   const runUpdateCheck = useCallback(
     async ({ silent }: { silent: boolean }) => {
       setIsCheckingForUpdates(true);
@@ -206,7 +201,6 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     commitReminderDrafts,
     resetReminderDraftToStored,
     idleModeSelectValue,
-    soundModeSelectValue,
     updateState,
     isCheckingForUpdates,
     checkForUpdates: () => runUpdateCheck({ silent: false }),

@@ -7,7 +7,6 @@ type SettingsPageProps = {
   settings: Settings;
   launchAtLogin: boolean;
   idleModeSelectValue: string;
-  soundModeSelectValue: string;
   showTrayCountdownOption: boolean;
   updateState: UpdateCheckResult | null;
   isCheckingForUpdates: boolean;
@@ -23,7 +22,6 @@ export function SettingsPage({
   settings,
   launchAtLogin,
   idleModeSelectValue,
-  soundModeSelectValue,
   showTrayCountdownOption,
   updateState,
   isCheckingForUpdates,
@@ -40,7 +38,6 @@ export function SettingsPage({
         settings={settings}
         launchAtLogin={launchAtLogin}
         idleModeSelectValue={idleModeSelectValue}
-        soundModeSelectValue={soundModeSelectValue}
         showTrayCountdownOption={showTrayCountdownOption}
         updateState={updateState}
         isCheckingForUpdates={isCheckingForUpdates}

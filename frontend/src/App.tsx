@@ -160,7 +160,6 @@ export function App() {
     commitReminderDrafts,
     resetReminderDraftToStored,
     idleModeSelectValue,
-    soundModeSelectValue,
     updateState,
     isCheckingForUpdates,
     checkForUpdates,
@@ -525,7 +524,6 @@ export function App() {
                   settings={settings}
                   launchAtLogin={launchAtLogin}
                   idleModeSelectValue={idleModeSelectValue}
-                  soundModeSelectValue={soundModeSelectValue}
                   showTrayCountdownOption={platformClass !== 'win'}
                   updateState={updateState}
                   isCheckingForUpdates={isCheckingForUpdates}
