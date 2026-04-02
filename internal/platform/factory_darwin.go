@@ -8,5 +8,5 @@ import (
 )
 
 func NewAdapters(appID string) api.Adapters {
-	return darwin.NewAdapters(appID)
+	return withNotificationCapabilityOverride(darwin.NewAdapters(appID))
 }

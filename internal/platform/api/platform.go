@@ -29,20 +29,7 @@ func (NoopNotifier) ShowReminder(_, _ string) error { return nil }
 type NoopNotificationCapabilityProvider struct{}
 
 func (NoopNotificationCapabilityProvider) GetNotificationCapability() ports.NotificationCapability {
-	return ports.NotificationCapability{
-		PermissionState: ports.NotificationPermissionUnknown,
-		CanRequest:      false,
-		CanOpenSettings: false,
-		Reason:          "notification capability unavailable",
-	}
-}
-
-func (NoopNotificationCapabilityProvider) RequestNotificationPermission() (ports.NotificationCapability, error) {
-	return NoopNotificationCapabilityProvider{}.GetNotificationCapability(), nil
-}
-
-func (NoopNotificationCapabilityProvider) OpenNotificationSettings() error {
-	return nil
+	return DisabledNotificationCapabilityProvider{Reason: "notification capability unavailable"}.GetNotificationCapability()
 }
 
 type NoopSoundPlayer struct{}
