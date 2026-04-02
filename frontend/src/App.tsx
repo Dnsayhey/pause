@@ -1,6 +1,13 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
-import { closeWindow } from './api';
+import {
+  ERR_UPDATE_DOWNLOAD_URL_MISSING,
+  ERR_UPDATE_FEED_HTTP_PREFIX,
+  ERR_UPDATE_FEED_NOT_CONFIGURED,
+  ERR_UPDATE_FEED_TIMEOUT,
+  ERR_UPDATE_FETCH_FAILED,
+  closeWindow
+} from './api';
 import { resolveLocale, t } from './i18n';
 import { HeroHeader } from './components/HeroHeader';
 import { CustomScrollArea, InlineError, useToast } from './components/ui';
@@ -14,9 +21,6 @@ const DARK_THEME_VARIANT_STORAGE_KEY = 'pause.darkThemeVariant';
 const NOTIFICATION_ERROR_PERMISSION_DENIED = 'ERR_NOTIFICATION_PERMISSION_DENIED';
 const NOTIFICATION_ERROR_PERMISSION_REQUIRED = 'ERR_NOTIFICATION_PERMISSION_REQUIRED';
 const NOTIFICATION_ERROR_UNAVAILABLE = 'ERR_NOTIFICATION_UNAVAILABLE';
-const UPDATE_ERROR_FEED_NOT_CONFIGURED = 'UPDATE FEED URL IS NOT CONFIGURED.';
-const UPDATE_ERROR_DOWNLOAD_URL_MISSING = 'ERR_UPDATE_DOWNLOAD_URL_MISSING';
-const UPDATE_ERROR_FEED_TIMEOUT = 'UPDATE FEED REQUEST TIMED OUT.';
 type DarkThemeVariant = 'default' | 'alt';
 
 function readDarkThemeVariant(): DarkThemeVariant {
@@ -41,7 +45,7 @@ function detectPlatformClass(): string {
 }
 
 function resolveInlineErrorMessage(locale: 'zh-CN' | 'en-US', message: string): string {
-  const normalized = String(message ?? '').toUpperCase();
+  const normalized = String(message ?? '').trim().toUpperCase();
   if (normalized.includes(NOTIFICATION_ERROR_PERMISSION_DENIED)) {
     return t(locale, 'notificationPermissionDeniedError');
   }
@@ -51,17 +55,23 @@ function resolveInlineErrorMessage(locale: 'zh-CN' | 'en-US', message: string): 
   if (normalized.includes(NOTIFICATION_ERROR_UNAVAILABLE)) {
     return t(locale, 'notificationUnavailableError');
   }
-  if (normalized.includes(UPDATE_ERROR_FEED_NOT_CONFIGURED)) {
+  if (normalized.includes(ERR_UPDATE_FEED_NOT_CONFIGURED)) {
     return t(locale, 'updateFeedNotConfiguredError');
   }
-  if (normalized.includes(UPDATE_ERROR_DOWNLOAD_URL_MISSING)) {
+  if (normalized.includes(ERR_UPDATE_DOWNLOAD_URL_MISSING)) {
     return t(locale, 'updateDownloadUnavailableError');
   }
-  if (normalized.includes(UPDATE_ERROR_FEED_TIMEOUT)) {
+  if (normalized.includes(ERR_UPDATE_FEED_TIMEOUT)) {
     return t(locale, 'updateFetchTimeoutError');
   }
-  if (normalized.startsWith('FAILED TO FETCH UPDATE FEED: HTTP ')) {
-    return `${t(locale, 'updateFetchFailedError')} (${String(message).replace(/^.*HTTP\s+/i, 'HTTP ')})`;
+  if (normalized.startsWith(ERR_UPDATE_FEED_HTTP_PREFIX)) {
+    const status = normalized.slice(ERR_UPDATE_FEED_HTTP_PREFIX.length).trim();
+    return status === ''
+      ? t(locale, 'updateFetchFailedError')
+      : `${t(locale, 'updateFetchFailedError')} (HTTP ${status})`;
+  }
+  if (normalized.includes(ERR_UPDATE_FETCH_FAILED)) {
+    return t(locale, 'updateFetchFailedError');
   }
   return message;
 }

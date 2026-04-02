@@ -214,6 +214,12 @@ const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.0.0';
 const UPDATES_URL = import.meta.env.VITE_UPDATES_URL || '';
 const UPDATE_FETCH_TIMEOUT_MS = 10_000;
 
+export const ERR_UPDATE_FEED_NOT_CONFIGURED = 'ERR_UPDATE_FEED_NOT_CONFIGURED';
+export const ERR_UPDATE_FEED_TIMEOUT = 'ERR_UPDATE_FEED_TIMEOUT';
+export const ERR_UPDATE_FEED_HTTP_PREFIX = 'ERR_UPDATE_FEED_HTTP_';
+export const ERR_UPDATE_FETCH_FAILED = 'ERR_UPDATE_FETCH_FAILED';
+export const ERR_UPDATE_DOWNLOAD_URL_MISSING = 'ERR_UPDATE_DOWNLOAD_URL_MISSING';
+
 async function getPlatformInfo(): Promise<PlatformInfo> {
   const backend = requireBackend();
   if (!backend.GetPlatformInfo) {
@@ -228,7 +234,7 @@ async function getPlatformInfo(): Promise<PlatformInfo> {
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
   if (UPDATES_URL.trim() === '') {
-    throw new Error('Update feed URL is not configured.');
+    throw new Error(ERR_UPDATE_FEED_NOT_CONFIGURED);
   }
 
   const controller = new AbortController();
@@ -241,17 +247,22 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Update feed request timed out.');
+      throw new Error(ERR_UPDATE_FEED_TIMEOUT);
     }
-    throw err;
+    throw new Error(ERR_UPDATE_FETCH_FAILED);
   } finally {
     window.clearTimeout(timeout);
   }
   if (!response.ok) {
-    throw new Error(`Failed to fetch update feed: HTTP ${response.status}`);
+    throw new Error(`${ERR_UPDATE_FEED_HTTP_PREFIX}${response.status}`);
   }
 
-  const payload = (await response.json()) as UpdatesFeed;
+  let payload: UpdatesFeed;
+  try {
+    payload = (await response.json()) as UpdatesFeed;
+  } catch {
+    throw new Error(ERR_UPDATE_FETCH_FAILED);
+  }
   const latestVersion = String(payload.release?.version ?? '').trim();
   const { os, arch } = await getPlatformInfo();
   const selectedAsset = selectBestAsset(payload.assets as UpdateAsset[] | undefined, os, arch);
@@ -270,7 +281,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
 export function openExternalURL(url: string): void {
   const target = String(url ?? '').trim();
   if (target === '') {
-    throw new Error('URL is required.');
+    throw new Error(ERR_UPDATE_DOWNLOAD_URL_MISSING);
   }
   requireBrowserBridge().BrowserOpenURL(target);
 }
