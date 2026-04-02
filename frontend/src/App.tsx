@@ -14,6 +14,9 @@ const DARK_THEME_VARIANT_STORAGE_KEY = 'pause.darkThemeVariant';
 const NOTIFICATION_ERROR_PERMISSION_DENIED = 'ERR_NOTIFICATION_PERMISSION_DENIED';
 const NOTIFICATION_ERROR_PERMISSION_REQUIRED = 'ERR_NOTIFICATION_PERMISSION_REQUIRED';
 const NOTIFICATION_ERROR_UNAVAILABLE = 'ERR_NOTIFICATION_UNAVAILABLE';
+const UPDATE_ERROR_FEED_NOT_CONFIGURED = 'UPDATE FEED URL IS NOT CONFIGURED.';
+const UPDATE_ERROR_DOWNLOAD_URL_MISSING = 'ERR_UPDATE_DOWNLOAD_URL_MISSING';
+const UPDATE_ERROR_RELEASES_PAGE_MISSING = 'ERR_UPDATE_RELEASES_PAGE_MISSING';
 type DarkThemeVariant = 'default' | 'alt';
 
 function readDarkThemeVariant(): DarkThemeVariant {
@@ -48,6 +51,18 @@ function resolveInlineErrorMessage(locale: 'zh-CN' | 'en-US', message: string): 
   if (normalized.includes(NOTIFICATION_ERROR_UNAVAILABLE)) {
     return t(locale, 'notificationUnavailableError');
   }
+  if (normalized.includes(UPDATE_ERROR_FEED_NOT_CONFIGURED)) {
+    return t(locale, 'updateFeedNotConfiguredError');
+  }
+  if (normalized.includes(UPDATE_ERROR_DOWNLOAD_URL_MISSING)) {
+    return t(locale, 'updateDownloadUnavailableError');
+  }
+  if (normalized.includes(UPDATE_ERROR_RELEASES_PAGE_MISSING)) {
+    return t(locale, 'updateReleasePageUnavailableError');
+  }
+  if (normalized.startsWith('FAILED TO FETCH UPDATE FEED: HTTP ')) {
+    return `${t(locale, 'updateFetchFailedError')} (${String(message).replace(/^.*HTTP\s+/i, 'HTTP ')})`;
+  }
   return message;
 }
 
@@ -78,6 +93,13 @@ export function App() {
     (message: string) => {
       const normalized = String(message ?? '').trim();
       if (normalized === '') {
+        return;
+      }
+      if (normalized === 'APP_UP_TO_DATE') {
+        pushToast({
+          message: t(localeRef.current, 'updateUpToDate'),
+          tone: 'info'
+        });
         return;
       }
       pushToast({
@@ -139,6 +161,10 @@ export function App() {
     resetReminderDraftToStored,
     idleModeSelectValue,
     soundModeSelectValue,
+    updateState,
+    isCheckingForUpdates,
+    checkForUpdates,
+    openUpdateDownload,
     notificationProductState,
     notificationPromptCode,
     notificationPromptVersion,
@@ -501,8 +527,12 @@ export function App() {
                   idleModeSelectValue={idleModeSelectValue}
                   soundModeSelectValue={soundModeSelectValue}
                   showTrayCountdownOption={platformClass !== 'win'}
+                  updateState={updateState}
+                  isCheckingForUpdates={isCheckingForUpdates}
                   onLaunchAtLoginChange={applyLaunchAtLogin}
                   onPatch={applyPatch}
+                  onCheckForUpdates={checkForUpdates}
+                  onOpenUpdateDownload={openUpdateDownload}
                   onThemeLabelDoubleClick={toggleDarkThemeVariant}
                 />
               }

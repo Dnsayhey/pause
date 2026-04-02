@@ -1,7 +1,7 @@
 import { ToggleSwitchRow } from './ToggleSwitch';
 import { PillSelect } from './ui';
 import { t, type Locale } from '../i18n';
-import type { Settings, SettingsPatch } from '../types';
+import type { Settings, SettingsPatch, UpdateCheckResult } from '../types';
 
 type SystemSettingsCardProps = {
   locale: Locale;
@@ -10,8 +10,12 @@ type SystemSettingsCardProps = {
   idleModeSelectValue: string;
   soundModeSelectValue: string;
   showTrayCountdownOption: boolean;
+  updateState: UpdateCheckResult | null;
+  isCheckingForUpdates: boolean;
   onLaunchAtLoginChange: (enabled: boolean) => Promise<void>;
   onPatch: (patch: SettingsPatch) => Promise<void>;
+  onCheckForUpdates: () => Promise<void>;
+  onOpenUpdateDownload: () => void;
   onThemeLabelDoubleClick?: () => void;
 };
 
@@ -22,10 +26,21 @@ export function SystemSettingsCard({
   idleModeSelectValue,
   soundModeSelectValue,
   showTrayCountdownOption,
+  updateState,
+  isCheckingForUpdates,
   onLaunchAtLoginChange,
   onPatch,
+  onCheckForUpdates,
+  onOpenUpdateDownload,
   onThemeLabelDoubleClick
 }: SystemSettingsCardProps) {
+  const currentVersion = (updateState?.currentVersion ?? import.meta.env.VITE_APP_VERSION) || '0.0.0';
+  const versionStatus = updateState
+    ? updateState.updateAvailable
+      ? `${t(locale, 'updateAvailableLabel')}: ${updateState.latestVersion ?? t(locale, 'updateUnknownVersion')}`
+      : t(locale, 'updateUpToDate')
+    : null;
+
   return (
     <section>
       <h3 className="mb-3 mt-0 text-[18px]">{t(locale, 'sectionSettings')}</h3>
@@ -144,6 +159,34 @@ export function SystemSettingsCard({
             }}
           />
         )}
+        <div className="flex flex-col items-start justify-between gap-3 text-sm font-normal leading-[1.35] sm:flex-row sm:items-center">
+          <div className="min-w-0">
+            <div className="text-[var(--text-primary)]">{t(locale, 'updateSectionTitle')}</div>
+            {versionStatus ? <div className="mt-1 text-xs leading-[1.4] text-[var(--text-secondary)]">{versionStatus}</div> : null}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-3 self-stretch sm:self-auto">
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">v{currentVersion}</span>
+            <button
+              type="button"
+              className="cursor-pointer rounded-[8px] border border-transparent px-1.5 py-1 text-xs font-medium leading-[1.2] text-[var(--text-secondary)] transition-colors hover:border-[var(--surface-border)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isCheckingForUpdates}
+              onClick={() => {
+                void onCheckForUpdates();
+              }}
+            >
+              {isCheckingForUpdates ? t(locale, 'updateChecking') : t(locale, 'updateCheckNow')}
+            </button>
+            {updateState?.updateAvailable && (updateState.selectedAsset?.url || updateState.releaseUrl) ? (
+              <button
+                type="button"
+                className="cursor-pointer rounded-[8px] border border-transparent px-1.5 py-1 text-xs font-medium leading-[1.2] text-[var(--text-secondary)] transition-colors hover:border-[var(--surface-border)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={onOpenUpdateDownload}
+              >
+                {t(locale, 'updateDownload')}
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     </section>
   );

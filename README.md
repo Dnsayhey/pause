@@ -70,8 +70,22 @@ go test -tags wails ./...
 ./scripts/build-windows-installer.sh
 
 # 生成发布清单与校验和
-./scripts/generate-release-manifest.sh --version <version> --channel <channel>
+./scripts/generate-release-manifest.sh --version <version> --channel stable
 ```
+
+会同时输出：
+
+- `release-manifest.txt`
+- `SHA256SUMS`
+- `updates.json`（供客户端“检查更新”消费）
+
+桌面端前端构建时需要注入：
+
+```bash
+VITE_UPDATES_URL=https://dnsayhey.github.io/pause/updates/stable.json
+```
+
+正式发版后，GitHub Actions 会把 `updates.json` 自动部署到 GitHub Pages。
 
 ## 清理脚本
 

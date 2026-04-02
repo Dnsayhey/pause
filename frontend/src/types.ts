@@ -80,6 +80,28 @@ export type NotificationCapability = {
   reason?: string;
 };
 
+export type UpdateAsset = {
+  name: string;
+  path: string;
+  os: string;
+  arch: string;
+  kind: string;
+  sha256: string;
+  size: number;
+  url: string | null;
+};
+
+export type UpdateCheckResult = {
+  currentVersion: string;
+  latestVersion: string | null;
+  channel: string | null;
+  checkedAt: string;
+  updateAvailable: boolean;
+  releaseUrl: string | null;
+  releasesPageUrl: string | null;
+  selectedAsset: UpdateAsset | null;
+};
+
 export type NotificationProductState = 'pending' | 'available' | 'unavailable';
 
 export type SettingsPatch = Partial<{

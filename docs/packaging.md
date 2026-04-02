@@ -111,7 +111,7 @@
 命令：
 
 ```bash
-./scripts/generate-release-manifest.sh --version <version> --channel <channel>
+./scripts/generate-release-manifest.sh --version <version> --channel stable
 ```
 
 脚本会扫描以下后缀文件：
@@ -128,6 +128,27 @@
 
 - `release-manifest.txt`：包含生成时间、版本、渠道、commit、文件条目
 - `SHA256SUMS`：发布文件 SHA256 校验和
+- `updates.json`：面向客户端消费的机器可读更新元数据
+
+`updates.json` 当前包含：
+
+- `schema_version`
+- `generated_at_utc`
+- `release.version`
+- `release.channel`
+- `release.tag`
+- `release.commit`
+- `release.repository`
+- `release.url`
+- `assets[]`：每个产物的 `name` / `path` / `os` / `arch` / `kind` / `sha256` / `size` / `url`
+
+建议把 `updates.json` 部署到一个稳定 URL，比如 GitHub Pages 或独立静态站点；客户端只请求这个固定地址，而不是直接依赖 GitHub `latest release` API。
+
+当前 GitHub Actions 约定的 Pages 地址格式：
+
+- `stable`：`https://dnsayhey.github.io/pause/updates/stable.json`
+
+前端构建时通过 `VITE_UPDATES_URL` 注入这个稳定地址。
 
 ## 推荐发布流程
 
@@ -135,6 +156,7 @@
 2. 执行 macOS 打包（按需传入签名与版本参数）。
 3. 执行 Windows 打包（按目标架构分别构建）。
 4. 执行 `generate-release-manifest.sh`，生成统一清单与校验文件。
+   当前推荐固定使用 `stable` 渠道标签，与自动更新地址保持一致。
 5. 人工验收并归档发布目录。
 
 ## GitHub Actions 自动打包
@@ -147,7 +169,9 @@
   - `pause-macos-arm64`：macOS Apple Silicon DMG
   - `pause-macos-x64`：macOS Intel x64 DMG
   - `pause-windows-x64`：Windows 安装包与校验文件
-  - `pause-release-manifest`：`release-manifest.txt` + `SHA256SUMS`
+  - `pause-release-manifest`：`release-manifest.txt` + `SHA256SUMS` + `updates.json`
+- Pages：
+  - `stable` tag 发版成功后自动部署 `updates/stable.json`
 
 ## 验收清单
 

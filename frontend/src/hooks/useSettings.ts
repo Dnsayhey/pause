@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getLaunchAtLogin, getNotificationCapability, getReminders, getSettings, setLaunchAtLogin, updateSettings } from '../api';
-import type { ReminderConfig, Settings, SettingsPatch } from '../types';
+import {
+  checkForUpdates,
+  getLaunchAtLogin,
+  getNotificationCapability,
+  getReminders,
+  getSettings,
+  openExternalURL,
+  setLaunchAtLogin,
+  updateSettings
+} from '../api';
+import type { ReminderConfig, Settings, SettingsPatch, UpdateCheckResult } from '../types';
 import { useNotificationState } from './useNotificationState';
 import { useReminderManager } from './useReminderManager';
 import { nearestOptionValue } from './settings/helpers';
@@ -18,6 +27,8 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
   const [settings, setSettings] = useState<Settings | null>(null);
   const [reminders, setReminders] = useState<ReminderConfig[]>([]);
   const [launchAtLogin, setLaunchAtLoginState] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateCheckResult | null>(null);
+  const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
 
   const {
     setNotificationCapability,
@@ -146,6 +157,39 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     return String(nearestOptionValue(settings.sound.volume, SOUND_VOLUME_OPTIONS));
   }, [settings]);
 
+  const runUpdateCheck = useCallback(
+    async ({ silent }: { silent: boolean }) => {
+      setIsCheckingForUpdates(true);
+      try {
+        const next = await checkForUpdates();
+        setUpdateState(next);
+        if (!silent && !next.updateAvailable) {
+          setError('APP_UP_TO_DATE');
+        }
+      } catch (err) {
+        if (!silent) {
+          setError(String(err));
+        }
+      } finally {
+        setIsCheckingForUpdates(false);
+      }
+    },
+    [setError]
+  );
+
+  useEffect(() => {
+    void runUpdateCheck({ silent: true });
+  }, [runUpdateCheck]);
+
+  const openUpdateDownload = useCallback(() => {
+    const url = updateState?.selectedAsset?.url || updateState?.releaseUrl;
+    if (!url) {
+      setError('ERR_UPDATE_DOWNLOAD_URL_MISSING');
+      return;
+    }
+    openExternalURL(url);
+  }, [setError, updateState]);
+
   return {
     settings,
     reminders,
@@ -164,6 +208,10 @@ export function useSettings({ setError, setBootstrapError, refreshRuntime }: Use
     resetReminderDraftToStored,
     idleModeSelectValue,
     soundModeSelectValue,
+    updateState,
+    isCheckingForUpdates,
+    checkForUpdates: () => runUpdateCheck({ silent: false }),
+    openUpdateDownload,
     notificationProductState,
     notificationPromptCode,
     notificationPromptVersion,

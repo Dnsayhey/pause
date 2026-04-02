@@ -1,6 +1,6 @@
 import { SystemSettingsCard } from '../components/SystemSettingsCard';
 import type { Locale } from '../i18n';
-import type { Settings, SettingsPatch } from '../types';
+import type { Settings, SettingsPatch, UpdateCheckResult } from '../types';
 
 type SettingsPageProps = {
   locale: Locale;
@@ -9,8 +9,12 @@ type SettingsPageProps = {
   idleModeSelectValue: string;
   soundModeSelectValue: string;
   showTrayCountdownOption: boolean;
+  updateState: UpdateCheckResult | null;
+  isCheckingForUpdates: boolean;
   onLaunchAtLoginChange: (enabled: boolean) => Promise<void>;
   onPatch: (patch: SettingsPatch) => Promise<void>;
+  onCheckForUpdates: () => Promise<void>;
+  onOpenUpdateDownload: () => void;
   onThemeLabelDoubleClick?: () => void;
 };
 
@@ -21,8 +25,12 @@ export function SettingsPage({
   idleModeSelectValue,
   soundModeSelectValue,
   showTrayCountdownOption,
+  updateState,
+  isCheckingForUpdates,
   onLaunchAtLoginChange,
   onPatch,
+  onCheckForUpdates,
+  onOpenUpdateDownload,
   onThemeLabelDoubleClick
 }: SettingsPageProps) {
   return (
@@ -34,8 +42,12 @@ export function SettingsPage({
         idleModeSelectValue={idleModeSelectValue}
         soundModeSelectValue={soundModeSelectValue}
         showTrayCountdownOption={showTrayCountdownOption}
+        updateState={updateState}
+        isCheckingForUpdates={isCheckingForUpdates}
         onLaunchAtLoginChange={onLaunchAtLoginChange}
         onPatch={onPatch}
+        onCheckForUpdates={onCheckForUpdates}
+        onOpenUpdateDownload={onOpenUpdateDownload}
         onThemeLabelDoubleClick={onThemeLabelDoubleClick}
       />
     </section>
