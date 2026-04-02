@@ -102,6 +102,8 @@ var (
 	procSetWindowLongPtrWOvl       = user32DLL.NewProc("SetWindowLongPtrW")
 	procSetLayeredWindowAttributes = user32DLL.NewProc("SetLayeredWindowAttributes")
 	procSetWindowPos               = user32DLL.NewProc("SetWindowPos")
+	procSetActiveWindow            = user32DLL.NewProc("SetActiveWindow")
+	procSetFocus                   = user32DLL.NewProc("SetFocus")
 	procGetSystemMetrics           = user32DLL.NewProc("GetSystemMetrics")
 	procMoveWindow                 = user32DLL.NewProc("MoveWindow")
 	procGetClientRect              = user32DLL.NewProc("GetClientRect")
@@ -134,6 +136,8 @@ type windowsBreakOverlayController struct {
 	theme                 string
 	visible               bool
 	className             string
+	focusOwnerHwnd        uintptr
+	activationPending     bool
 	emergencySkipVisible  bool
 	lastBlockedShortcutAt time.Time
 	blockedShortcutCount  int
@@ -151,6 +155,7 @@ type windowsOverlayWindow struct {
 	y             int
 	w             int
 	h             int
+	primary       bool
 	buttonRect    ovlRect
 	buttonHot     bool
 	buttonPressed bool
@@ -197,10 +202,11 @@ type ovlMonitorInfo struct {
 }
 
 type ovlMonitorBounds struct {
-	x int
-	y int
-	w int
-	h int
+	x       int
+	y       int
+	w       int
+	h       int
+	primary bool
 }
 
 type ovlTrackMouseEvent struct {
@@ -256,6 +262,8 @@ func (c *windowsBreakOverlayController) Show(allowSkip bool, skipButtonTitle str
 	c.theme = normalizeOverlayTheme(theme)
 	c.visible = true
 	if !wasVisible {
+		c.focusOwnerHwnd = c.chooseFocusOwnerWindowLocked()
+		c.activationPending = true
 		c.emergencySkipVisible = false
 		c.lastBlockedShortcutAt = time.Time{}
 		c.blockedShortcutCount = 0
@@ -275,6 +283,8 @@ func (c *windowsBreakOverlayController) Show(allowSkip bool, skipButtonTitle str
 func (c *windowsBreakOverlayController) Hide() {
 	c.mu.Lock()
 	c.visible = false
+	c.focusOwnerHwnd = 0
+	c.activationPending = false
 	c.emergencySkipVisible = false
 	c.lastBlockedShortcutAt = time.Time{}
 	c.blockedShortcutCount = 0
@@ -357,11 +367,12 @@ func (c *windowsBreakOverlayController) loop() {
 		}
 
 		created = append(created, windowsOverlayWindow{
-			hwnd: hwnd,
-			x:    m.x,
-			y:    m.y,
-			w:    m.w,
-			h:    m.h,
+			hwnd:    hwnd,
+			x:       m.x,
+			y:       m.y,
+			w:       m.w,
+			h:       m.h,
+			primary: m.primary,
 		})
 	}
 
@@ -426,17 +437,31 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 				c.windows[i].y = y
 				c.windows[i].w = w
 				c.windows[i].h = h
+				wnd.primary = c.windows[i].primary
 				break
 			}
 		}
 		c.mu.Unlock()
 	}
 
+	shouldActivate := false
+	c.mu.Lock()
+	if visible && c.activationPending {
+		if c.focusOwnerHwnd == 0 || !c.hasWindowLocked(c.focusOwnerHwnd) {
+			c.focusOwnerHwnd = c.chooseFocusOwnerWindowLocked()
+		}
+		if c.focusOwnerHwnd == hwnd {
+			shouldActivate = true
+			c.activationPending = false
+		}
+	}
+	c.mu.Unlock()
+
 	_, _, _ = procSetWindowPos.Call(
 		hwnd,
 		hwndTopmost,
 		uintptr(x), uintptr(y), uintptr(w), uintptr(h),
-		swpNoActivate,
+		overlayWindowActivationFlags(shouldActivate),
 	)
 
 	btnW := 260
@@ -475,7 +500,7 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 			hwnd,
 			hwndTopmost,
 			uintptr(x), uintptr(y), uintptr(w), uintptr(h),
-			swpNoActivate,
+			overlayWindowActivationFlags(shouldActivate),
 		)
 		if !wnd.shown {
 			setOverlayWindowAlpha(hwnd, 0)
@@ -483,11 +508,14 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 				hwnd,
 				hwndTopmost,
 				uintptr(x), uintptr(y), uintptr(w), uintptr(h),
-				swpShowWindow,
+				swpShowWindow|overlayWindowActivationFlags(shouldActivate),
 			)
 			_, _, _ = procShowWindow.Call(hwnd, swShow)
 			_, _, _ = procInvalidateRect.Call(hwnd, 0, 1)
 			_, _, _ = procUpdateWindow.Call(hwnd)
+			if shouldActivate {
+				activateOverlayWindow(hwnd)
+			}
 			fadeOverlayWindowAlpha(hwnd, 0, 255, overlayFadeInDurationMs)
 			c.mu.Lock()
 			for i := range c.windows {
@@ -503,9 +531,12 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 				hwnd,
 				hwndTopmost,
 				uintptr(x), uintptr(y), uintptr(w), uintptr(h),
-				swpShowWindow,
+				swpShowWindow|overlayWindowActivationFlags(shouldActivate),
 			)
 			_, _, _ = procShowWindow.Call(hwnd, swShow)
+			if shouldActivate {
+				activateOverlayWindow(hwnd)
+			}
 		}
 	} else {
 		if wnd.shown {
@@ -706,9 +737,13 @@ func (c *windowsBreakOverlayController) destroy(hwnd uintptr) {
 
 	c.mu.Lock()
 	remaining := c.removeWindowLocked(hwnd)
+	if c.focusOwnerHwnd == hwnd {
+		c.focusOwnerHwnd = 0
+	}
 	if remaining == 0 {
 		c.started = false
 		c.windows = nil
+		c.activationPending = false
 	}
 	c.mu.Unlock()
 	if remaining == 0 {
@@ -1157,11 +1192,12 @@ func (c *windowsBreakOverlayController) createOverlayWindowForMonitor(className 
 		return windowsOverlayWindow{}, false
 	}
 	return windowsOverlayWindow{
-		hwnd: hwnd,
-		x:    m.x,
-		y:    m.y,
-		w:    m.w,
-		h:    m.h,
+		hwnd:    hwnd,
+		x:       m.x,
+		y:       m.y,
+		w:       m.w,
+		h:       m.h,
+		primary: m.primary,
 	}, true
 }
 
@@ -1176,6 +1212,39 @@ func (c *windowsBreakOverlayController) lookupWindow(hwnd uintptr) (windowsOverl
 		}
 	}
 	return windowsOverlayWindow{}, false
+}
+
+func (c *windowsBreakOverlayController) hasWindowLocked(hwnd uintptr) bool {
+	for _, wnd := range c.windows {
+		if wnd.hwnd == hwnd {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *windowsBreakOverlayController) chooseFocusOwnerWindowLocked() uintptr {
+	if len(c.windows) == 0 {
+		return 0
+	}
+
+	var cursor point
+	if ret, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&cursor))); ret != 0 {
+		x := int(cursor.x)
+		y := int(cursor.y)
+		for _, wnd := range c.windows {
+			if x >= wnd.x && x < wnd.x+wnd.w && y >= wnd.y && y < wnd.y+wnd.h {
+				return wnd.hwnd
+			}
+		}
+	}
+
+	for _, wnd := range c.windows {
+		if wnd.primary {
+			return wnd.hwnd
+		}
+	}
+	return c.windows[0].hwnd
 }
 
 func (c *windowsBreakOverlayController) removeWindowLocked(hwnd uintptr) int {
@@ -1211,7 +1280,7 @@ func listOverlayMonitors() []ovlMonitorBounds {
 			w = 1920
 			h = 1080
 		}
-		result = append(result, ovlMonitorBounds{x: x, y: y, w: w, h: h})
+		result = append(result, ovlMonitorBounds{x: x, y: y, w: w, h: h, primary: true})
 	}
 	return result
 }
@@ -1237,12 +1306,29 @@ func windowsMonitorEnumProc(hMonitor uintptr, _ uintptr, _ uintptr, _ uintptr) u
 		return 1
 	}
 	*out = append(*out, ovlMonitorBounds{
-		x: int(info.rcMonitor.left),
-		y: int(info.rcMonitor.top),
-		w: w,
-		h: h,
+		x:       int(info.rcMonitor.left),
+		y:       int(info.rcMonitor.top),
+		w:       w,
+		h:       h,
+		primary: info.dwFlags&1 != 0,
 	})
 	return 1
+}
+
+func overlayWindowActivationFlags(activate bool) uintptr {
+	if activate {
+		return 0
+	}
+	return swpNoActivate
+}
+
+func activateOverlayWindow(hwnd uintptr) {
+	if hwnd == 0 {
+		return
+	}
+	_, _, _ = procSetForegroundWnd.Call(hwnd)
+	_, _, _ = procSetActiveWindow.Call(hwnd)
+	_, _, _ = procSetFocus.Call(hwnd)
 }
 
 func currentMonitorBoundsForWindow(hwnd uintptr) (int, int, int, int, bool) {

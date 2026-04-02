@@ -364,6 +364,15 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
     return window;
 }
 
+static void PauseOverlayActivateWindowOnMain(NSWindow *window) {
+    if (window == nil) {
+        return;
+    }
+
+    [NSApp activateIgnoringOtherApps:YES];
+    [window orderFrontRegardless];
+}
+
 static void PauseOverlaySetAllowSkipOnMain(BOOL allowSkip) {
     pauseOverlayAllowSkip = allowSkip;
     if (pauseOverlaySkipButtons == nil) {
@@ -489,6 +498,9 @@ static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle
         [window orderFrontRegardless];
         [window release];
     }
+
+    NSWindow *focusWindow = ([pauseOverlayWindows count] > 0 ? [pauseOverlayWindows objectAtIndex:0] : nil);
+    PauseOverlayActivateWindowOnMain(focusWindow);
 
     for (NSWindow *window in pauseOverlayWindows) {
         [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
