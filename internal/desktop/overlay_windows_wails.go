@@ -469,7 +469,8 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 	btnW := 260
 	btnH := 58
 	btnX := (w - btnW) / 2
-	btnY := h/2 + 96
+	contentTop := (h - 286) / 2
+	btnY := contentTop + 228
 	allowSkip := c.allowSkip || c.emergencySkipVisible
 	releaseCapture := false
 	c.mu.Lock()
@@ -664,11 +665,12 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 	_, _, _ = procSetBkMode.Call(hdc, 1)
 	_, _, _ = procSetTextColor.Call(hdc, uintptr(fg))
 
+	contentTop := client.top + ((client.bottom - client.top - 286) / 2)
 	textRect := ovlRect{
 		left:   client.left,
-		top:    client.top + 120,
+		top:    contentTop,
 		right:  client.right,
-		bottom: client.top + 266,
+		bottom: contentTop + 146,
 	}
 	utf16Text := syscall.StringToUTF16(text)
 	if len(utf16Text) == 0 {
@@ -702,7 +704,7 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 			left:   client.left + 72,
 			top:    textRect.bottom + 12,
 			right:  client.right - 72,
-			bottom: textRect.bottom + 72,
+			bottom: textRect.bottom + 56,
 		}
 		utf16Message := syscall.StringToUTF16(message)
 		if len(utf16Message) == 0 {
