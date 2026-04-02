@@ -1,4 +1,4 @@
-package api
+package fallbacks
 
 import (
 	"strings"
@@ -33,4 +33,10 @@ func (p DisabledNotificationCapabilityProvider) RequestNotificationPermission() 
 
 func (p DisabledNotificationCapabilityProvider) OpenNotificationSettings() error {
 	return nil
+}
+
+type NoopNotificationCapabilityProvider struct{}
+
+func (NoopNotificationCapabilityProvider) GetNotificationCapability() ports.NotificationCapability {
+	return DisabledNotificationCapabilityProvider{Reason: "notification capability unavailable"}.GetNotificationCapability()
 }

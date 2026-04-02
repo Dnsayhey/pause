@@ -5,11 +5,16 @@ import (
 	"strings"
 
 	"pause/internal/platform/api"
+	"pause/internal/platform/fallbacks"
 )
 
 func withNotificationCapabilityOverride(adapters api.Adapters) api.Adapters {
+	if reason, disabled := notificationCapabilityDisabledByBuild(); disabled {
+		adapters.NotificationCapabilityProvider = fallbacks.DisabledNotificationCapabilityProvider{Reason: reason}
+		return adapters
+	}
 	if reason, disabled := notificationCapabilityDisabledByEnv(); disabled {
-		adapters.NotificationCapabilityProvider = api.DisabledNotificationCapabilityProvider{Reason: reason}
+		adapters.NotificationCapabilityProvider = fallbacks.DisabledNotificationCapabilityProvider{Reason: reason}
 	}
 	return adapters
 }

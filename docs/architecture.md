@@ -129,6 +129,8 @@ internal/backend/
 - 提示音
 - 开机启动
 
+同时，`platform` 根层也负责少量“能力装配决策”，例如按运行环境对某些 provider 做统一 override；具体平台实现文件仍只负责真实能力本身。
+
 它当前通过 `NewAdapters()` 返回一组 backend 可消费的能力适配器：
 
 - `IdleProvider`

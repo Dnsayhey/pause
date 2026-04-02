@@ -34,11 +34,15 @@ npm --prefix frontend run build
 go run -tags wails,dev .
 ```
 
-如果本地开发时需要显式关闭通知能力查询，可以这样启动：
+说明：
 
-```bash
-PAUSE_DISABLE_NOTIFICATION_CAPABILITY=1 go run -tags wails,dev .
-```
+- 本地 `dev` 构建默认禁用通知相关能力，避免开发态和正式打包态的系统行为差异影响主界面调试。
+- 真实通知行为请在打包版中验证。
+- 如需显式强制关闭通知能力，也可以设置：
+
+  ```bash
+  PAUSE_DISABLE_NOTIFICATION_CAPABILITY=1 go run -tags wails,dev .
+  ```
 
 ### 4) 运行无 UI 后端循环
 

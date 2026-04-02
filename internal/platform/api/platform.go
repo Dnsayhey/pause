@@ -26,12 +26,6 @@ type NoopNotifier struct{}
 
 func (NoopNotifier) ShowReminder(_, _ string) error { return nil }
 
-type NoopNotificationCapabilityProvider struct{}
-
-func (NoopNotificationCapabilityProvider) GetNotificationCapability() ports.NotificationCapability {
-	return DisabledNotificationCapabilityProvider{Reason: "notification capability unavailable"}.GetNotificationCapability()
-}
-
 type NoopSoundPlayer struct{}
 
 func (NoopSoundPlayer) PlayBreakEnd(_ settingsdomain.SoundSettings) error { return nil }

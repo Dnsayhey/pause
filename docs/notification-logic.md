@@ -54,6 +54,8 @@
 关键代码：
 - `internal/backend/ports/runtime_dependencies.go`
 - `internal/platform/api/platform.go`
+- `internal/platform/fallbacks/notification_capability.go`
+- `internal/platform/notification_capability_override.go`
 
 ## 前端产品态
 
@@ -126,6 +128,25 @@
 - `frontend/src/hooks/useSettings.ts`
 - `frontend/src/App.tsx`
 
+## 开发与调试
+
+本地 `dev` 构建默认禁用通知相关能力。
+
+行为说明：
+
+- `go run -tags wails,dev .` 默认会把 `NotificationCapabilityProvider` 替换为禁用版 provider。
+- 这样做是为了避免开发态与正式打包态在系统通知身份上的差异，尤其是 macOS 非 `.app` 进程导致的原生框架问题。
+- 本地开发默认不验证真实通知行为；真实通知请在打包版中验收。
+- 该开关在 `internal/platform` 组装层生效，不在前端做 dev 分支判断。
+- 如需显式强制关闭通知能力，也可以设置：
+
+```bash
+PAUSE_DISABLE_NOTIFICATION_CAPABILITY=1 go run -tags wails,dev .
+```
+
+- 显式开关会继续把 `NotificationCapabilityProvider` 替换为禁用版 provider。
+- 三个平台统一返回 `unknown / canRequest=false / canOpenSettings=false` 的降级能力对象。
+
 ## 平台实现
 
 ### macOS
@@ -139,10 +160,13 @@
 行为要点：
 - 未授权时发送会失败并返回错误，不做平台 fallback。
 - `RequestNotificationPermission()` 为异步桥接到 Go 等待，带超时保护（180s）。
+- `GetNotificationCapability()` 当前也使用异步桥接回传状态，避免主线程同步等待异步回调。
+- 发送通知前的权限判断在 Go 层复用同一套状态查询结果，再进入原生发送路径。
 
 关键代码：
 - `internal/platform/darwin/adapters.go`
 - `internal/platform/darwin/notification_user_cgo.go`
+- `internal/platform/darwin/notification_user_callbacks_cgo.go`
 
 ### Windows
 

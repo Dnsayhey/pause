@@ -2,14 +2,17 @@
 
 package platform
 
-import "pause/internal/platform/api"
+import (
+	"pause/internal/platform/api"
+	"pause/internal/platform/fallbacks"
+)
 
 func NewAdapters(_ string) api.Adapters {
 	return withNotificationCapabilityOverride(api.Adapters{
 		IdleProvider:                   api.NoopIdleProvider{},
 		LockStateProvider:              api.NoopLockStateProvider{},
 		Notifier:                       api.NoopNotifier{},
-		NotificationCapabilityProvider: api.NoopNotificationCapabilityProvider{},
+		NotificationCapabilityProvider: fallbacks.NoopNotificationCapabilityProvider{},
 		SoundPlayer:                    api.NoopSoundPlayer{},
 		StartupManager:                 api.NoopStartupManager{},
 	})
