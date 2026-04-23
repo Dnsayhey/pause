@@ -21,10 +21,11 @@ type tickState struct {
 func (e *Engine) Start(ctx context.Context) {
 	e.startOnce.Do(func() {
 		logx.Infof("engine.start")
-		runCtx, cancel := context.WithCancel(context.Background())
-		if ctx != nil {
-			runCtx, cancel = context.WithCancel(ctx)
+		baseCtx := ctx
+		if baseCtx == nil {
+			baseCtx = context.Background()
 		}
+		runCtx, cancel := context.WithCancel(baseCtx)
 		e.mu.Lock()
 		e.runCtx = runCtx
 		e.cancelRun = cancel
