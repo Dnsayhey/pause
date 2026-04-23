@@ -32,16 +32,15 @@ func (e *Engine) PauseReminder(reminderID int64, now time.Time) (state.RuntimeSt
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	key := normalizeReminderID(reminderID)
-	if key <= 0 {
+	if reminderID <= 0 {
 		return state.RuntimeState{}, errors.New("invalid reminder reason")
 	}
-	if _, ok := findReminderByID(e.reminders, key); !ok {
+	if _, ok := findReminderByID(e.reminders, reminderID); !ok {
 		return state.RuntimeState{}, errors.New("unknown reminder reason")
 	}
-	wasPaused := e.pausedReminder[key]
-	e.pausedReminder[key] = true
-	logx.Infof("reminder.pause reason=%d already_paused=%t", key, wasPaused)
+	wasPaused := e.pausedReminder[reminderID]
+	e.pausedReminder[reminderID] = true
+	logx.Infof("reminder.pause reason=%d already_paused=%t", reminderID, wasPaused)
 
 	settings := e.store.Get()
 	return e.runtimeStateLocked(now, settings), nil
@@ -51,13 +50,12 @@ func (e *Engine) ResumeReminder(reminderID int64, now time.Time) (state.RuntimeS
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	key := normalizeReminderID(reminderID)
-	if key <= 0 {
+	if reminderID <= 0 {
 		return state.RuntimeState{}, errors.New("invalid reminder reason")
 	}
-	wasPaused := e.pausedReminder[key]
-	delete(e.pausedReminder, key)
-	logx.Infof("reminder.resume reason=%d was_paused=%t", key, wasPaused)
+	wasPaused := e.pausedReminder[reminderID]
+	delete(e.pausedReminder, reminderID)
+	logx.Infof("reminder.resume reason=%d was_paused=%t", reminderID, wasPaused)
 
 	settings := e.store.Get()
 	return e.runtimeStateLocked(now, settings), nil

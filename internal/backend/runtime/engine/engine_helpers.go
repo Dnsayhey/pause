@@ -13,7 +13,7 @@ import (
 )
 
 func buildImmediateBreakEvent(reminders []reminder.Reminder, nextByID map[int64]int, forcedReason int64) *scheduler.Event {
-	reasonKey := normalizeReminderID(forcedReason)
+	reasonKey := forcedReason
 	if reasonKey <= 0 {
 		reasonKey = selectImmediateReason(nextByID)
 	}
@@ -30,13 +30,6 @@ func buildImmediateBreakEvent(reminders []reminder.Reminder, nextByID map[int64]
 	}
 }
 
-func normalizeReminderID(id int64) int64 {
-	if id <= 0 {
-		return 0
-	}
-	return id
-}
-
 func cloneReminderConfigs(reminders []reminder.Reminder) []reminder.Reminder {
 	if len(reminders) == 0 {
 		return nil
@@ -47,9 +40,8 @@ func cloneReminderConfigs(reminders []reminder.Reminder) []reminder.Reminder {
 }
 
 func findReminderByID(reminders []reminder.Reminder, id int64) (reminder.Reminder, bool) {
-	norm := normalizeReminderID(id)
 	for _, cfg := range reminders {
-		if cfg.ID == norm {
+		if cfg.ID == id {
 			return cfg, true
 		}
 	}
@@ -177,7 +169,7 @@ func splitReminderEventByType(evt *scheduler.Event, reminders []reminder.Reminde
 	restBreakSec := 0
 
 	for _, reason := range evt.Reasons {
-		id := normalizeReminderID(int64(reason))
+		id := int64(reason)
 		reminder, ok := byID[id]
 		if !ok {
 			restReasons = append(restReasons, reason)

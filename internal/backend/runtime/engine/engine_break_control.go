@@ -78,7 +78,7 @@ func (e *Engine) StartBreakNowForReason(reason int64, now time.Time) (state.Runt
 		joinReminderTypes(evt.Reasons),
 		evt.BreakSec,
 		settings.Enforcement.OverlaySkipAllowed,
-		normalizeReminderID(reason),
+		reason,
 	)
 	return e.runtimeStateLocked(now, settings), nil
 }

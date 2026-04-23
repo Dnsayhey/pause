@@ -24,11 +24,7 @@ func New() *Scheduler {
 }
 
 func (s *Scheduler) ResetByID(id int64) {
-	norm := normalizeReminderID(id)
-	if norm <= 0 {
-		return
-	}
-	delete(s.elapsedSec, norm)
+	delete(s.elapsedSec, id)
 }
 
 func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []reminder.Reminder) *Event {
@@ -117,17 +113,9 @@ func enabledReminders(reminders []reminder.Reminder) []reminder.Reminder {
 	return result
 }
 
-func normalizeReminderID(id int64) int64 {
-	if id <= 0 {
-		return 0
-	}
-	return id
-}
-
 func findReminderByID(reminders []reminder.Reminder, id int64) (reminder.Reminder, bool) {
-	norm := normalizeReminderID(id)
 	for _, reminder := range reminders {
-		if reminder.ID == norm {
+		if reminder.ID == id {
 			return reminder, true
 		}
 	}

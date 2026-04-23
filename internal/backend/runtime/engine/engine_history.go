@@ -17,11 +17,7 @@ func reminderIDsFromEvent(evt *scheduler.Event) []int64 {
 	}
 	ids := make([]int64, 0, len(evt.Reasons))
 	for _, reason := range evt.Reasons {
-		id := normalizeReminderID(int64(reason))
-		if id <= 0 {
-			continue
-		}
-		ids = append(ids, id)
+		ids = append(ids, int64(reason))
 	}
 	if len(ids) == 0 {
 		return nil
