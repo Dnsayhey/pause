@@ -1,48 +1,56 @@
-# Pause 通知能力与前端策略
+# Pause 通知说明
 
 最后更新：2026-04-23
 
-本文档记录 Pause 当前通知能力的实现边界、前端交互策略与平台差异。
+本文档只描述当前实现。
 
-只记录当前实现，不记录历史排障过程和临时迁移方案。
+## 1. 当前模型
 
-## 当前结论
+Pause 的通知链路是：
 
-- 通知链路已统一为「运行时发送 + 前端启用前预检」。
-- 前端产品态统一为三态：`pending / available / unavailable`（UI 文案：待授权 / 可以通知 / 通知关闭）。
-- `CreateReminder / UpdateReminder` 不做权限申请；只在“新建或启用 notify 提醒”时预检。
-- macOS 与 Windows 都支持：查询通知能力、请求权限（或能力刷新）、打开系统设置。
-- Windows 使用原生 WinRT + ShellExecute 路径，通知能力查询/发送/设置跳转均走原生实现。
-- 通知发送成败由 runtime 统一记日志，平台层只保留关键失败日志。
+- runtime 负责决定什么时候发通知
+- platform 负责执行单次系统通知发送
+- frontend 负责在启用 notify reminder 前做能力预检
 
-## 端到端链路
+通知只用于 `notify` 类型 reminder。
 
-运行时行为：
-- engine 每秒 tick。
-- 调度命中后拆分 `rest` 与 `notify` 事件。
-- `notify` 事件直接尝试发送系统通知，不进入休息会话。
-- 通知发送绑定到 engine 的运行时 `ctx`，在 runtime 关闭时会统一取消并等待已发起任务收敛。
-- 运行时对并发通知发送施加轻量上限，超限任务会直接丢弃并记录日志，避免 goroutine 无上限堆积。
+`rest` 类型 reminder 会进入 break session；`notify` 类型 reminder 只发系统通知，不进入休息会话。
+
+## 2. 运行时行为
+
+运行时流程：
+
+1. engine 每秒 tick
+2. 调度器命中后生成事件
+3. runtime 把事件拆成 `rest` 和 `notify`
+4. `notify` 事件直接发送系统通知
+
+当前约束：
+
+- 通知任务绑定到 engine 的运行时 `ctx`
+- `Engine.Stop()` 会取消运行时上下文
+- `Engine.Stop()` 会等待已发起通知任务结束
+- 通知发送有轻量并发上限
+- 超限通知会被丢弃并写日志
 
 关键代码：
+
 - `internal/backend/runtime/engine/engine_tick.go`
 - `internal/backend/runtime/engine/engine_notifications.go`
 - `internal/platform/darwin/adapters.go`
 - `internal/platform/windows/adapters.go`
 
-发送日志：
-- 成功：`reminder.notification_sent`
-- 失败：`reminder.notification_err`
-- 超限丢弃：`reminder.notification_dropped`
-
-## 后端能力模型
+## 3. 后端能力模型
 
 后端抽象：
+
 - `NotificationPermissionState`
 - `NotificationCapability`
 - `NotificationCapabilityProvider`
+- `Notifier`
 
-底层状态：
+状态枚举：
+
 - `authorized`
 - `not_determined`
 - `denied`
@@ -50,162 +58,135 @@
 - `unknown`
 
 能力字段：
+
 - `canRequest`
 - `canOpenSettings`
 - `reason`
 
-关键代码：
-- `internal/backend/ports/runtime_dependencies.go`
-- `internal/platform/api/platform.go`
-- `internal/platform/fallbacks/notification_capability.go`
-- `internal/platform/notification_capability_override.go`
+## 4. 前端产品态
 
-## 前端产品态
+前端统一映射成三态：
 
-前端统一暴露三态：
-- `pending`（待授权）
-- `available`（可以通知）
-- `unavailable`（通知关闭 / 不可用）
+- `pending`
+- `available`
+- `unavailable`
 
 映射规则：
+
 - `authorized` -> `available`
 - `not_determined` -> `pending`
-- 其他状态（`denied / restricted / unknown`）-> `unavailable`
+- `denied / restricted / unknown` -> `unavailable`
 
-说明：
-- Windows 通常不会产生 macOS 等价的 per-app 首次授权 `not_determined` 流程，属于平台差异；前端仍按同一三态模型呈现。
+这层三态是产品模型，不要求和不同平台的原生状态机一一对应。
 
-关键代码：
-- `frontend/src/hooks/useSettings.ts`
+## 5. 前端交互规则
 
-## 前端交互策略
+只在“会让 notify reminder 生效”的动作前预检通知能力：
 
-### 何时预检通知能力
-
-只在“让 notify reminder 生效”的动作前预检：
-- 新建 `notify` 类型 reminder
-- 把已有 `notify` 从关闭切为开启
-- 把已启用 reminder 从 `rest` 改为 `notify`
+- 新建 `notify` reminder
+- 把已有 `notify` reminder 从关闭切为开启
+- 把已启用 reminder 从 `rest` 改成 `notify`
 
 不会触发预检：
-- 普通字段编辑（名称、间隔、时长等）
+
+- 普通字段编辑
 - 关闭 reminder
-- 其他不导致 notify 生效的保存动作
+- 与 notify 生效无关的保存动作
 
-### 三态下动作
+三态下行为：
 
-当用户尝试新建或启用通知提醒：
-- `available`：直接继续提交。
-- `pending`：弹权限提示 + 发起 `RequestNotificationPermission()`，不依赖结果；本次提交中止。
-- `unavailable`：弹“通知关闭”提示，并提供“打开系统设置” action；本次提交中止。
+- `available`
+  直接提交
+- `pending`
+  发起 `RequestNotificationPermission()`，本次保存中止
+- `unavailable`
+  提示用户通知不可用，并提供打开系统设置入口，本次保存中止
 
-### 列表状态标签
+列表标签：
 
-当 reminder 满足：
-- `reminderType=notify`
-- `enabled=true`
-- 当前通知状态不为 `available`
+- `notify + enabled + 非 available`
+  会显示状态标签
+- `pending`
+  显示“待授权”
+- `unavailable`
+  显示“通知关闭”
 
-在标题侧显示状态标签：
-- `pending` -> `待授权`
-- `unavailable` -> `通知关闭`
+## 6. 刷新时机
 
-点击标签行为：
-- `pending`：再次发起授权请求并提示
-- `unavailable`：提示并提供打开系统设置 action
+前端当前会在这些时机刷新通知能力：
 
-关键代码：
-- `frontend/src/pages/RemindersPage.tsx`
-- `frontend/src/hooks/useSettings.ts`
+- 提醒页初始化
+- 应用窗口 focus
+- 页面 `visibilitychange` 回到可见
+- 用户点击主界面
+- 授权请求返回 `authorized`
 
-### 刷新时机
+## 7. 平台实现
 
-当前刷新触发点：
-- 提醒页初始化加载
-- 应用窗口 `focus`
-- 页面 `visibilitychange`（变为可见）
-- 用户点击主界面任意位置（`pointerdown capture`）
-- 授权请求返回 `authorized` 时立即更新本地状态
+### macOS
 
-关键代码：
-- `frontend/src/hooks/useSettings.ts`
-- `frontend/src/App.tsx`
+能力：
 
-## 开发与调试
+- 查询授权状态
+- 请求授权
+- 打开系统通知设置
+- 发送通知
 
-本地 `dev` 构建默认禁用通知相关能力。
+实现：
 
-行为说明：
+- 使用 `UNUserNotificationCenter`
+- 发送前安装 notification delegate
+- 未授权时发送直接失败，不做 fallback
 
-- `go run -tags wails,dev .` 默认会把 `NotificationCapabilityProvider` 替换为禁用版 provider。
-- 这样做是为了避免开发态与正式打包态在系统通知身份上的差异，尤其是 macOS 非 `.app` 进程导致的原生框架问题。
-- 本地开发默认不验证真实通知行为；真实通知请在打包版中验收。
-- 该开关在 `internal/platform` 组装层生效，不在前端做 dev 分支判断。
-- 如需显式强制关闭通知能力，也可以设置：
+### Windows
+
+能力：
+
+- 查询通知能力
+- 发送 toast
+- 打开系统通知设置
+
+实现：
+
+- 使用 WinRT toast
+- 通知设置通过 `ms-settings:notifications`
+- `RequestNotificationPermission()` 只返回当前能力，不弹系统授权对话框
+
+## 8. 开发态约束
+
+本地 `dev` 构建默认禁用通知能力。
+
+原因：
+
+- 开发态进程身份和正式打包态不同
+- 尤其在 macOS 下，非 `.app` 进程的通知行为不稳定
+
+开发态建议：
+
+- 不在 `go run -tags wails,dev .` 下验收真实通知
+- 真实通知行为用打包产物验证
+
+显式禁用方式：
 
 ```bash
 PAUSE_DISABLE_NOTIFICATION_CAPABILITY=1 go run -tags wails,dev .
 ```
 
-- 显式开关会继续把 `NotificationCapabilityProvider` 替换为禁用版 provider。
-- 三个平台统一返回 `unknown / canRequest=false / canOpenSettings=false` 的降级能力对象。
+## 9. 日志
 
-## 平台实现
+runtime 负责业务日志，平台层只保留关键失败日志。
 
-### macOS
+当前相关日志：
 
-基础能力（`UNUserNotificationCenter`）：
-- 查询授权状态
-- 请求授权
-- 打开系统通知设置
-- 发送通知前安装通知 delegate
-
-行为要点：
-- 未授权时发送会失败并返回错误，不做平台 fallback。
-- `RequestNotificationPermission()` 为异步桥接到 Go 等待，带超时保护（180s）。
-- `GetNotificationCapability()` 当前也使用异步桥接回传状态，避免主线程同步等待异步回调。
-- 发送通知前的权限判断在 Go 层复用同一套状态查询结果，再进入原生发送路径。
-
-关键代码：
-- `internal/platform/darwin/adapters.go`
-- `internal/platform/darwin/notification_user_cgo.go`
-- `internal/platform/darwin/notification_user_callbacks_cgo.go`
-
-### Windows
-
-基础能力（原生实现）：
-- WinRT `ToastNotifier.Setting` 查询通知能力
-- WinRT toast 发送通知
-- `ShellExecuteW` 打开 `ms-settings:notifications`
-
-行为要点：
-- `RequestNotificationPermission()` 直接返回当前能力（无 macOS 式授权弹窗）。
-- 查询 `ToastNotifier.Setting` 若返回 `0x80070490`，按 `Enabled` 处理，避免首次安装误判。
-- 安装器写入 `HKCU\\Software\\Classes\\AppUserModelId\\com.pause.app` 下的 `DisplayName/IconUri`，卸载时删除该键，保证通知图标元数据完整。
-- 发送路径使用 WinRT toast。
-
-关键代码：
-- `internal/platform/windows/adapters.go`
-- `internal/platform/windows/winrt_native.go`
-- `scripts/windows-installer/project.nsi`
-
-## 日志策略
-
-统一原则：
-- runtime 记录业务通知发送成功/失败。
-- 平台层只记录关键失败与关键兼容分支（例如 Windows `0x80070490` 兜底）。
-- 不保留临时排障型高频诊断日志。
-- runtime 负责通知任务的生命周期控制；平台层只关注单次发送本身。
-
-代表日志：
 - `reminder.notification_sent`
 - `reminder.notification_err`
+- `reminder.notification_dropped`
 - `darwin.notification.* failed`
 - `windows.notification.capability_lookup_failed`
 - `windows.notification.settings_open_failed`
 
-## 非目标与边界
+## 10. 边界
 
-- 不在提醒保存接口里绑定权限校验或权限申请。
-- 不为平台差异强行做“假一致”状态机；统一产品态即可。
-- 不引入冗余 fallback 掩盖真实失败；失败优先记录日志并显式暴露状态。
+- 提醒保存接口不直接申请权限
+- 不为平台差异强行伪造一致状态机
+- runtime 负责通知任务生命周期，platform 只负责单次发送
