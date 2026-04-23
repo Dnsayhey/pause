@@ -16,10 +16,10 @@ func (e *Engine) SetReminderConfigs(reminders []reminder.Reminder) []reminder.Re
 
 	next := cloneReminderConfigs(reminders)
 	prev := cloneReminderConfigs(e.reminders)
-	e.reminders = cloneReminderConfigs(next)
+	e.reminders = next
 	e.applyReminderConfigPatchLocked(prev, next)
 	logx.Infof("reminders.synced count=%d", len(e.reminders))
-	return cloneReminderConfigs(e.reminders)
+	return cloneReminderConfigs(next)
 }
 
 func (e *Engine) ApplyReminderSnapshot(ctx context.Context, reminders []reminder.Reminder) error {
