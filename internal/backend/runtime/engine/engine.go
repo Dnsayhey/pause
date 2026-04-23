@@ -17,6 +17,8 @@ type SkipMode string
 const (
 	SkipModeNormal    SkipMode = "normal"
 	SkipModeEmergency SkipMode = "emergency"
+
+	notificationConcurrencyLimit = 4
 )
 
 type SettingsStore interface {
@@ -77,6 +79,7 @@ type Engine struct {
 	runCtx             context.Context
 	cancelRun          context.CancelFunc
 	backgroundTasks    sync.WaitGroup
+	notificationSlots  chan struct{}
 }
 
 func NewEngine(
@@ -111,5 +114,6 @@ func NewEngine(
 		notifier:       notifier,
 		pausedReminder: map[int64]bool{},
 		globalEnabled:  true,
+		notificationSlots: make(chan struct{}, notificationConcurrencyLimit),
 	}
 }

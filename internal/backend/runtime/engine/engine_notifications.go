@@ -50,9 +50,16 @@ func (e *Engine) notifyRemindersLocked(reminderIDs []int64, language string) {
 		keyParts = append(keyParts, strconv.FormatInt(id, 10))
 	}
 	reminderKey := strings.Join(keyParts, "+")
+	select {
+	case e.notificationSlots <- struct{}{}:
+	default:
+		logx.Warnf("reminder.notification_dropped reminders=%s reason=concurrency_limit", reminderKey)
+		return
+	}
 	e.backgroundTasks.Add(1)
 	go func(ctx context.Context, n ports.Notifier, t string, b string, key string) {
 		defer e.backgroundTasks.Done()
+		defer func() { <-e.notificationSlots }()
 		if err := n.ShowReminder(ctx, t, b); err != nil {
 			logx.Warnf("reminder.notification_err reminders=%s err=%v", key, err)
 			return

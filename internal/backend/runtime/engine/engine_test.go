@@ -47,6 +47,48 @@ func (s *blockingNotifierStub) ShowReminder(ctx context.Context, _, _ string) er
 	return ctx.Err()
 }
 
+type controllableSettingsStore struct {
+	current   settingsdomain.Settings
+	updateCh  chan struct{}
+	releaseCh chan struct{}
+}
+
+func (s *controllableSettingsStore) Get() settingsdomain.Settings {
+	return s.current
+}
+
+func (s *controllableSettingsStore) Update(patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error) {
+	if s.updateCh != nil {
+		select {
+		case s.updateCh <- struct{}{}:
+		default:
+		}
+	}
+	if s.releaseCh != nil {
+		<-s.releaseCh
+	}
+	s.current = s.current.ApplyPatch(patch)
+	return s.current, nil
+}
+
+type countingNotifierStub struct {
+	started chan struct{}
+	block   chan struct{}
+}
+
+func (s *countingNotifierStub) ShowReminder(ctx context.Context, _, _ string) error {
+	select {
+	case s.started <- struct{}{}:
+	default:
+	}
+	select {
+	case <-s.block:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func testEngine(t *testing.T) *Engine {
 	t.Helper()
 	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
@@ -252,4 +294,88 @@ func TestEngine_StopAfterCanceledStartContext(t *testing.T) {
 	if err := ctx.Err(); !errors.Is(err, context.Canceled) {
 		t.Fatalf("ctx err=%v want=%v", err, context.Canceled)
 	}
+}
+
+func TestEngine_UpdateSettingsDoesNotBlockRuntimeReadsOnStoreIO(t *testing.T) {
+	store := &controllableSettingsStore{
+		current:   settingsdomain.DefaultSettings(),
+		updateCh:  make(chan struct{}, 1),
+		releaseCh: make(chan struct{}),
+	}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, nil, &historyRecorderStub{})
+
+	done := make(chan struct{})
+	go func() {
+		enabled := false
+		if _, err := eng.UpdateSettings(settingsdomain.SettingsPatch{
+			Sound: &settingsdomain.SoundSettingsPatch{Enabled: &enabled},
+		}); err != nil {
+			t.Errorf("UpdateSettings() err=%v", err)
+		}
+		close(done)
+	}()
+
+	select {
+	case <-store.updateCh:
+	case <-time.After(time.Second):
+		t.Fatalf("expected store update to start")
+	}
+
+	readDone := make(chan struct{})
+	go func() {
+		_ = eng.GetRuntimeState(time.Now())
+		close(readDone)
+	}()
+
+	select {
+	case <-readDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected runtime read to proceed while settings store update is blocked")
+	}
+
+	close(store.releaseCh)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatalf("expected UpdateSettings() to finish after store release")
+	}
+}
+
+func TestEngine_NotificationConcurrencyLimitDropsExcess(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	notifier := &countingNotifierStub{
+		started: make(chan struct{}, 16),
+		block:   make(chan struct{}),
+	}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, notifier, &historyRecorderStub{})
+	eng.SetReminderConfigs([]reminder.Reminder{{ID: 1, Name: "Hydrate", Enabled: true, IntervalSec: 60, BreakSec: 1, ReminderType: "notify"}})
+	eng.Start(context.Background())
+
+	for i := 0; i < notificationConcurrencyLimit+2; i++ {
+		eng.notifyRemindersLocked([]int64{1}, settingsdomain.UILanguageEnUS)
+	}
+
+	timer := time.NewTimer(200 * time.Millisecond)
+	defer timer.Stop()
+	started := 0
+loop:
+	for {
+		select {
+		case <-notifier.started:
+			started++
+		case <-timer.C:
+			break loop
+		}
+	}
+
+	if started != notificationConcurrencyLimit {
+		t.Fatalf("started=%d want=%d", started, notificationConcurrencyLimit)
+	}
+
+	close(notifier.block)
+	eng.Stop()
 }

@@ -13,9 +13,6 @@ func (e *Engine) GetSettings() settings.Settings {
 }
 
 func (e *Engine) UpdateSettings(patch settings.SettingsPatch) (settings.Settings, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	patchJSON := marshalPatchForLog(patch)
 	next, err := e.store.Update(patch)
 	if err != nil {
@@ -24,7 +21,9 @@ func (e *Engine) UpdateSettings(patch settings.SettingsPatch) (settings.Settings
 	}
 
 	if patch.Enforcement != nil && patch.Enforcement.OverlaySkipAllowed != nil {
+		e.mu.Lock()
 		e.session.SetCanSkip(next.Enforcement.OverlaySkipAllowed)
+		e.mu.Unlock()
 	}
 
 	logx.Infof("settings.updated patch=%s", patchJSON)
