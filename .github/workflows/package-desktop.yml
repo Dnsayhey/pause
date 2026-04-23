@@ -242,6 +242,55 @@ jobs:
             -e "s|REPO|${REPO}|g" \
             .github/release_template.md > release.md
 
+      - name: Remove stale release assets
+        uses: actions/github-script@v8
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          TAG_NAME: v${{ needs.validate.outputs.version }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = process.env.TAG_NAME;
+            const version = process.env.VERSION;
+            const keep = new Set([
+              `Pause-v${version}-macos-arm64.dmg`,
+              `Pause-v${version}-macos-x64.dmg`,
+              `Pause-v${version}-windows-x64-setup.exe`,
+              'release-manifest.txt',
+              'SHA256SUMS',
+              'updates.json',
+            ]);
+
+            let release;
+            try {
+              const response = await github.rest.repos.getReleaseByTag({
+                owner,
+                repo,
+                tag,
+              });
+              release = response.data;
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`No existing release found for ${tag}, skipping asset cleanup.`);
+                return;
+              }
+              throw error;
+            }
+
+            for (const asset of release.assets ?? []) {
+              if (keep.has(asset.name)) {
+                core.info(`Keeping asset: ${asset.name}`);
+                continue;
+              }
+              core.info(`Deleting stale asset: ${asset.name}`);
+              await github.rest.repos.deleteReleaseAsset({
+                owner,
+                repo,
+                asset_id: asset.id,
+              });
+            }
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
