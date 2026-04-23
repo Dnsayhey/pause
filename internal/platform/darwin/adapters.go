@@ -3,6 +3,7 @@
 package darwin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -106,7 +107,10 @@ func idleSecondsFromNanoseconds(ns uint64) int {
 	return int(ns / 1_000_000_000)
 }
 
-func (darwinNotifier) ShowReminder(title, body string) error {
+func (darwinNotifier) ShowReminder(ctx context.Context, title, body string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "Pause"
@@ -114,6 +118,9 @@ func (darwinNotifier) ShowReminder(title, body string) error {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		body = "Break started"
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return showDarwinUserNotification(title, body)
 }

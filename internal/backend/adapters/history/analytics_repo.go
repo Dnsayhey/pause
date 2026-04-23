@@ -20,35 +20,31 @@ func NewAnalyticsRepository(store *historydb.Store) *AnalyticsRepository {
 }
 
 func (r *AnalyticsRepository) QueryWeeklyStats(ctx context.Context, from time.Time, to time.Time) (analyticsdomain.WeeklyStats, error) {
-	_ = ctx
 	if err := r.ensureStore(); err != nil {
 		return analyticsdomain.WeeklyStats{}, err
 	}
-	return r.store.QueryAnalyticsWeeklyStats(from, to)
+	return r.store.QueryAnalyticsWeeklyStats(ctx, from, to)
 }
 
 func (r *AnalyticsRepository) QuerySummary(ctx context.Context, from time.Time, to time.Time) (analyticsdomain.Summary, error) {
-	_ = ctx
 	if err := r.ensureStore(); err != nil {
 		return analyticsdomain.Summary{}, err
 	}
-	return r.store.QueryAnalyticsSummary(from, to)
+	return r.store.QueryAnalyticsSummary(ctx, from, to)
 }
 
 func (r *AnalyticsRepository) QueryTrendByDay(ctx context.Context, from time.Time, to time.Time) (analyticsdomain.Trend, error) {
-	_ = ctx
 	if err := r.ensureStore(); err != nil {
 		return analyticsdomain.Trend{}, err
 	}
-	return r.store.QueryAnalyticsTrendByDay(from, to)
+	return r.store.QueryAnalyticsTrendByDay(ctx, from, to)
 }
 
 func (r *AnalyticsRepository) QueryBreakTypeDistribution(ctx context.Context, from time.Time, to time.Time) (analyticsdomain.BreakTypeDistribution, error) {
-	_ = ctx
 	if err := r.ensureStore(); err != nil {
 		return analyticsdomain.BreakTypeDistribution{}, err
 	}
-	return r.store.QueryAnalyticsBreakTypeDistribution(from, to)
+	return r.store.QueryAnalyticsBreakTypeDistribution(ctx, from, to)
 }
 
 func (r *AnalyticsRepository) ensureStore() error {

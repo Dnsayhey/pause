@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -37,7 +38,7 @@ func (noopSoundPlayer) PlayBreakEnd(settings.SoundSettings) error { return nil }
 
 type noopNotifier struct{}
 
-func (noopNotifier) ShowReminder(_, _ string) error { return nil }
+func (noopNotifier) ShowReminder(context.Context, string, string) error { return nil }
 
 type pendingHistoryBreak struct {
 	StartedAt       time.Time
@@ -49,6 +50,7 @@ type pendingHistoryBreak struct {
 type Engine struct {
 	mu        sync.Mutex
 	startOnce sync.Once
+	stopOnce  sync.Once
 
 	store     SettingsStore
 	reminders []reminder.Reminder
@@ -72,6 +74,9 @@ type Engine struct {
 	currentLocked  bool
 
 	activeHistoryBreak *pendingHistoryBreak
+	runCtx             context.Context
+	cancelRun          context.CancelFunc
+	backgroundTasks    sync.WaitGroup
 }
 
 func NewEngine(

@@ -18,6 +18,7 @@ const (
 
 type RuntimeEngine interface {
 	Start(ctx context.Context)
+	Stop()
 	GetSettings() settings.Settings
 	GetRuntimeState(now time.Time) state.RuntimeState
 	Pause(now time.Time) (state.RuntimeState, error)
@@ -42,6 +43,10 @@ func WrapEngine(engine *service.Engine) RuntimeEngine {
 
 func (a *runtimeEngineAdapter) Start(ctx context.Context) {
 	a.engine.Start(ctx)
+}
+
+func (a *runtimeEngineAdapter) Stop() {
+	a.engine.Stop()
 }
 
 func (a *runtimeEngineAdapter) GetSettings() settings.Settings {

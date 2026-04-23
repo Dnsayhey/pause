@@ -3,6 +3,7 @@
 package windows
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -99,7 +100,10 @@ func (windowsIdleProvider) CurrentIdleSeconds() int {
 	return int((now - last) / 1000)
 }
 
-func (n windowsNotifier) ShowReminder(title, body string) error {
+func (n windowsNotifier) ShowReminder(ctx context.Context, title, body string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "Pause"
@@ -110,6 +114,9 @@ func (n windowsNotifier) ShowReminder(title, body string) error {
 	}
 
 	appID := toastAppID(n.appID)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return showToastReminder(appID, title, body)
 }
 

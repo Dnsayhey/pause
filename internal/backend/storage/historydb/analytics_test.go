@@ -2,6 +2,7 @@ package historydb
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func TestAnalytics_QuerySummary(t *testing.T) {
 	store := analyticsFixtureStore(t)
 	base := time.Unix(1_700_000_000, 0).UTC()
 
-	summary, err := store.QueryAnalyticsSummary(base.Add(-time.Hour), base.Add(24*time.Hour))
+	summary, err := store.QueryAnalyticsSummary(context.Background(), base.Add(-time.Hour), base.Add(24*time.Hour))
 	if err != nil {
 		t.Fatalf("QueryAnalyticsSummary() err=%v", err)
 	}
@@ -54,7 +55,7 @@ func TestAnalytics_QueryBreakTypeDistribution(t *testing.T) {
 	store := analyticsFixtureStore(t)
 	base := time.Unix(1_700_000_000, 0).UTC()
 
-	dist, err := store.QueryAnalyticsBreakTypeDistribution(base.Add(-time.Hour), base.Add(24*time.Hour))
+	dist, err := store.QueryAnalyticsBreakTypeDistribution(context.Background(), base.Add(-time.Hour), base.Add(24*time.Hour))
 	if err != nil {
 		t.Fatalf("QueryAnalyticsBreakTypeDistribution() err=%v", err)
 	}
@@ -63,5 +64,18 @@ func TestAnalytics_QueryBreakTypeDistribution(t *testing.T) {
 	}
 	if len(dist.Items) == 0 {
 		t.Fatalf("expected distribution items")
+	}
+}
+
+func TestAnalytics_QuerySummaryHonorsCanceledContext(t *testing.T) {
+	store := analyticsFixtureStore(t)
+	base := time.Unix(1_700_000_000, 0).UTC()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := store.QueryAnalyticsSummary(ctx, base.Add(-time.Hour), base.Add(24*time.Hour))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("QueryAnalyticsSummary() err=%v want=%v", err, context.Canceled)
 	}
 }

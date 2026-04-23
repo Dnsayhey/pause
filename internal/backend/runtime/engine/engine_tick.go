@@ -21,7 +21,13 @@ type tickState struct {
 func (e *Engine) Start(ctx context.Context) {
 	e.startOnce.Do(func() {
 		logx.Infof("engine.start")
+		runCtx, cancel := context.WithCancel(context.Background())
+		if ctx != nil {
+			runCtx, cancel = context.WithCancel(ctx)
+		}
 		e.mu.Lock()
+		e.runCtx = runCtx
+		e.cancelRun = cancel
 		if e.lastTick.IsZero() {
 			// Seed the baseline once at startup so the first scheduler tick accounts
 			// for the first elapsed second instead of waiting an extra cycle.
@@ -35,13 +41,28 @@ func (e *Engine) Start(ctx context.Context) {
 			defer ticker.Stop()
 			for {
 				select {
-				case <-ctx.Done():
+				case <-runCtx.Done():
 					return
 				case now := <-ticker.C:
 					e.Tick(now)
 				}
 			}
 		}()
+	})
+}
+
+func (e *Engine) Stop() {
+	e.stopOnce.Do(func() {
+		e.mu.Lock()
+		cancel := e.cancelRun
+		e.cancelRun = nil
+		e.runCtx = nil
+		e.mu.Unlock()
+
+		if cancel != nil {
+			cancel()
+		}
+		e.backgroundTasks.Wait()
 	})
 }
 

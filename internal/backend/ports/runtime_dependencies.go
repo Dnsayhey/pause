@@ -29,7 +29,7 @@ type LockStateProvider interface {
 }
 
 type Notifier interface {
-	ShowReminder(title, body string) error
+	ShowReminder(ctx context.Context, title, body string) error
 }
 
 type NotificationPermissionState string

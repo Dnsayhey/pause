@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -51,7 +52,7 @@ func (NoopLockStateProvider) IsScreenLocked() bool { return false }
 
 type NoopNotifier struct{}
 
-func (NoopNotifier) ShowReminder(_, _ string) error { return nil }
+func (NoopNotifier) ShowReminder(context.Context, string, string) error { return nil }
 
 type NoopNotificationCapabilityProvider struct{}
 

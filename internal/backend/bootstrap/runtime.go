@@ -87,7 +87,13 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 }
 
 func (r *Runtime) Close() error {
-	if r == nil || r.History == nil {
+	if r == nil {
+		return nil
+	}
+	if r.Engine != nil {
+		r.Engine.Stop()
+	}
+	if r.History == nil {
 		return nil
 	}
 	return r.History.Close()

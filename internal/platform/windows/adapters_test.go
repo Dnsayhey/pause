@@ -3,6 +3,7 @@
 package windows
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -25,7 +26,7 @@ func TestShowReminder_PrefersToast(t *testing.T) {
 	}
 
 	n := windowsNotifier{appID: "com.pause.app"}
-	if err := n.ShowReminder(" ", " "); err != nil {
+	if err := n.ShowReminder(context.Background(), " ", " "); err != nil {
 		t.Fatalf("ShowReminder() err=%v", err)
 	}
 	if !calledToast {
@@ -43,7 +44,7 @@ func TestShowReminder_ReturnsToastError(t *testing.T) {
 	showToastReminder = func(_, _, _ string) error { return toastErr }
 
 	n := windowsNotifier{appID: "com.pause.app"}
-	if err := n.ShowReminder("t", "b"); !errors.Is(err, toastErr) {
+	if err := n.ShowReminder(context.Background(), "t", "b"); !errors.Is(err, toastErr) {
 		t.Fatalf("expected toast error, got=%v", err)
 	}
 }

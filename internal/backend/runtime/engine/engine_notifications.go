@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -40,16 +41,22 @@ func (e *Engine) notifyRemindersLocked(reminderIDs []int64, language string) {
 		title = "提醒"
 	}
 	notifier := e.notifier
+	runCtx := e.runCtx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
 	keyParts := make([]string, 0, len(reminderIDs))
 	for _, id := range reminderIDs {
 		keyParts = append(keyParts, strconv.FormatInt(id, 10))
 	}
 	reminderKey := strings.Join(keyParts, "+")
-	go func(n ports.Notifier, t string, b string, key string) {
-		if err := n.ShowReminder(t, b); err != nil {
+	e.backgroundTasks.Add(1)
+	go func(ctx context.Context, n ports.Notifier, t string, b string, key string) {
+		defer e.backgroundTasks.Done()
+		if err := n.ShowReminder(ctx, t, b); err != nil {
 			logx.Warnf("reminder.notification_err reminders=%s err=%v", key, err)
 			return
 		}
 		logx.Infof("reminder.notification_sent reminders=%s", key)
-	}(notifier, title, body, reminderKey)
+	}(runCtx, notifier, title, body, reminderKey)
 }

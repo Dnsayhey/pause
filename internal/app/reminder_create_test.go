@@ -39,7 +39,7 @@ func newTestApp(t *testing.T) *App {
 	return &App{
 		ctx:       context.Background(),
 		engine:    bootstrap.WrapEngine(engine),
-		history:   historyStore,
+		runtime:   historyStore,
 		reminders: container.ReminderService,
 	}
 }

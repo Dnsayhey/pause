@@ -14,7 +14,7 @@ import (
 type App struct {
 	ctx                    context.Context
 	engine                 engineRuntime
-	history                historyCloser
+	runtime                runtimeCloser
 	reminders              reminderService
 	analytics              analyticsService
 	settingsSvc            settingsService
@@ -32,7 +32,7 @@ const (
 	skipModeEmergency skipMode = bootstrap.SkipModeEmergency
 )
 
-type historyCloser interface {
+type runtimeCloser interface {
 	Close() error
 }
 

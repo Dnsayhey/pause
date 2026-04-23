@@ -42,7 +42,7 @@ func NewApp(configPath string) (*App, error) {
 
 	return &App{
 		engine:                 runtime.Engine,
-		history:                runtime.History,
+		runtime:                runtime,
 		reminders:              runtime.ReminderService,
 		analytics:              runtime.AnalyticsService,
 		settingsSvc:            runtime.SettingsService,
@@ -80,12 +80,12 @@ func appContextOrBackground(ctx context.Context) context.Context {
 }
 
 func (a *App) Shutdown(_ context.Context) {
-	if a == nil || a.history == nil {
+	if a == nil || a.runtime == nil {
 		return
 	}
 	logx.Infof("app.shutdown started")
-	if err := a.history.Close(); err != nil {
-		logx.Warnf("app.shutdown history_close_err=%v", err)
+	if err := a.runtime.Close(); err != nil {
+		logx.Warnf("app.shutdown runtime_close_err=%v", err)
 		return
 	}
 	logx.Infof("app.shutdown completed")

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -25,6 +26,24 @@ type historyRecorderStub struct{ calls int }
 func (s *historyRecorderStub) RecordBreak(_ context.Context, _ time.Time, _ time.Time, _ string, _ int, _ int, _ bool, _ []int64) error {
 	s.calls++
 	return nil
+}
+
+type blockingNotifierStub struct {
+	started chan struct{}
+	done    chan struct{}
+}
+
+func (s *blockingNotifierStub) ShowReminder(ctx context.Context, _, _ string) error {
+	select {
+	case s.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	select {
+	case s.done <- struct{}{}:
+	default:
+	}
+	return ctx.Err()
 }
 
 func testEngine(t *testing.T) *Engine {
@@ -162,5 +181,78 @@ func TestEngine_SkipCurrentBreakRejectsInvalidMode(t *testing.T) {
 	}
 	if _, err := eng.SkipCurrentBreak(now.Add(time.Second), SkipMode("bad")); err == nil {
 		t.Fatalf("expected invalid mode error")
+	}
+}
+
+func TestEngine_StopWaitsForNotificationTasks(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	notifier := &blockingNotifierStub{
+		started: make(chan struct{}, 1),
+		done:    make(chan struct{}, 1),
+	}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, notifier, &historyRecorderStub{})
+	eng.SetReminderConfigs([]reminder.Reminder{{ID: 1, Name: "Hydrate", Enabled: true, IntervalSec: 60, BreakSec: 1, ReminderType: "notify"}})
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eng.Start(runCtx)
+	eng.notifyRemindersLocked([]int64{1}, settingsdomain.UILanguageEnUS)
+
+	select {
+	case <-notifier.started:
+	case <-time.After(time.Second):
+		t.Fatalf("expected notification task to start")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		eng.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatalf("expected Stop() to return after canceling background tasks")
+	}
+
+	select {
+	case <-notifier.done:
+	case <-time.After(time.Second):
+		t.Fatalf("expected notifier to observe cancellation")
+	}
+}
+
+func TestEngine_StopAfterCanceledStartContext(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, &blockingNotifierStub{
+		started: make(chan struct{}, 1),
+		done:    make(chan struct{}, 1),
+	}, &historyRecorderStub{})
+	eng.Start(ctx)
+
+	stopped := make(chan struct{})
+	go func() {
+		eng.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatalf("expected Stop() to return promptly for canceled start context")
+	}
+
+	if err := ctx.Err(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ctx err=%v want=%v", err, context.Canceled)
 	}
 }
