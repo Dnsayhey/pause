@@ -47,13 +47,6 @@ func (s *Store) Get() settingsdomain.Settings {
 	return s.settings
 }
 
-func (s *Store) Set(next settingsdomain.Settings) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.settings = next.Normalize()
-	return s.saveLocked()
-}
-
 func (s *Store) Update(patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
