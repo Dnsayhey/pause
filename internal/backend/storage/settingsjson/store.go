@@ -77,8 +77,8 @@ func (s *Store) load() error {
 	settings := settingsdomain.DefaultSettings()
 	if len(bytes.TrimSpace(data)) > 0 {
 		if err := json.Unmarshal(data, &settings); err != nil {
-			if err := s.backupCorruptedConfigLocked(data); err != nil {
-				return err
+			if backupErr := s.backupCorruptedConfigLocked(data); backupErr != nil {
+				return errors.Join(err, backupErr)
 			}
 			s.settings = settingsdomain.DefaultSettings()
 			return s.saveLocked()

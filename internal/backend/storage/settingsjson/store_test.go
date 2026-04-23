@@ -82,3 +82,30 @@ func TestOpenStore_CorruptedConfigBackedUpAndRecovered(t *testing.T) {
 		t.Fatalf("backup file count mismatch: got=%d", len(matches))
 	}
 }
+
+func TestOpenStore_CorruptedConfigBackupFailurePreservesParseError(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "config")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() err=%v", err)
+	}
+	path := filepath.Join(dir, "settings.json")
+	raw := []byte("{bad json")
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("WriteFile(corrupted config) err=%v", err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("Chmod(readonly dir) err=%v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	_, err := OpenStore(path)
+	if err == nil {
+		t.Fatalf("expected OpenStore() error")
+	}
+	if !strings.Contains(err.Error(), "invalid character") {
+		t.Fatalf("expected parse error in joined error, got=%v", err)
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("expected backup error in joined error, got=%v", err)
+	}
+}
