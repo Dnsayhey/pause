@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
+	reminderdomain "pause/internal/backend/domain/reminder"
+
 	_ "modernc.org/sqlite"
 )
 
 const (
-	reminderTypeRest   = "rest"
-	reminderTypeNotify = "notify"
 	sourceScheduled    = "scheduled"
 	sourceManual       = "manual"
 	statusCompleted    = "completed"
@@ -105,7 +105,7 @@ func (s *Store) migrate(ctx context.Context) error {
 }
 
 func isValidReminderType(reminderType string) bool {
-	return reminderType == reminderTypeRest || reminderType == reminderTypeNotify
+	return reminderdomain.NormalizeReminderType(reminderType) != ""
 }
 
 func isValidSource(source string) bool {
@@ -120,13 +120,7 @@ func boolToInt(v bool) int {
 }
 
 func validateReminderName(name string) error {
-	if strings.TrimSpace(name) == "" {
-		return errors.New("reminder name is required")
-	}
-	if name != strings.TrimSpace(name) {
-		return errors.New("reminder name cannot have leading or trailing spaces")
-	}
-	return nil
+	return reminderdomain.ValidateName(name)
 }
 
 func ensureStore(ctx context.Context, s *Store) error {
@@ -140,19 +134,14 @@ func ensureStore(ctx context.Context, s *Store) error {
 }
 
 func validateReminder(reminder Reminder) error {
-	if err := validateReminderName(reminder.Name); err != nil {
-		return err
-	}
-	if reminder.IntervalSec <= 0 {
-		return errors.New("reminder intervalSec must be > 0")
-	}
-	if reminder.BreakSec <= 0 {
-		return errors.New("reminder breakSec must be > 0")
-	}
-	if !isValidReminderType(reminder.ReminderType) {
-		return errors.New("reminder reminderType must be rest or notify")
-	}
-	return nil
+	return reminderdomain.ValidateReminder(reminderdomain.Reminder{
+		ID:           1,
+		Name:         reminder.Name,
+		Enabled:      reminder.Enabled,
+		IntervalSec:  reminder.IntervalSec,
+		BreakSec:     reminder.BreakSec,
+		ReminderType: reminder.ReminderType,
+	})
 }
 
 func applyReminderPatch(current Reminder, patch ReminderPatch) (Reminder, error) {
@@ -167,21 +156,22 @@ func applyReminderPatch(current Reminder, patch ReminderPatch) (Reminder, error)
 	}
 	if patch.IntervalSec != nil {
 		if *patch.IntervalSec <= 0 {
-			return Reminder{}, errors.New("reminder intervalSec must be > 0")
+			return Reminder{}, reminderdomain.ErrIntervalRange
 		}
 		current.IntervalSec = *patch.IntervalSec
 	}
 	if patch.BreakSec != nil {
 		if *patch.BreakSec <= 0 {
-			return Reminder{}, errors.New("reminder breakSec must be > 0")
+			return Reminder{}, reminderdomain.ErrBreakRange
 		}
 		current.BreakSec = *patch.BreakSec
 	}
 	if patch.ReminderType != nil {
-		if !isValidReminderType(*patch.ReminderType) {
-			return Reminder{}, errors.New("reminder reminderType must be rest or notify")
+		normalized := reminderdomain.NormalizeReminderType(*patch.ReminderType)
+		if normalized == "" {
+			return Reminder{}, reminderdomain.ErrTypeInvalid
 		}
-		current.ReminderType = *patch.ReminderType
+		current.ReminderType = normalized
 	}
 	return current, nil
 }
@@ -199,7 +189,7 @@ func (s *Store) ListReminders(ctx context.Context) ([]Reminder, error) {
 		 ORDER BY id ASC`,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("history list reminders query failed: %w", err)
 	}
 	defer rows.Close()
 
@@ -208,13 +198,13 @@ func (s *Store) ListReminders(ctx context.Context) ([]Reminder, error) {
 		var r Reminder
 		var enabledInt int
 		if err := rows.Scan(&r.ID, &r.Name, &enabledInt, &r.IntervalSec, &r.BreakSec, &r.ReminderType); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("history list reminders scan failed: %w", err)
 		}
 		r.Enabled = enabledInt == 1
 		result = append(result, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("history list reminders rows failed: %w", err)
 	}
 	return result, nil
 }
@@ -229,7 +219,7 @@ func (s *Store) UpdateReminder(ctx context.Context, reminderID int64, patch Remi
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("history update reminder tx begin failed: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -249,12 +239,12 @@ func (s *Store) UpdateReminder(ctx context.Context, reminderID int64, patch Remi
 	case errors.Is(err, sql.ErrNoRows):
 		return fmt.Errorf("reminder id %d: %w", reminderID, ErrReminderNotFound)
 	default:
-		return err
+		return fmt.Errorf("history update reminder load failed: %w", err)
 	}
 
 	current, err = applyReminderPatch(current, patch)
 	if err != nil {
-		return err
+		return fmt.Errorf("history update reminder validate failed: %w", err)
 	}
 
 	res, err := tx.ExecContext(
@@ -276,17 +266,20 @@ func (s *Store) UpdateReminder(ctx context.Context, reminderID int64, patch Remi
 		current.ID,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("history update reminder exec failed: %w", err)
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("history update reminder rows affected failed: %w", err)
 	}
 	if affected == 0 {
 		return fmt.Errorf("reminder id %d: %w", reminderID, ErrReminderNotFound)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("history update reminder commit failed: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) CreateReminder(ctx context.Context, reminder Reminder) (int64, error) {
@@ -295,12 +288,14 @@ func (s *Store) CreateReminder(ctx context.Context, reminder Reminder) (int64, e
 	}
 
 	if err := validateReminder(reminder); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("history create reminder validate failed: %w", err)
 	}
+	reminder.Name = strings.TrimSpace(reminder.Name)
+	reminder.ReminderType = reminderdomain.NormalizeReminderType(reminder.ReminderType)
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("history create reminder tx begin failed: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -336,15 +331,15 @@ func (s *Store) CreateReminder(ctx context.Context, reminder Reminder) (int64, e
 			existingID,
 		)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("history restore reminder exec failed: %w", err)
 		}
 		if err := tx.Commit(); err != nil {
-			return 0, err
+			return 0, fmt.Errorf("history restore reminder commit failed: %w", err)
 		}
 		return existingID, nil
 	case errors.Is(err, sql.ErrNoRows):
 	default:
-		return 0, err
+		return 0, fmt.Errorf("history create reminder lookup failed: %w", err)
 	}
 
 	var res sql.Result
@@ -373,17 +368,17 @@ func (s *Store) CreateReminder(ctx context.Context, reminder Reminder) (int64, e
 		)
 	}
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("history create reminder insert failed: %w", err)
 	}
 	insertedID := reminder.ID
 	if insertedID <= 0 {
 		insertedID, err = res.LastInsertId()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("history create reminder last insert id failed: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("history create reminder commit failed: %w", err)
 	}
 	return insertedID, nil
 }
@@ -406,11 +401,11 @@ func (s *Store) DeleteReminder(ctx context.Context, reminderID int64) error {
 		reminderID,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("history delete reminder exec failed: %w", err)
 	}
 	affected, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("history delete reminder rows affected failed: %w", err)
 	}
 	if affected == 0 {
 		return ErrReminderNotFound
@@ -452,18 +447,18 @@ func (s *Store) RecordBreak(
 		return err
 	}
 	if plannedBreakSec <= 0 {
-		return errors.New("planned break sec must be > 0")
+		return fmt.Errorf("history record break validate failed: %w", errors.New("planned break sec must be > 0"))
 	}
 	if actualBreakSec < 0 {
-		return errors.New("actual break sec must be >= 0")
+		return fmt.Errorf("history record break validate failed: %w", errors.New("actual break sec must be >= 0"))
 	}
 	if !isValidSource(source) {
-		return errors.New("invalid break source")
+		return fmt.Errorf("history record break validate failed: %w", errors.New("invalid break source"))
 	}
 
 	reasons := dedupeReminderIDs(reminderIDs)
 	if len(reminderIDs) > 0 && len(reasons) != len(reminderIDs) {
-		return errors.New("reminder ids must be unique positive integers")
+		return fmt.Errorf("history record break validate failed: %w", errors.New("reminder ids must be unique positive integers"))
 	}
 
 	status := statusCompleted
@@ -475,7 +470,7 @@ func (s *Store) RecordBreak(
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("history record break tx begin failed: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -493,18 +488,18 @@ func (s *Store) RecordBreak(
 		nullIfZero(skippedAtUnix),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("history record break insert session failed: %w", err)
 	}
 	sessionID, err := res.LastInsertId()
 	if err != nil {
-		return err
+		return fmt.Errorf("history record break last insert id failed: %w", err)
 	}
 
 	for _, reminderID := range reasons {
 		name := ""
 		intervalSec := plannedBreakSec
 		breakSec := plannedBreakSec
-		reminderType := reminderTypeRest
+		reminderType := reminderdomain.ReminderTypeRest
 
 		row := tx.QueryRowContext(
 			ctx,
@@ -519,7 +514,7 @@ func (s *Store) RecordBreak(
 		case errors.Is(err, sql.ErrNoRows):
 			return fmt.Errorf("reminder id %d not found", reminderID)
 		default:
-			return err
+			return fmt.Errorf("history record break load reminder failed: %w", err)
 		}
 
 		if err := validateReminderName(name); err != nil {
@@ -548,11 +543,14 @@ func (s *Store) RecordBreak(
 			reminderType,
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("history record break insert reminder snapshot failed: %w", err)
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("history record break commit failed: %w", err)
+	}
+	return nil
 }
 
 func nullIfZero(value int64) any {

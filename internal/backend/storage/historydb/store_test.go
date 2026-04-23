@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	reminderdomain "pause/internal/backend/domain/reminder"
 )
 
 func openStoreForTest(t *testing.T) *Store {
@@ -80,5 +83,29 @@ func TestHistoryStore_UpdateReminderValidation(t *testing.T) {
 	}
 	if err := store.UpdateReminder(context.Background(), 999, ReminderPatch{}); !errors.Is(err, ErrReminderNotFound) {
 		t.Fatalf("expected reminder not found, got=%v", err)
+	}
+}
+
+func TestHistoryStore_CreateReminderValidationUsesWrappedError(t *testing.T) {
+	store := openStoreForTest(t)
+	_, err := store.CreateReminder(context.Background(), Reminder{
+		Name:         "Eye",
+		Enabled:      true,
+		IntervalSec:  0,
+		BreakSec:     20,
+		ReminderType: "rest",
+	})
+	if !errors.Is(err, reminderdomain.ErrIntervalRange) {
+		t.Fatalf("expected interval validation error, got=%v", err)
+	}
+	if !strings.Contains(err.Error(), "history create reminder validate failed") {
+		t.Fatalf("expected wrapped validation message, got=%v", err)
+	}
+}
+
+func TestHistoryStore_DeleteReminderPreservesNotFoundSentinel(t *testing.T) {
+	store := openStoreForTest(t)
+	if err := store.DeleteReminder(context.Background(), 999); !errors.Is(err, ErrReminderNotFound) {
+		t.Fatalf("expected not found, got=%v", err)
 	}
 }

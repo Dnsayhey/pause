@@ -38,15 +38,10 @@ func (s *Service) List(ctx context.Context) ([]reminderdomain.Reminder, error) {
 }
 
 func (s *Service) Create(ctx context.Context, input reminderdomain.CreateInput) ([]reminderdomain.Reminder, error) {
-	if input.ReminderType == nil {
-		return nil, errors.New("reminder reminderType is required")
+	normalized, err := input.Normalize()
+	if err != nil {
+		return nil, err
 	}
-	enabled := true
-	if input.Enabled != nil {
-		enabled = *input.Enabled
-	}
-	normalized := input
-	normalized.Enabled = &enabled
 
 	if _, err := s.repo.CreateReminder(normalizeContext(ctx), normalized); err != nil {
 		return nil, err
@@ -63,16 +58,10 @@ func (s *Service) Create(ctx context.Context, input reminderdomain.CreateInput) 
 
 func (s *Service) EnsureDefaults(ctx context.Context, inputs []reminderdomain.CreateInput) error {
 	for _, input := range inputs {
-		if input.ReminderType == nil {
-			return errors.New("reminder reminderType is required")
+		normalized, err := input.Normalize()
+		if err != nil {
+			return err
 		}
-
-		enabled := true
-		if input.Enabled != nil {
-			enabled = *input.Enabled
-		}
-		normalized := input
-		normalized.Enabled = &enabled
 
 		if _, err := s.repo.CreateReminder(normalizeContext(ctx), normalized); err != nil && !errors.Is(err, reminderdomain.ErrAlreadyExists) {
 			return err
@@ -82,7 +71,11 @@ func (s *Service) EnsureDefaults(ctx context.Context, inputs []reminderdomain.Cr
 }
 
 func (s *Service) Update(ctx context.Context, patch reminderdomain.Patch) ([]reminderdomain.Reminder, error) {
-	if err := s.repo.UpdateReminder(normalizeContext(ctx), patch); err != nil {
+	normalized, err := patch.Normalize()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateReminder(normalizeContext(ctx), normalized); err != nil {
 		return nil, err
 	}
 	reminders, err := s.List(ctx)
@@ -97,7 +90,7 @@ func (s *Service) Update(ctx context.Context, patch reminderdomain.Patch) ([]rem
 
 func (s *Service) Delete(ctx context.Context, reminderID int64) ([]reminderdomain.Reminder, error) {
 	if reminderID <= 0 {
-		return nil, errors.New("reminder id is required")
+		return nil, reminderdomain.ErrIDRequired
 	}
 	if err := s.repo.DeleteReminder(normalizeContext(ctx), reminderID); err != nil {
 		return nil, err
@@ -134,7 +127,7 @@ func normalizeReminders(reminders []reminderdomain.Reminder) []reminderdomain.Re
 			Enabled:      item.Enabled,
 			IntervalSec:  item.IntervalSec,
 			BreakSec:     item.BreakSec,
-			ReminderType: strings.TrimSpace(item.ReminderType),
+			ReminderType: reminderdomain.NormalizeReminderType(item.ReminderType),
 		})
 	}
 	if len(result) == 0 {

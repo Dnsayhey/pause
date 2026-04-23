@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	reminderdomain "pause/internal/backend/domain/reminder"
 	"pause/internal/backend/domain/settings"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/desktop"
@@ -282,7 +283,7 @@ func reminderDisplayName(choice autoReminderChoice, language string) string {
 }
 
 func isRestRuntimeReminder(reminder state.ReminderRuntime) bool {
-	return strings.ToLower(strings.TrimSpace(reminder.ReminderType)) != "notify"
+	return reminderdomain.IsRestReminderType(reminder.ReminderType)
 }
 
 func buildRemindersPayload(state state.RuntimeState, language string) (string, []int64) {

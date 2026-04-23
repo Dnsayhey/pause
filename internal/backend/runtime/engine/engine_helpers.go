@@ -159,7 +159,7 @@ func nextReasons(reminders []state.ReminderRuntime, defs []reminder.Reminder) []
 }
 
 func isRestReminderType(reminderType string) bool {
-	return strings.ToLower(strings.TrimSpace(reminderType)) != "notify"
+	return reminder.IsRestReminderType(reminderType)
 }
 
 func splitReminderEventByType(evt *scheduler.Event, reminders []reminder.Reminder) (*scheduler.Event, []int64) {

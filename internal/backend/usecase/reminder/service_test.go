@@ -104,3 +104,32 @@ func TestReminderService_EnsureDefaultsUnexpectedError(t *testing.T) {
 		t.Fatalf("error mismatch got=%v want=%v", err, wantErr)
 	}
 }
+
+func TestReminderService_CreateRejectsInvalidReminder(t *testing.T) {
+	rest := "rest"
+	svc, err := NewService(&reminderRepoStub{}, nil)
+	if err != nil {
+		t.Fatalf("NewService() err=%v", err)
+	}
+
+	_, err = svc.Create(context.Background(), reminderdomain.CreateInput{
+		Name:         "Eye",
+		IntervalSec:  0,
+		BreakSec:     20,
+		ReminderType: &rest,
+	})
+	if !errors.Is(err, reminderdomain.ErrIntervalRange) {
+		t.Fatalf("Create() err=%v want=%v", err, reminderdomain.ErrIntervalRange)
+	}
+}
+
+func TestReminderService_UpdateRejectsInvalidPatch(t *testing.T) {
+	svc, err := NewService(&reminderRepoStub{}, nil)
+	if err != nil {
+		t.Fatalf("NewService() err=%v", err)
+	}
+	name := " "
+	if _, err := svc.Update(context.Background(), reminderdomain.Patch{ID: 1, Name: &name}); !errors.Is(err, reminderdomain.ErrNameRequired) {
+		t.Fatalf("Update() err=%v want=%v", err, reminderdomain.ErrNameRequired)
+	}
+}
