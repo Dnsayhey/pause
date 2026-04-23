@@ -7,6 +7,7 @@ import (
 
 	reminderdomain "pause/internal/backend/domain/reminder"
 	"pause/internal/backend/ports"
+	internalctx "pause/internal/backend/usecase/internalctx"
 )
 
 type Service struct {
@@ -30,7 +31,7 @@ func (s *Service) Sync(ctx context.Context) error {
 }
 
 func (s *Service) List(ctx context.Context) ([]reminderdomain.Reminder, error) {
-	items, err := s.repo.ListReminders(normalizeContext(ctx))
+	items, err := s.repo.ListReminders(internalctx.OrBackground(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (s *Service) Create(ctx context.Context, input reminderdomain.CreateInput) 
 		return nil, err
 	}
 
-	if _, err := s.repo.CreateReminder(normalizeContext(ctx), normalized); err != nil {
+	if _, err := s.repo.CreateReminder(internalctx.OrBackground(ctx), normalized); err != nil {
 		return nil, err
 	}
 	reminders, err := s.List(ctx)
@@ -63,7 +64,7 @@ func (s *Service) EnsureDefaults(ctx context.Context, inputs []reminderdomain.Cr
 			return err
 		}
 
-		if _, err := s.repo.CreateReminder(normalizeContext(ctx), normalized); err != nil && !errors.Is(err, reminderdomain.ErrAlreadyExists) {
+		if _, err := s.repo.CreateReminder(internalctx.OrBackground(ctx), normalized); err != nil && !errors.Is(err, reminderdomain.ErrAlreadyExists) {
 			return err
 		}
 	}
@@ -75,7 +76,7 @@ func (s *Service) Update(ctx context.Context, patch reminderdomain.Patch) ([]rem
 	if err != nil {
 		return nil, err
 	}
-	if err := s.repo.UpdateReminder(normalizeContext(ctx), normalized); err != nil {
+	if err := s.repo.UpdateReminder(internalctx.OrBackground(ctx), normalized); err != nil {
 		return nil, err
 	}
 	reminders, err := s.List(ctx)
@@ -92,7 +93,7 @@ func (s *Service) Delete(ctx context.Context, reminderID int64) ([]reminderdomai
 	if reminderID <= 0 {
 		return nil, reminderdomain.ErrIDRequired
 	}
-	if err := s.repo.DeleteReminder(normalizeContext(ctx), reminderID); err != nil {
+	if err := s.repo.DeleteReminder(internalctx.OrBackground(ctx), reminderID); err != nil {
 		return nil, err
 	}
 	reminders, err := s.List(ctx)
@@ -103,13 +104,6 @@ func (s *Service) Delete(ctx context.Context, reminderID int64) ([]reminderdomai
 		return nil, err
 	}
 	return reminders, nil
-}
-
-func normalizeContext(ctx context.Context) context.Context {
-	if ctx != nil {
-		return ctx
-	}
-	return context.Background()
 }
 
 func normalizeReminders(reminders []reminderdomain.Reminder) []reminderdomain.Reminder {
@@ -142,5 +136,5 @@ func (s *Service) applyRuntimeSnapshot(ctx context.Context, reminders []reminder
 	if s == nil || s.sink == nil {
 		return nil
 	}
-	return s.sink.ApplyReminderSnapshot(normalizeContext(ctx), reminders)
+	return s.sink.ApplyReminderSnapshot(internalctx.OrBackground(ctx), reminders)
 }

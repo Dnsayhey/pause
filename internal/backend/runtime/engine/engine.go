@@ -56,7 +56,7 @@ type Engine struct {
 	reminders []reminder.Reminder
 	scheduler *scheduler.Scheduler
 	session   *session.Manager
-	history   ports.BreakRepository
+	history   ports.BreakRecorder
 
 	idleProvider ports.IdleProvider
 	lockProvider ports.LockStateProvider
@@ -85,7 +85,7 @@ func NewEngine(
 	lockProvider ports.LockStateProvider,
 	soundPlayer ports.SoundPlayer,
 	notifier ports.Notifier,
-	history ports.BreakRepository,
+	history ports.BreakRecorder,
 ) *Engine {
 	if idleProvider == nil {
 		idleProvider = noopIdleProvider{}

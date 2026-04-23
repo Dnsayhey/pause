@@ -21,7 +21,7 @@ type RuntimeEngine interface {
 	Stop()
 	GetSettings() settings.Settings
 	GetRuntimeState(now time.Time) state.RuntimeState
-	Pause(now time.Time) (state.RuntimeState, error)
+	Pause(now time.Time) state.RuntimeState
 	Resume(now time.Time) state.RuntimeState
 	PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
 	ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
@@ -57,7 +57,7 @@ func (a *runtimeEngineAdapter) GetRuntimeState(now time.Time) state.RuntimeState
 	return a.engine.GetRuntimeState(now)
 }
 
-func (a *runtimeEngineAdapter) Pause(now time.Time) (state.RuntimeState, error) {
+func (a *runtimeEngineAdapter) Pause(now time.Time) state.RuntimeState {
 	return a.engine.Pause(now)
 }
 

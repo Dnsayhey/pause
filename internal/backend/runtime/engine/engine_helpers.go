@@ -150,7 +150,7 @@ func nextReasons(reminders []state.ReminderRuntime, defs []reminder.Reminder) []
 		if !reminder.Enabled || reminder.Paused || reminder.NextInSec < 0 {
 			continue
 		}
-		if reminder.NextInSec-minNext <= 60 {
+		if reminder.NextInSec-minNext <= scheduler.MergeWindowSec {
 			reasons = append(reasons, reminder.ID)
 		}
 	}

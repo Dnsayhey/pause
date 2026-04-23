@@ -13,11 +13,7 @@ func (a *App) GetRuntimeState() RuntimeState {
 }
 
 func (a *App) Pause() (RuntimeState, error) {
-	runtimeState, err := a.engine.Pause(time.Now())
-	if err != nil {
-		return RuntimeState{}, err
-	}
-	return a.decorateRuntimeState(runtimeState), nil
+	return a.decorateRuntimeState(a.engine.Pause(time.Now())), nil
 }
 
 func (a *App) Resume() RuntimeState {

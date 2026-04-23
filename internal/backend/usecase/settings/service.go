@@ -6,42 +6,52 @@ import (
 
 	settingsdomain "pause/internal/backend/domain/settings"
 	"pause/internal/backend/ports"
+	internalctx "pause/internal/backend/usecase/internalctx"
 )
 
 type Service struct {
-	repo ports.SettingsRepository
+	storeRepo      ports.SettingsStoreRepository
+	platformSyncer ports.PlatformSettingsSyncer
+	startupManager ports.StartupManager
 }
 
-func NewService(repo ports.SettingsRepository) (*Service, error) {
-	if repo == nil {
-		return nil, errors.New("settings repository is required")
+func NewService(storeRepo ports.SettingsStoreRepository, platformSyncer ports.PlatformSettingsSyncer, startupManager ports.StartupManager) (*Service, error) {
+	if storeRepo == nil {
+		return nil, errors.New("settings store repository is required")
 	}
-	return &Service{repo: repo}, nil
+	if platformSyncer == nil {
+		return nil, errors.New("platform settings syncer is required")
+	}
+	if startupManager == nil {
+		return nil, errors.New("startup manager is required")
+	}
+	return &Service{
+		storeRepo:      storeRepo,
+		platformSyncer: platformSyncer,
+		startupManager: startupManager,
+	}, nil
 }
 
 func (s *Service) Get(ctx context.Context) settingsdomain.Settings {
-	return s.repo.GetSettings(normalizeContext(ctx))
+	return s.storeRepo.GetSettings(internalctx.OrBackground(ctx))
 }
 
 func (s *Service) Update(ctx context.Context, patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error) {
-	return s.repo.UpdateSettings(normalizeContext(ctx), patch)
+	return s.storeRepo.UpdateSettings(internalctx.OrBackground(ctx), patch)
 }
 
 func (s *Service) SyncPlatformSettings(ctx context.Context) error {
-	return s.repo.SyncPlatformSettings(normalizeContext(ctx))
+	return s.platformSyncer.SyncPlatformSettings(internalctx.OrBackground(ctx))
 }
 
 func (s *Service) GetLaunchAtLogin(ctx context.Context) (bool, error) {
-	return s.repo.GetLaunchAtLogin(normalizeContext(ctx))
+	return s.startupManager.GetLaunchAtLogin()
 }
 
 func (s *Service) SetLaunchAtLogin(ctx context.Context, enabled bool) (bool, error) {
-	return s.repo.SetLaunchAtLogin(normalizeContext(ctx), enabled)
-}
-
-func normalizeContext(ctx context.Context) context.Context {
-	if ctx != nil {
-		return ctx
+	_ = internalctx.OrBackground(ctx)
+	if err := s.startupManager.SetLaunchAtLogin(enabled); err != nil {
+		return false, err
 	}
-	return context.Background()
+	return s.startupManager.GetLaunchAtLogin()
 }

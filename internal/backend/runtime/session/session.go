@@ -56,7 +56,8 @@ func (m *Manager) StartBreak(now time.Time, evt *scheduler.Event, canSkip bool) 
 		canSkip:   canSkip,
 	}
 
-	// v1 has no pre-break countdown; session enters rest immediately.
+	// StatusReminding is reserved for a future pre-break countdown flow.
+	// v1 transitions into the resting state immediately.
 	m.current.status = StatusResting
 }
 

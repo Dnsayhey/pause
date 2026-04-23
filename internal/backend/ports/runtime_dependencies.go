@@ -7,17 +7,18 @@ import (
 	"pause/internal/backend/domain/settings"
 )
 
-type BreakRepository interface {
-	RecordBreak(
-		ctx context.Context,
-		startedAt time.Time,
-		endedAt time.Time,
-		source string,
-		plannedBreakSec int,
-		actualBreakSec int,
-		skipped bool,
-		reminderIDs []int64,
-	) error
+type BreakRecordInput struct {
+	StartedAt       time.Time
+	EndedAt         time.Time
+	Source          string
+	PlannedBreakSec int
+	ActualBreakSec  int
+	Skipped         bool
+	ReminderIDs     []int64
+}
+
+type BreakRecorder interface {
+	RecordBreak(ctx context.Context, input BreakRecordInput) error
 }
 
 type IdleProvider interface {

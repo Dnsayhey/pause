@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	historyadapter "pause/internal/backend/adapters/history"
 	"pause/internal/backend/bootstrap"
 	"pause/internal/backend/ports"
 	service "pause/internal/backend/runtime/engine"
@@ -29,7 +30,7 @@ func newTestApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("NewContainer() err=%v", err)
 	}
-	engine := service.NewEngine(settingsStore, nil, nil, nil, nil, historyStore)
+	engine := service.NewEngine(settingsStore, nil, nil, nil, nil, historyadapter.NewBreakRecorder(historyStore))
 	defs, err := container.ReminderService.List(context.Background())
 	if err != nil {
 		t.Fatalf("ReminderService.List() err=%v", err)

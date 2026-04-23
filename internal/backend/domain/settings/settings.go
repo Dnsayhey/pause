@@ -83,9 +83,6 @@ func (s Settings) Normalize() Settings {
 		s.Timer.Mode = d.Timer.Mode
 	}
 	s.UI.Language = NormalizeUILanguage(s.UI.Language)
-	if s.UI.Language == "" {
-		s.UI.Language = d.UI.Language
-	}
 	s.UI.Theme = NormalizeUITheme(s.UI.Theme)
 	if s.UI.Theme == "" {
 		s.UI.Theme = d.UI.Theme

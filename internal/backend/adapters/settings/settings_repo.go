@@ -26,19 +26,14 @@ func (noopStartupManager) GetLaunchAtLogin() (bool, error) {
 }
 
 type SettingsRepository struct {
-	store          SettingsStore
-	startupManager ports.StartupManager
+	store SettingsStore
 }
 
-var _ ports.SettingsRepository = (*SettingsRepository)(nil)
+var _ ports.SettingsStoreRepository = (*SettingsRepository)(nil)
 
-func NewSettingsRepository(store SettingsStore, startupManager ports.StartupManager) *SettingsRepository {
-	if startupManager == nil {
-		startupManager = noopStartupManager{}
-	}
+func NewSettingsRepository(store SettingsStore) *SettingsRepository {
 	return &SettingsRepository{
-		store:          store,
-		startupManager: startupManager,
+		store: store,
 	}
 }
 
@@ -58,7 +53,24 @@ func (r *SettingsRepository) UpdateSettings(ctx context.Context, patch settingsd
 	return r.store.Update(patch)
 }
 
-func (r *SettingsRepository) SyncPlatformSettings(ctx context.Context) error {
+type PlatformSettingsSyncer struct {
+	store          SettingsStore
+	startupManager ports.StartupManager
+}
+
+var _ ports.PlatformSettingsSyncer = (*PlatformSettingsSyncer)(nil)
+
+func NewPlatformSettingsSyncer(store SettingsStore, startupManager ports.StartupManager) *PlatformSettingsSyncer {
+	if startupManager == nil {
+		startupManager = noopStartupManager{}
+	}
+	return &PlatformSettingsSyncer{
+		store:          store,
+		startupManager: startupManager,
+	}
+}
+
+func (r *PlatformSettingsSyncer) SyncPlatformSettings(ctx context.Context) error {
 	_ = ctx
 	if err := r.ensureStore(); err != nil {
 		return err
@@ -70,26 +82,14 @@ func (r *SettingsRepository) SyncPlatformSettings(ctx context.Context) error {
 	return r.startupManager.SetLaunchAtLogin(true)
 }
 
-func (r *SettingsRepository) GetLaunchAtLogin(ctx context.Context) (bool, error) {
-	_ = ctx
-	if err := r.ensureStore(); err != nil {
-		return false, err
-	}
-	return r.startupManager.GetLaunchAtLogin()
-}
-
-func (r *SettingsRepository) SetLaunchAtLogin(ctx context.Context, enabled bool) (bool, error) {
-	_ = ctx
-	if err := r.ensureStore(); err != nil {
-		return false, err
-	}
-	if err := r.startupManager.SetLaunchAtLogin(enabled); err != nil {
-		return false, err
-	}
-	return r.startupManager.GetLaunchAtLogin()
-}
-
 func (r *SettingsRepository) ensureStore() error {
+	if r == nil || r.store == nil {
+		return errSettingsStoreUnavailable
+	}
+	return nil
+}
+
+func (r *PlatformSettingsSyncer) ensureStore() error {
 	if r == nil || r.store == nil {
 		return errSettingsStoreUnavailable
 	}

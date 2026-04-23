@@ -7,6 +7,7 @@ import (
 
 	analyticsdomain "pause/internal/backend/domain/analytics"
 	"pause/internal/backend/ports"
+	internalctx "pause/internal/backend/usecase/internalctx"
 )
 
 type Service struct {
@@ -29,7 +30,7 @@ func (s *Service) GetWeeklyStats(ctx context.Context, fromSec int64, toSec int64
 	if err != nil {
 		return analyticsdomain.WeeklyStats{}, err
 	}
-	return s.repo.QueryWeeklyStats(normalizeContext(ctx), from, to)
+	return s.repo.QueryWeeklyStats(internalctx.OrBackground(ctx), from, to)
 }
 
 func (s *Service) GetSummary(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.Summary, error) {
@@ -37,7 +38,7 @@ func (s *Service) GetSummary(ctx context.Context, fromSec int64, toSec int64) (a
 	if err != nil {
 		return analyticsdomain.Summary{}, err
 	}
-	return s.repo.QuerySummary(normalizeContext(ctx), from, to)
+	return s.repo.QuerySummary(internalctx.OrBackground(ctx), from, to)
 }
 
 func (s *Service) GetTrendByDay(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.Trend, error) {
@@ -45,7 +46,7 @@ func (s *Service) GetTrendByDay(ctx context.Context, fromSec int64, toSec int64)
 	if err != nil {
 		return analyticsdomain.Trend{}, err
 	}
-	return s.repo.QueryTrendByDay(normalizeContext(ctx), from, to)
+	return s.repo.QueryTrendByDay(internalctx.OrBackground(ctx), from, to)
 }
 
 func (s *Service) GetBreakTypeDistribution(ctx context.Context, fromSec int64, toSec int64) (analyticsdomain.BreakTypeDistribution, error) {
@@ -53,7 +54,7 @@ func (s *Service) GetBreakTypeDistribution(ctx context.Context, fromSec int64, t
 	if err != nil {
 		return analyticsdomain.BreakTypeDistribution{}, err
 	}
-	return s.repo.QueryBreakTypeDistribution(normalizeContext(ctx), from, to)
+	return s.repo.QueryBreakTypeDistribution(internalctx.OrBackground(ctx), from, to)
 }
 
 func (s *Service) resolveRange(fromSec int64, toSec int64) (time.Time, time.Time, error) {
@@ -77,11 +78,4 @@ func currentWeekRange(now time.Time) (time.Time, time.Time) {
 		AddDate(0, 0, -(weekday - 1))
 	end := start.AddDate(0, 0, 7)
 	return start, end
-}
-
-func normalizeContext(ctx context.Context) context.Context {
-	if ctx != nil {
-		return ctx
-	}
-	return context.Background()
 }

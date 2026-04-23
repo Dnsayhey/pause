@@ -2,7 +2,6 @@ package settingsadapter
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	settingsdomain "pause/internal/backend/domain/settings"
@@ -49,7 +48,7 @@ func (m *fakeStartupManager) GetLaunchAtLogin() (bool, error) {
 
 func TestSettingsRepository_SyncFirstInstallOnly(t *testing.T) {
 	manager := &fakeStartupManager{}
-	first := NewSettingsRepository(&fakeSettingsStore{created: true, current: settingsdomain.DefaultSettings()}, manager)
+	first := NewPlatformSettingsSyncer(&fakeSettingsStore{created: true, current: settingsdomain.DefaultSettings()}, manager)
 	if err := first.SyncPlatformSettings(context.Background()); err != nil {
 		t.Fatalf("SyncPlatformSettings(first) err=%v", err)
 	}
@@ -58,7 +57,7 @@ func TestSettingsRepository_SyncFirstInstallOnly(t *testing.T) {
 	}
 
 	manager.setCalls = 0
-	existing := NewSettingsRepository(&fakeSettingsStore{created: false, current: settingsdomain.DefaultSettings()}, manager)
+	existing := NewPlatformSettingsSyncer(&fakeSettingsStore{created: false, current: settingsdomain.DefaultSettings()}, manager)
 	if err := existing.SyncPlatformSettings(context.Background()); err != nil {
 		t.Fatalf("SyncPlatformSettings(existing) err=%v", err)
 	}
@@ -67,28 +66,17 @@ func TestSettingsRepository_SyncFirstInstallOnly(t *testing.T) {
 	}
 }
 
-func TestSettingsRepository_SetLaunchAtLogin_VerifyRoundTrip(t *testing.T) {
-	manager := &fakeStartupManager{}
-	repo := NewSettingsRepository(&fakeSettingsStore{current: settingsdomain.DefaultSettings()}, manager)
+func TestSettingsRepository_UpdateSettings(t *testing.T) {
+	repo := NewSettingsRepository(&fakeSettingsStore{current: settingsdomain.DefaultSettings()})
 
-	actual, err := repo.SetLaunchAtLogin(context.Background(), true)
+	enabled := false
+	got, err := repo.UpdateSettings(context.Background(), settingsdomain.SettingsPatch{
+		Sound: &settingsdomain.SoundSettingsPatch{Enabled: &enabled},
+	})
 	if err != nil {
-		t.Fatalf("SetLaunchAtLogin() err=%v", err)
+		t.Fatalf("UpdateSettings() err=%v", err)
 	}
-	if !actual {
-		t.Fatalf("expected true")
-	}
-	if manager.setCalls != 1 || manager.getCalls != 1 {
-		t.Fatalf("call count mismatch set=%d get=%d", manager.setCalls, manager.getCalls)
-	}
-}
-
-func TestSettingsRepository_SetLaunchAtLogin_PropagatesSetError(t *testing.T) {
-	wantErr := errors.New("set failed")
-	manager := &fakeStartupManager{setErr: wantErr}
-	repo := NewSettingsRepository(&fakeSettingsStore{current: settingsdomain.DefaultSettings()}, manager)
-
-	if _, err := repo.SetLaunchAtLogin(context.Background(), true); !errors.Is(err, wantErr) {
-		t.Fatalf("err mismatch: got=%v want=%v", err, wantErr)
+	if got.Sound.Enabled {
+		t.Fatalf("expected updated sound setting to be false")
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"pause/internal/backend/domain/reminder"
 	settingsdomain "pause/internal/backend/domain/settings"
+	"pause/internal/backend/ports"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/backend/storage/settingsjson"
 )
@@ -23,7 +24,7 @@ func (f *fakeLockProvider) IsScreenLocked() bool { return f.locked }
 
 type historyRecorderStub struct{ calls int }
 
-func (s *historyRecorderStub) RecordBreak(_ context.Context, _ time.Time, _ time.Time, _ string, _ int, _ int, _ bool, _ []int64) error {
+func (s *historyRecorderStub) RecordBreak(_ context.Context, _ ports.BreakRecordInput) error {
 	s.calls++
 	return nil
 }
@@ -95,9 +96,7 @@ func TestEngine_StartBreakNowAndSkip(t *testing.T) {
 func TestEngine_StartBreakNowRejectedWhenGlobalDisabled(t *testing.T) {
 	eng := testEngine(t)
 	now := time.Unix(1_700_000_000, 0)
-	if _, err := eng.Pause(now); err != nil {
-		t.Fatalf("Pause() err=%v", err)
-	}
+	_ = eng.Pause(now)
 	if _, err := eng.StartBreakNow(now.Add(time.Second)); err == nil {
 		t.Fatalf("expected StartBreakNow() fail when global disabled")
 	}
@@ -134,9 +133,7 @@ func TestEngine_PauseResumeFreezesAndContinuesSchedulerProgress(t *testing.T) {
 		t.Fatalf("expected nextIn=1 before pause, got=%d", got)
 	}
 
-	if _, err := eng.Pause(base.Add(time.Second)); err != nil {
-		t.Fatalf("Pause() err=%v", err)
-	}
+	_ = eng.Pause(base.Add(time.Second))
 
 	eng.Tick(base.Add(100 * time.Second))
 	duringPause := eng.GetRuntimeState(base.Add(100 * time.Second))

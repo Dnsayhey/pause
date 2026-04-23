@@ -66,8 +66,9 @@ func NewRuntime(configPath string, bundleID string) (*Runtime, error) {
 		return nil, err
 	}
 
-	settingsRepo := settingsadapter.NewSettingsRepository(store, adapters.StartupManager)
-	settingsService, err := settingsusecase.NewService(settingsRepo)
+	settingsRepo := settingsadapter.NewSettingsRepository(store)
+	settingsSyncer := settingsadapter.NewPlatformSettingsSyncer(store, adapters.StartupManager)
+	settingsService, err := settingsusecase.NewService(settingsRepo, settingsSyncer, adapters.StartupManager)
 	if err != nil {
 		closeHistoryStoreOnInitError(historyStore, "settings_service")
 		return nil, err

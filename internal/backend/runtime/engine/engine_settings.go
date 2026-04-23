@@ -32,13 +32,13 @@ func (e *Engine) UpdateSettings(patch settings.SettingsPatch) (settings.Settings
 	return next, nil
 }
 
-func (e *Engine) Pause(now time.Time) (state.RuntimeState, error) {
+func (e *Engine) Pause(now time.Time) state.RuntimeState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	e.setGlobalEnabledLocked(false, now)
 	logx.Infof("runtime_global_enabled.set enabled=false source=pause")
-	return e.runtimeStateLocked(now, e.store.Get()), nil
+	return e.runtimeStateLocked(now, e.store.Get())
 }
 
 func (e *Engine) Resume(now time.Time) state.RuntimeState {

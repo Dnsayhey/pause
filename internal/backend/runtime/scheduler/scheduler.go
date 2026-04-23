@@ -6,7 +6,7 @@ import (
 	"pause/internal/backend/domain/reminder"
 )
 
-const mergeWindowSec = 60
+const MergeWindowSec = 60
 
 type ReminderType int64
 
@@ -61,7 +61,7 @@ func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []reminder.Reminder
 			continue
 		}
 		remaining := reminder.IntervalSec - s.elapsedSec[reminder.ID]
-		if remaining <= mergeWindowSec {
+		if remaining <= MergeWindowSec {
 			dueIDs[reminder.ID] = struct{}{}
 		}
 	}

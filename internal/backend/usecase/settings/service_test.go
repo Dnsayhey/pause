@@ -20,15 +20,23 @@ func (s *settingsRepoStub) UpdateSettings(_ context.Context, patch settingsdomai
 	return settingsdomain.DefaultSettings().ApplyPatch(patch), nil
 }
 
-func (s *settingsRepoStub) SyncPlatformSettings(_ context.Context) error     { return nil }
-func (s *settingsRepoStub) GetLaunchAtLogin(_ context.Context) (bool, error) { return true, nil }
-func (s *settingsRepoStub) SetLaunchAtLogin(_ context.Context, enabled bool) (bool, error) {
-	return enabled, nil
+type platformSyncerStub struct{}
+
+func (platformSyncerStub) SyncPlatformSettings(_ context.Context) error { return nil }
+
+type startupManagerStub struct {
+	current bool
+}
+
+func (s *startupManagerStub) GetLaunchAtLogin() (bool, error) { return s.current, nil }
+func (s *startupManagerStub) SetLaunchAtLogin(enabled bool) error {
+	s.current = enabled
+	return nil
 }
 
 func TestSettingsService_UpdateForwardsPatch(t *testing.T) {
 	repo := &settingsRepoStub{}
-	svc, err := NewService(repo)
+	svc, err := NewService(repo, platformSyncerStub{}, &startupManagerStub{})
 	if err != nil {
 		t.Fatalf("NewService() err=%v", err)
 	}
@@ -45,5 +53,21 @@ func TestSettingsService_UpdateForwardsPatch(t *testing.T) {
 	}
 	if updated.Sound.Enabled != enabled {
 		t.Fatalf("updated value mismatch: got=%t want=%t", updated.Sound.Enabled, enabled)
+	}
+}
+
+func TestSettingsService_LaunchAtLoginUsesStartupManager(t *testing.T) {
+	startup := &startupManagerStub{}
+	svc, err := NewService(&settingsRepoStub{}, platformSyncerStub{}, startup)
+	if err != nil {
+		t.Fatalf("NewService() err=%v", err)
+	}
+
+	actual, err := svc.SetLaunchAtLogin(context.Background(), true)
+	if err != nil {
+		t.Fatalf("SetLaunchAtLogin() err=%v", err)
+	}
+	if !actual {
+		t.Fatalf("expected launch-at-login to be true")
 	}
 }
