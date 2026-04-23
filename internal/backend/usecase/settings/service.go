@@ -49,7 +49,7 @@ func (s *Service) GetLaunchAtLogin(ctx context.Context) (bool, error) {
 }
 
 func (s *Service) SetLaunchAtLogin(ctx context.Context, enabled bool) (bool, error) {
-	_ = internalctx.OrBackground(ctx)
+	_ = ctx
 	if err := s.startupManager.SetLaunchAtLogin(enabled); err != nil {
 		return false, err
 	}
