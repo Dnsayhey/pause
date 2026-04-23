@@ -1,6 +1,6 @@
 # Pause 通知能力与前端策略
 
-最后更新：2026-04-02
+最后更新：2026-04-23
 
 本文档记录 Pause 当前通知能力的实现边界、前端交互策略与平台差异。
 
@@ -21,6 +21,8 @@
 - engine 每秒 tick。
 - 调度命中后拆分 `rest` 与 `notify` 事件。
 - `notify` 事件直接尝试发送系统通知，不进入休息会话。
+- 通知发送绑定到 engine 的运行时 `ctx`，在 runtime 关闭时会统一取消并等待已发起任务收敛。
+- 运行时对并发通知发送施加轻量上限，超限任务会直接丢弃并记录日志，避免 goroutine 无上限堆积。
 
 关键代码：
 - `internal/backend/runtime/engine/engine_tick.go`
@@ -31,6 +33,7 @@
 发送日志：
 - 成功：`reminder.notification_sent`
 - 失败：`reminder.notification_err`
+- 超限丢弃：`reminder.notification_dropped`
 
 ## 后端能力模型
 
@@ -192,6 +195,7 @@ PAUSE_DISABLE_NOTIFICATION_CAPABILITY=1 go run -tags wails,dev .
 - runtime 记录业务通知发送成功/失败。
 - 平台层只记录关键失败与关键兼容分支（例如 Windows `0x80070490` 兜底）。
 - 不保留临时排障型高频诊断日志。
+- runtime 负责通知任务的生命周期控制；平台层只关注单次发送本身。
 
 代表日志：
 - `reminder.notification_sent`

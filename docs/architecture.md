@@ -1,6 +1,6 @@
 # Pause 架构与结构说明
 
-最后更新：2026-04-02
+最后更新：2026-04-23
 
 本文档是 Pause 当前代码结构、职责边界、运行链路与维护约束的单一说明入口。  
 README 只保留项目入口与常用命令；涉及结构、架构、数据边界、Wails API、平台职责时，以本文档为准。
@@ -99,6 +99,14 @@ internal/backend/
 - `bootstrap/`
   - 把 platform、storage、usecase、runtime 装配成可运行对象
 
+补充说明：
+
+- `usecase/settings` 现在显式组合三类依赖：
+  - `SettingsStoreRepository`：只负责 `settings.json` 的读取与更新
+  - `PlatformSettingsSyncer`：只负责首次安装时的平台设置同步
+  - `StartupManager`：只负责开机启动状态读写
+- `runtime/engine` 只依赖抽象后的 `BreakRecorder`、`Notifier` 等 ports，不直接依赖具体 storage / platform 实现。
+
 ### 3.3 `internal/desktop`
 
 `desktop` 是桌面 UI 外壳层，负责：
@@ -186,6 +194,11 @@ main / main_wails
         -> usecase / runtime 组装
 ```
 
+补充说明：
+
+- `Runtime.Close()` 会先停止 `Engine` 的后台任务，再关闭 `history.db`。
+- `app.Shutdown()` 统一走 `Runtime.Close()`，不再只关闭数据库句柄。
+
 ### 5.2 Wails API 链路
 
 ```text
@@ -214,7 +227,7 @@ runtime state
 ```json
 {
   "enforcement": { "overlaySkipAllowed": true },
-  "sound": { "enabled": true, "volume": 70 },
+  "sound": { "enabled": true },
   "timer": { "mode": "idle_pause", "idlePauseThresholdSec": 60 },
   "ui": { "showTrayCountdown": true, "language": "auto", "theme": "auto" }
 }
@@ -225,6 +238,7 @@ runtime state
 - 全局调度开关不再持久化到 `settings.json`。
 - `Pause()/Resume()` 仅影响运行时计时推进（暂停时冻结进度，恢复后继续）。
 - 运行时开关状态通过 `RuntimeState.globalEnabled` 返回给前端/状态栏展示。
+- `settings.json` 只负责设置持久化；开机启动状态不写入该文件，由 `StartupManager` 单独管理。
 
 ### 6.2 `history.db`
 
@@ -272,6 +286,7 @@ runtime state
 
 - 这些返回值已经切换为 `internal/app` 自有 DTO
 - frontend 不应依赖 backend 内部类型结构
+- `GetLaunchAtLogin/SetLaunchAtLogin` 虽然仍由 `internal/app` 暴露，但后端实现上已经不再走 settings repository，而是直接通过 `StartupManager` 读写平台状态。
 
 ## 8. Build Tags 与平台差异
 
