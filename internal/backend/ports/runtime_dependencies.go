@@ -64,7 +64,3 @@ type StartupManager interface {
 	SetLaunchAtLogin(enabled bool) error
 	GetLaunchAtLogin() (bool, error)
 }
-
-type Clock interface {
-	Now() time.Time
-}
