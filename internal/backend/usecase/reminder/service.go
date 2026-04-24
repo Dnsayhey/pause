@@ -127,9 +127,7 @@ func normalizeReminders(reminders []reminderdomain.Reminder) []reminderdomain.Re
 	if len(result) == 0 {
 		return nil
 	}
-	cloned := make([]reminderdomain.Reminder, 0, len(result))
-	cloned = append(cloned, result...)
-	return cloned
+	return result
 }
 
 func (s *Service) applyRuntimeSnapshot(ctx context.Context, reminders []reminderdomain.Reminder) error {
