@@ -19,9 +19,6 @@ func reminderIDsFromEvent(evt *scheduler.Event) []int64 {
 	for _, reason := range evt.Reasons {
 		ids = append(ids, int64(reason))
 	}
-	if len(ids) == 0 {
-		return nil
-	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	uniq := ids[:0]
 	var last int64

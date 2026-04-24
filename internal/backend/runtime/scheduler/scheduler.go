@@ -15,6 +15,7 @@ type Event struct {
 	BreakSec int
 }
 
+// Scheduler is not thread-safe and must be called under external synchronization.
 type Scheduler struct {
 	elapsedSec map[int64]int
 }
@@ -97,7 +98,15 @@ func (s *Scheduler) NextInSec(reminders []reminder.Reminder, reminderID int64) i
 func (s *Scheduler) NextByID(reminders []reminder.Reminder) map[int64]int {
 	next := map[int64]int{}
 	for _, reminder := range reminders {
-		next[reminder.ID] = s.NextInSec(reminders, reminder.ID)
+		if !reminder.Enabled {
+			next[reminder.ID] = -1
+			continue
+		}
+		remaining := reminder.IntervalSec - s.elapsedSec[reminder.ID]
+		if remaining < 0 {
+			remaining = 0
+		}
+		next[reminder.ID] = remaining
 	}
 	return next
 }
