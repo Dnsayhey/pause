@@ -95,14 +95,17 @@ func (e *Engine) Tick(now time.Time) {
 	historyWrite = e.completeFinishedSessionLocked(now, tick.settings)
 	if e.stopTickLocked(now, tick, "global_disabled", !e.globalEnabled) {
 		e.mu.Unlock()
+		e.commitHistoryWrite(historyWrite)
 		return
 	}
 	if e.stopTickLocked(now, tick, "session_active", e.session.IsActive()) {
 		e.mu.Unlock()
+		e.commitHistoryWrite(historyWrite)
 		return
 	}
 	if e.stopTickLocked(now, tick, "idle_paused", !e.lastTickActive) {
 		e.mu.Unlock()
+		e.commitHistoryWrite(historyWrite)
 		return
 	}
 

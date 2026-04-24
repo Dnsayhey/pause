@@ -291,6 +291,31 @@ func TestEngine_SkipCurrentBreakDoesNotHoldLockDuringHistoryWrite(t *testing.T) 
 	}
 }
 
+func TestEngine_TickCommitsCompletedHistoryBeforeIdleEarlyReturn(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	idleProvider := &fakeIdleProvider{}
+	history := &historyRecorderStub{}
+	eng := NewEngine(store, idleProvider, &fakeLockProvider{}, nil, nil, history)
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 2, BreakSec: 20, ReminderType: "rest"},
+	})
+
+	base := time.Unix(1_700_000_000, 0)
+	if _, err := eng.StartBreakNow(base); err != nil {
+		t.Fatalf("StartBreakNow() err=%v", err)
+	}
+
+	idleProvider.idleSec = settingsdomain.DefaultSettings().Timer.IdlePauseThresholdSec + 1
+	eng.Tick(base.Add(20 * time.Second))
+
+	if history.calls != 1 {
+		t.Fatalf("history writes=%d want=1", history.calls)
+	}
+}
+
 func TestEngine_StopWaitsForNotificationTasks(t *testing.T) {
 	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
 	if err != nil {
