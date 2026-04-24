@@ -54,8 +54,9 @@ func (e *Engine) setGlobalEnabledLocked(enabled bool, now time.Time) {
 		return
 	}
 	e.globalEnabled = enabled
-	// Freeze scheduler progress while disabled without discarding elapsed state.
-	// Also reset tick baseline to prevent catch-up over paused duration.
+	// Pausing freezes the current scheduler progress instead of resetting per-reminder
+	// elapsed state. Resuming continues from that saved progress, but paused wall-clock
+	// time is intentionally excluded by resetting the tick baseline.
 	e.lastTick = now
 	e.tickRemainder = 0
 }

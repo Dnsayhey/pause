@@ -12,7 +12,6 @@ type Status string
 
 const (
 	StatusIdle      Status = "idle"
-	StatusReminding Status = "reminding"
 	StatusResting   Status = "resting"
 	StatusCompleted Status = "completed"
 	StatusSkipped   Status = "skipped"
@@ -35,7 +34,7 @@ func NewManager() *Manager {
 }
 
 func (m *Manager) IsActive() bool {
-	return m.current != nil && (m.current.status == StatusReminding || m.current.status == StatusResting)
+	return m.current != nil && m.current.status == StatusResting
 }
 
 func (m *Manager) StartBreak(now time.Time, evt *scheduler.Event, canSkip bool) {
@@ -49,16 +48,12 @@ func (m *Manager) StartBreak(now time.Time, evt *scheduler.Event, canSkip bool) 
 	}
 
 	m.current = &Session{
-		status:    StatusReminding,
+		status:    StatusResting,
 		reasons:   reasons,
 		startedAt: now,
 		endsAt:    now.Add(time.Duration(evt.BreakSec) * time.Second),
 		canSkip:   canSkip,
 	}
-
-	// StatusReminding is reserved for a future pre-break countdown flow.
-	// v1 transitions into the resting state immediately.
-	m.current.status = StatusResting
 }
 
 func (m *Manager) Tick(now time.Time) {

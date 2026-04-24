@@ -78,27 +78,24 @@ func resetSchedulerByReasons(s *scheduler.Scheduler, reasons []scheduler.Reminde
 	}
 }
 
-func joinReminderTypes(reasons []scheduler.ReminderType) string {
-	if len(reasons) == 0 {
+func joinInt64Like[T ~int64](values []T) string {
+	if len(values) == 0 {
 		return "none"
 	}
 
-	labels := make([]string, 0, len(reasons))
-	for _, reason := range reasons {
-		labels = append(labels, strconv.FormatInt(int64(reason), 10))
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, strconv.FormatInt(int64(value), 10))
 	}
-	return strings.Join(labels, "+")
+	return strings.Join(parts, "+")
+}
+
+func joinReminderTypes(reasons []scheduler.ReminderType) string {
+	return joinInt64Like(reasons)
 }
 
 func joinReasons(reasons []int64) string {
-	if len(reasons) == 0 {
-		return "none"
-	}
-	parts := make([]string, 0, len(reasons))
-	for _, reason := range reasons {
-		parts = append(parts, strconv.FormatInt(reason, 10))
-	}
-	return strings.Join(parts, "+")
+	return joinInt64Like(reasons)
 }
 
 func marshalPatchForLog(patch settings.SettingsPatch) string {
