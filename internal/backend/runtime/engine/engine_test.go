@@ -29,6 +29,20 @@ func (s *historyRecorderStub) RecordBreak(_ context.Context, _ ports.BreakRecord
 	return nil
 }
 
+type blockingHistoryRecorderStub struct {
+	started chan struct{}
+	block   chan struct{}
+}
+
+func (s *blockingHistoryRecorderStub) RecordBreak(_ context.Context, _ ports.BreakRecordInput) error {
+	select {
+	case s.started <- struct{}{}:
+	default:
+	}
+	<-s.block
+	return nil
+}
+
 type blockingNotifierStub struct {
 	started chan struct{}
 	done    chan struct{}
@@ -220,6 +234,60 @@ func TestEngine_SkipCurrentBreakRejectsInvalidMode(t *testing.T) {
 	}
 	if _, err := eng.SkipCurrentBreak(now.Add(time.Second), SkipMode("bad")); err == nil {
 		t.Fatalf("expected invalid mode error")
+	}
+}
+
+func TestEngine_SkipCurrentBreakDoesNotHoldLockDuringHistoryWrite(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	history := &blockingHistoryRecorderStub{
+		started: make(chan struct{}, 1),
+		block:   make(chan struct{}),
+	}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, nil, history)
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 2, BreakSec: 20, ReminderType: "rest"},
+	})
+
+	now := time.Unix(1_700_000_000, 0)
+	if _, err := eng.StartBreakNow(now); err != nil {
+		t.Fatalf("StartBreakNow() err=%v", err)
+	}
+
+	skipDone := make(chan struct{})
+	go func() {
+		if _, err := eng.SkipCurrentBreak(now.Add(time.Second), SkipModeNormal); err != nil {
+			t.Errorf("SkipCurrentBreak() err=%v", err)
+		}
+		close(skipDone)
+	}()
+
+	select {
+	case <-history.started:
+	case <-time.After(time.Second):
+		t.Fatalf("expected history write to start")
+	}
+
+	readDone := make(chan struct{})
+	go func() {
+		_ = eng.GetRuntimeState(now.Add(2 * time.Second))
+		close(readDone)
+	}()
+
+	select {
+	case <-readDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected runtime read to proceed while history write is blocked")
+	}
+
+	close(history.block)
+
+	select {
+	case <-skipDone:
+	case <-time.After(time.Second):
+		t.Fatalf("expected SkipCurrentBreak() to finish after history write release")
 	}
 }
 

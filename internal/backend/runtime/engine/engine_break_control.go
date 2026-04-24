@@ -10,28 +10,31 @@ import (
 
 func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	var historyWrite *historyWrite
 
 	settings := e.store.Get()
 	view := e.session.CurrentView(now)
 	switch mode {
 	case "", SkipModeNormal:
 		if !settings.Enforcement.OverlaySkipAllowed {
+			e.mu.Unlock()
 			return state.RuntimeState{}, errors.New("skip is disabled by settings")
 		}
 	case SkipModeEmergency:
 		// Emergency path: allow explicit user escape from enforced overlay.
 		e.session.SetCanSkip(true)
 	default:
+		e.mu.Unlock()
 		return state.RuntimeState{}, errors.New("invalid skip mode")
 	}
 
 	if err := e.session.Skip(); err != nil {
 		logx.Warnf("break.skip_err mode=%s err=%v", mode, err)
+		e.mu.Unlock()
 		return state.RuntimeState{}, err
 	}
 	if view != nil {
-		e.recordBreakSkippedLocked(now, view)
+		historyWrite = e.prepareBreakSkippedWriteLocked(now, view)
 		logx.Infof(
 			"break.skipped mode=%s reasons=%s remaining_sec=%d",
 			mode,
@@ -40,7 +43,10 @@ func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeSt
 		)
 	}
 	e.session.ClearIfDone()
-	return e.runtimeStateLocked(now, settings), nil
+	runtimeState := e.runtimeStateLocked(now, settings)
+	e.mu.Unlock()
+	e.commitHistoryWrite(historyWrite)
+	return runtimeState, nil
 }
 
 func (e *Engine) StartBreakNow(now time.Time) (state.RuntimeState, error) {

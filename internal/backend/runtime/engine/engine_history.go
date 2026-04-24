@@ -11,6 +11,12 @@ import (
 	"pause/internal/logx"
 )
 
+type historyWrite struct {
+	ctx    context.Context
+	input  ports.BreakRecordInput
+	logKey string
+}
+
 func reminderIDsFromEvent(evt *scheduler.Event) []int64 {
 	if evt == nil || len(evt.Reasons) == 0 {
 		return nil
@@ -48,10 +54,10 @@ func (e *Engine) recordBreakStartedLocked(now time.Time, source string, evt *sch
 	}
 }
 
-func (e *Engine) recordBreakCompletedLocked(view *state.BreakSessionView) {
+func (e *Engine) prepareBreakCompletedWriteLocked(view *state.BreakSessionView) *historyWrite {
 	if e.history == nil || view == nil || e.activeHistoryBreak == nil {
 		e.activeHistoryBreak = nil
-		return
+		return nil
 	}
 	actualBreakSec := int(view.EndsAt.Sub(view.StartedAt).Seconds())
 	if actualBreakSec < 0 {
@@ -62,24 +68,26 @@ func (e *Engine) recordBreakCompletedLocked(view *state.BreakSessionView) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := e.history.RecordBreak(ctx, ports.BreakRecordInput{
-		StartedAt:       record.StartedAt,
-		EndedAt:         view.EndsAt,
-		Source:          record.Source,
-		PlannedBreakSec: record.PlannedBreakSec,
-		ActualBreakSec:  actualBreakSec,
-		Skipped:         false,
-		ReminderIDs:     record.ReminderIDs,
-	}); err != nil {
-		logx.Warnf("history.break_complete_err source=%s err=%v", record.Source, err)
-	}
 	e.activeHistoryBreak = nil
+	return &historyWrite{
+		ctx: ctx,
+		input: ports.BreakRecordInput{
+			StartedAt:       record.StartedAt,
+			EndedAt:         view.EndsAt,
+			Source:          record.Source,
+			PlannedBreakSec: record.PlannedBreakSec,
+			ActualBreakSec:  actualBreakSec,
+			Skipped:         false,
+			ReminderIDs:     record.ReminderIDs,
+		},
+		logKey: "history.break_complete_err",
+	}
 }
 
-func (e *Engine) recordBreakSkippedLocked(now time.Time, view *state.BreakSessionView) {
+func (e *Engine) prepareBreakSkippedWriteLocked(now time.Time, view *state.BreakSessionView) *historyWrite {
 	if e.history == nil || view == nil || e.activeHistoryBreak == nil {
 		e.activeHistoryBreak = nil
-		return
+		return nil
 	}
 	actualBreakSec := int(now.Sub(view.StartedAt).Seconds())
 	if actualBreakSec < 0 {
@@ -90,16 +98,27 @@ func (e *Engine) recordBreakSkippedLocked(now time.Time, view *state.BreakSessio
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := e.history.RecordBreak(ctx, ports.BreakRecordInput{
-		StartedAt:       record.StartedAt,
-		EndedAt:         now,
-		Source:          record.Source,
-		PlannedBreakSec: record.PlannedBreakSec,
-		ActualBreakSec:  actualBreakSec,
-		Skipped:         true,
-		ReminderIDs:     record.ReminderIDs,
-	}); err != nil {
-		logx.Warnf("history.break_skip_err source=%s err=%v", record.Source, err)
-	}
 	e.activeHistoryBreak = nil
+	return &historyWrite{
+		ctx: ctx,
+		input: ports.BreakRecordInput{
+			StartedAt:       record.StartedAt,
+			EndedAt:         now,
+			Source:          record.Source,
+			PlannedBreakSec: record.PlannedBreakSec,
+			ActualBreakSec:  actualBreakSec,
+			Skipped:         true,
+			ReminderIDs:     record.ReminderIDs,
+		},
+		logKey: "history.break_skip_err",
+	}
+}
+
+func (e *Engine) commitHistoryWrite(write *historyWrite) {
+	if e == nil || e.history == nil || write == nil {
+		return
+	}
+	if err := e.history.RecordBreak(write.ctx, write.input); err != nil {
+		logx.Warnf("%s source=%s err=%v", write.logKey, write.input.Source, err)
+	}
 }

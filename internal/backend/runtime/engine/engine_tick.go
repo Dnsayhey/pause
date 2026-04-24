@@ -70,9 +70,9 @@ func (e *Engine) Stop() {
 func (e *Engine) Tick(now time.Time) {
 	idleSec := e.idleProvider.CurrentIdleSeconds()
 	locked := e.lockProvider.IsScreenLocked()
+	var historyWrite *historyWrite
 
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	firstTick := e.lastTick.IsZero()
 	if firstTick {
@@ -88,26 +88,34 @@ func (e *Engine) Tick(now time.Time) {
 	tick.appliedDeltaSec = tick.rawDeltaSec
 	if firstTick {
 		e.logTickLocked(now, tick.settings, tick.reminders, "bootstrap", 0, 0, nil)
+		e.mu.Unlock()
 		return
 	}
 
-	e.completeFinishedSessionLocked(now, tick.settings)
+	historyWrite = e.completeFinishedSessionLocked(now, tick.settings)
 	if e.stopTickLocked(now, tick, "global_disabled", !e.globalEnabled) {
+		e.mu.Unlock()
 		return
 	}
 	if e.stopTickLocked(now, tick, "session_active", e.session.IsActive()) {
+		e.mu.Unlock()
 		return
 	}
 	if e.stopTickLocked(now, tick, "idle_paused", !e.lastTickActive) {
+		e.mu.Unlock()
 		return
 	}
 
 	evt, reason, ok := e.advanceSchedulerLocked(now, &tick)
 	if !ok {
 		e.logTickLocked(now, tick.settings, tick.reminders, reason, tick.rawDeltaSec, tick.appliedDeltaSec, nil)
+		e.mu.Unlock()
+		e.commitHistoryWrite(historyWrite)
 		return
 	}
 	e.dispatchScheduledEventLocked(now, tick, evt)
+	e.mu.Unlock()
+	e.commitHistoryWrite(historyWrite)
 }
 
 func (e *Engine) isTickActive(cfg settings.Settings) bool {
@@ -142,10 +150,11 @@ func (e *Engine) updateTickActivityLocked(cfg settings.Settings, idleSec int, lo
 	e.lastTickActive = e.isTickActive(cfg)
 }
 
-func (e *Engine) completeFinishedSessionLocked(now time.Time, cfg settings.Settings) {
+func (e *Engine) completeFinishedSessionLocked(now time.Time, cfg settings.Settings) *historyWrite {
+	var historyWrite *historyWrite
 	e.session.Tick(now)
 	if view := e.session.CurrentView(now); view != nil && view.Status == string(session.StatusCompleted) {
-		e.recordBreakCompletedLocked(view)
+		historyWrite = e.prepareBreakCompletedWriteLocked(view)
 		logx.Infof(
 			"break.completed reasons=%s duration_sec=%d",
 			joinReasons(view.Reasons),
@@ -156,6 +165,7 @@ func (e *Engine) completeFinishedSessionLocked(now time.Time, cfg settings.Setti
 		}
 	}
 	e.session.ClearIfDone()
+	return historyWrite
 }
 
 func (e *Engine) stopTickLocked(now time.Time, tick tickState, reason string, shouldStop bool) bool {
