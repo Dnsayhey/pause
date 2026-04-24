@@ -125,7 +125,6 @@ export const zhCN = {
   analyticsColTriggered: '触发',
   analyticsColCompleted: '完成',
   analyticsColSkipped: '跳过',
-  analyticsColCanceled: '取消',
   analyticsColSkipRate: '跳过率',
   analyticsEmpty: '当前时间范围暂无数据',
   analyticsRangeLabel: '时间范围',

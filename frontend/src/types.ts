@@ -122,7 +122,6 @@ export type AnalyticsReminderStat = {
   triggeredCount: number;
   completedCount: number;
   skippedCount: number;
-  canceledCount: number;
   totalActualBreakSec: number;
   avgActualBreakSec: number;
 };
@@ -131,7 +130,6 @@ export type AnalyticsSummaryStats = {
   totalSessions: number;
   totalCompleted: number;
   totalSkipped: number;
-  totalCanceled: number;
   totalActualBreakSec: number;
   avgActualBreakSec: number;
 };
@@ -149,7 +147,6 @@ export type AnalyticsSummary = {
   totalSessions: number;
   totalCompleted: number;
   totalSkipped: number;
-  totalCanceled: number;
   completionRate: number;
   skipRate: number;
   totalActualBreakSec: number;
@@ -161,7 +158,6 @@ export type AnalyticsTrendPoint = {
   totalSessions: number;
   totalCompleted: number;
   totalSkipped: number;
-  totalCanceled: number;
   completionRate: number;
   skipRate: number;
   totalActualBreakSec: number;
@@ -180,7 +176,6 @@ export type AnalyticsBreakTypeDistributionItem = {
   triggeredCount: number;
   completedCount: number;
   skippedCount: number;
-  canceledCount: number;
   completionRate: number;
   skipRate: number;
   triggeredShare: number;

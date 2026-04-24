@@ -1,6 +1,6 @@
 # Pause 架构说明
 
-最后更新：2026-04-23
+最后更新：2026-04-24
 
 本文档只描述当前实现。
 
@@ -160,6 +160,11 @@ storage 层保留防御式校验，但领域规则以 domain 为准。
 - 记录 break history
 - 发送通知
 
+当前实现约束：
+
+- break session 结束态只有 `completed` 和 `skipped`
+- break history 在锁内完成状态收口与写入参数快照，在锁外提交到 `history.db`
+
 runtime 生命周期：
 
 - `Engine.Start(ctx)` 启动 tick 循环
@@ -222,6 +227,11 @@ main / main_wails
 
 - `reminders`
 - `break_sessions` / `break_session_reminders`
+
+其中 `break_sessions.status` 当前只使用：
+
+- `completed`
+- `skipped`
 
 analytics 查询也全部基于 `history.db`。
 

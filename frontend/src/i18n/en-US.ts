@@ -125,7 +125,6 @@ export const enUS = {
   analyticsColTriggered: 'Triggered',
   analyticsColCompleted: 'Completed',
   analyticsColSkipped: 'Skipped',
-  analyticsColCanceled: 'Canceled',
   analyticsColSkipRate: 'Skip rate',
   analyticsEmpty: 'No data in selected range',
   analyticsRangeLabel: 'Range',
