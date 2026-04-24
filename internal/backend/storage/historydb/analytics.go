@@ -54,7 +54,6 @@ func (s *Store) QueryAnalyticsSummary(ctx context.Context, from time.Time, to ti
 		TotalSessions:       summary.TotalSessions,
 		TotalCompleted:      summary.TotalCompleted,
 		TotalSkipped:        summary.TotalSkipped,
-		TotalCanceled:       summary.TotalCanceled,
 		CompletionRate:      ratio(summary.TotalCompleted, summary.TotalSessions),
 		SkipRate:            ratio(summary.TotalSkipped, summary.TotalSessions),
 		TotalActualBreakSec: summary.TotalActualBreakSec,
@@ -90,7 +89,6 @@ func (s *Store) QueryAnalyticsTrendByDay(ctx context.Context, from time.Time, to
 		   COUNT(*) AS total_sessions,
 		   COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS total_completed,
 		   COALESCE(SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END), 0) AS total_skipped,
-		   COALESCE(SUM(CASE WHEN status = 'canceled' THEN 1 ELSE 0 END), 0) AS total_canceled,
 		   COALESCE(SUM(CASE WHEN status = 'completed' THEN actual_break_sec ELSE 0 END), 0) AS total_actual_break_sec,
 		   COALESCE(ROUND(AVG(CASE WHEN status = 'completed' THEN actual_break_sec END), 1), 0) AS avg_actual_break_sec
 		 FROM sessions
@@ -117,7 +115,6 @@ func (s *Store) QueryAnalyticsTrendByDay(ctx context.Context, from time.Time, to
 			&row.TotalSessions,
 			&row.TotalCompleted,
 			&row.TotalSkipped,
-			&row.TotalCanceled,
 			&row.TotalActualBreakSec,
 			&row.AvgActualBreakSec,
 		); err != nil {
@@ -159,7 +156,6 @@ func (s *Store) QueryAnalyticsBreakTypeDistribution(ctx context.Context, from ti
 			TriggeredCount:  row.TriggeredCount,
 			CompletedCount:  row.CompletedCount,
 			SkippedCount:    row.SkippedCount,
-			CanceledCount:   row.CanceledCount,
 			CompletionRate:  ratio(row.CompletedCount, row.TriggeredCount),
 			SkipRate:        ratio(row.SkippedCount, row.TriggeredCount),
 			ReminderType:    row.ReminderType,
@@ -191,7 +187,6 @@ func (s *Store) queryReminderAggregatesByRange(ctx context.Context, startUnix in
 		     COUNT(s.id) AS triggered_count,
 		     COALESCE(SUM(CASE WHEN s.status = 'completed' THEN 1 ELSE 0 END), 0) AS completed_count,
 		     COALESCE(SUM(CASE WHEN s.status = 'skipped' THEN 1 ELSE 0 END), 0) AS skipped_count,
-		     COALESCE(SUM(CASE WHEN s.status = 'canceled' THEN 1 ELSE 0 END), 0) AS canceled_count,
 		     COALESCE(SUM(CASE WHEN s.status = 'completed' THEN s.actual_break_sec ELSE 0 END), 0) AS total_actual_break_sec,
 		     COALESCE(ROUND(AVG(CASE WHEN s.status = 'completed' THEN s.actual_break_sec END), 1), 0) AS avg_actual_break_sec
 		   FROM sessions_in_range s
@@ -210,7 +205,6 @@ func (s *Store) queryReminderAggregatesByRange(ctx context.Context, startUnix in
 		     0 AS triggered_count,
 		     0 AS completed_count,
 		     0 AS skipped_count,
-		     0 AS canceled_count,
 		     0 AS total_actual_break_sec,
 		     0.0 AS avg_actual_break_sec
 		   FROM reminders r
@@ -235,7 +229,6 @@ func (s *Store) queryReminderAggregatesByRange(ctx context.Context, startUnix in
 		   c.triggered_count,
 		   c.completed_count,
 		   c.skipped_count,
-		   c.canceled_count,
 		   c.total_actual_break_sec,
 		   c.avg_actual_break_sec
 		 FROM combined c
@@ -261,7 +254,6 @@ func (s *Store) queryReminderAggregatesByRange(ctx context.Context, startUnix in
 			&row.TriggeredCount,
 			&row.CompletedCount,
 			&row.SkippedCount,
-			&row.CanceledCount,
 			&row.TotalActualBreakSec,
 			&row.AvgActualBreakSec,
 		); err != nil {
@@ -296,7 +288,6 @@ func (s *Store) querySummaryAggregateByRange(ctx context.Context, startUnix int6
 		   COUNT(id) AS total_sessions,
 		   COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS total_completed,
 		   COALESCE(SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END), 0) AS total_skipped,
-		   COALESCE(SUM(CASE WHEN status = 'canceled' THEN 1 ELSE 0 END), 0) AS total_canceled,
 		   COALESCE(SUM(CASE WHEN status = 'completed' THEN actual_break_sec ELSE 0 END), 0) AS total_actual_break_sec,
 		   COALESCE(ROUND(AVG(CASE WHEN status = 'completed' THEN actual_break_sec END), 1), 0) AS avg_actual_break_sec
 		 FROM sessions_in_range`,
@@ -306,7 +297,6 @@ func (s *Store) querySummaryAggregateByRange(ctx context.Context, startUnix int6
 		&summary.TotalSessions,
 		&summary.TotalCompleted,
 		&summary.TotalSkipped,
-		&summary.TotalCanceled,
 		&summary.TotalActualBreakSec,
 		&summary.AvgActualBreakSec,
 	)

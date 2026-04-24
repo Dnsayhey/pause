@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS break_sessions (
   trigger_source    TEXT NOT NULL
                     CHECK (trigger_source IN ('scheduled', 'manual')),
   status            TEXT NOT NULL
-                    CHECK (status IN ('completed', 'skipped', 'canceled')),
+                    CHECK (status IN ('completed', 'skipped')),
   started_at        INTEGER NOT NULL,
   ended_at          INTEGER NOT NULL,
   planned_break_sec INTEGER NOT NULL CHECK (planned_break_sec > 0),

@@ -8,7 +8,6 @@ type ReminderStat struct {
 	TriggeredCount      int     `json:"triggeredCount"`
 	CompletedCount      int     `json:"completedCount"`
 	SkippedCount        int     `json:"skippedCount"`
-	CanceledCount       int     `json:"canceledCount"`
 	TotalActualBreakSec int     `json:"totalActualBreakSec"`
 	AvgActualBreakSec   float64 `json:"avgActualBreakSec"`
 }
@@ -17,7 +16,6 @@ type SummaryStats struct {
 	TotalSessions       int     `json:"totalSessions"`
 	TotalCompleted      int     `json:"totalCompleted"`
 	TotalSkipped        int     `json:"totalSkipped"`
-	TotalCanceled       int     `json:"totalCanceled"`
 	TotalActualBreakSec int     `json:"totalActualBreakSec"`
 	AvgActualBreakSec   float64 `json:"avgActualBreakSec"`
 }
@@ -35,7 +33,6 @@ type Summary struct {
 	TotalSessions       int     `json:"totalSessions"`
 	TotalCompleted      int     `json:"totalCompleted"`
 	TotalSkipped        int     `json:"totalSkipped"`
-	TotalCanceled       int     `json:"totalCanceled"`
 	CompletionRate      float64 `json:"completionRate"`
 	SkipRate            float64 `json:"skipRate"`
 	TotalActualBreakSec int     `json:"totalActualBreakSec"`
@@ -47,7 +44,6 @@ type TrendPoint struct {
 	TotalSessions       int     `json:"totalSessions"`
 	TotalCompleted      int     `json:"totalCompleted"`
 	TotalSkipped        int     `json:"totalSkipped"`
-	TotalCanceled       int     `json:"totalCanceled"`
 	CompletionRate      float64 `json:"completionRate"`
 	SkipRate            float64 `json:"skipRate"`
 	TotalActualBreakSec int     `json:"totalActualBreakSec"`
@@ -66,7 +62,6 @@ type BreakTypeDistributionItem struct {
 	TriggeredCount  int     `json:"triggeredCount"`
 	CompletedCount  int     `json:"completedCount"`
 	SkippedCount    int     `json:"skippedCount"`
-	CanceledCount   int     `json:"canceledCount"`
 	CompletionRate  float64 `json:"completionRate"`
 	SkipRate        float64 `json:"skipRate"`
 	TriggeredShare  float64 `json:"triggeredShare"`
