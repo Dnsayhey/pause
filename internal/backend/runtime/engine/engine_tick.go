@@ -158,6 +158,7 @@ func (e *Engine) completeFinishedSessionLocked(now time.Time, cfg settings.Setti
 	e.session.Tick(now)
 	if view := e.session.CurrentView(now); view != nil && view.Status == string(session.StatusCompleted) {
 		historyWrite = e.prepareBreakCompletedWriteLocked(view)
+		e.clearPostponedOnceForReasonsLocked(view.Reasons)
 		logx.Infof(
 			"break.completed reasons=%s duration_sec=%d",
 			joinReasons(view.Reasons),

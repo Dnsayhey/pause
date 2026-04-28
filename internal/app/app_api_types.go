@@ -98,6 +98,7 @@ type BreakSessionView struct {
 	EndsAt       time.Time `json:"endsAt"`
 	RemainingSec int       `json:"remainingSec"`
 	CanSkip      bool      `json:"canSkip"`
+	CanPostpone  bool      `json:"canPostpone"`
 }
 
 type RuntimeState struct {

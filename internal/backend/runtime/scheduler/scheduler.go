@@ -28,6 +28,21 @@ func (s *Scheduler) ResetByID(id int64) {
 	delete(s.elapsedSec, id)
 }
 
+func (s *Scheduler) PostponeByID(id int64, intervalSec int, delaySec int) {
+	if id <= 0 {
+		return
+	}
+	if intervalSec <= 0 {
+		delete(s.elapsedSec, id)
+		return
+	}
+	if delaySec <= 0 {
+		s.elapsedSec[id] = intervalSec
+		return
+	}
+	s.elapsedSec[id] = intervalSec - delaySec
+}
+
 func (s *Scheduler) OnActiveSeconds(activeSec int, reminders []reminder.Reminder) *Event {
 	if activeSec <= 0 {
 		return nil

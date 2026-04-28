@@ -56,3 +56,18 @@ func TestScheduler_NextInSec(t *testing.T) {
 		t.Fatalf("next stand mismatch got=%d", got)
 	}
 }
+
+func TestScheduler_PostponeByID(t *testing.T) {
+	s := New()
+	reminders := fixtureReminders()
+
+	s.PostponeByID(1, reminders[0].IntervalSec, 60)
+	if got := s.NextInSec(reminders, 1); got != 60 {
+		t.Fatalf("next postponed mismatch got=%d", got)
+	}
+
+	s.PostponeByID(2, reminders[1].IntervalSec, reminders[1].IntervalSec+60)
+	if got := s.NextInSec(reminders, 2); got != reminders[1].IntervalSec+60 {
+		t.Fatalf("next clamped mismatch got=%d", got)
+	}
+}

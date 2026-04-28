@@ -66,6 +66,13 @@ func overlaySkipButtonTitle(language string) string {
 	return "Skip"
 }
 
+func overlayPostponeButtonTitle(language string) string {
+	if language == settings.UILanguageZhCN {
+		return "1分钟后休息"
+	}
+	return "Rest in 1 min"
+}
+
 func overlayCountdownText(language string, remainingSec int) string {
 	if remainingSec < 0 {
 		remainingSec = 0

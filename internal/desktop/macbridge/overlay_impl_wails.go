@@ -10,16 +10,20 @@ package macbridge
 #import <dispatch/dispatch.h>
 
 extern void overlaySkipCallbackGo(void);
+extern void overlayPostponeCallbackGo(void);
 
 static NSMutableArray<NSWindow *> *pauseOverlayWindows;
 static NSMutableArray<NSTextField *> *pauseOverlayCountdownLabels;
 static NSMutableArray<NSTextField *> *pauseOverlayMessageLabels;
 static NSMutableArray<NSButton *> *pauseOverlaySkipButtons;
+static NSMutableArray<NSButton *> *pauseOverlayPostponeButtons;
 static BOOL pauseOverlayVisible;
 static BOOL pauseOverlayAllowSkip;
+static BOOL pauseOverlayAllowPostpone;
 static BOOL pauseOverlayEmergencySkipUnlocked;
 static id pauseOverlayKeyMonitor;
 static NSString *pauseOverlaySkipButtonTitle;
+static NSString *pauseOverlayPostponeButtonTitle;
 static NSString *pauseOverlayCountdownText;
 static NSString *pauseOverlayMessageText;
 static NSString *pauseOverlayTheme;
@@ -31,12 +35,17 @@ static void PauseOverlayUpdateSkipButtonStyleOnMain(NSButton *button);
 
 @interface PauseOverlayHandler : NSObject
 - (void)onSkipButtonClick:(id)sender;
+- (void)onPostponeButtonClick:(id)sender;
 @end
 
 @implementation PauseOverlayHandler
 - (void)onSkipButtonClick:(id)sender {
     (void)sender;
     overlaySkipCallbackGo();
+}
+- (void)onPostponeButtonClick:(id)sender {
+    (void)sender;
+    overlayPostponeCallbackGo();
 }
 @end
 
@@ -226,14 +235,14 @@ static NSColor *PauseOverlayButtonTextColorForTheme(NSString *theme, BOOL hovere
     return [NSColor colorWithSRGBRed:0.08 green:0.08 blue:0.08 alpha:1.0];
 }
 
-static NSButton *PauseOverlayBuildSkipButton(NSString *title, NSString *theme) {
-    NSString *resolvedTitle = (title != nil ? title : @"Emergency Skip");
+static NSButton *PauseOverlayBuildActionButton(NSString *title, NSString *theme, SEL action) {
+    NSString *resolvedTitle = (title != nil ? title : @"");
     PauseOverlaySkipButton *button = [[[PauseOverlaySkipButton alloc] initWithFrame:NSMakeRect(0, 0, 170, 36)] autorelease];
     [button setPauseOverlayTitle:resolvedTitle];
     [button setPauseOverlayTheme:(theme != nil ? theme : @"dark")];
     [button setTitle:resolvedTitle];
     [button setTarget:pauseOverlayHandler];
-    [button setAction:@selector(onSkipButtonClick:)];
+    [button setAction:action];
     [button setButtonType:NSButtonTypeMomentaryChange];
     [button setBezelStyle:NSBezelStyleRegularSquare];
     [button setBordered:NO];
@@ -258,6 +267,16 @@ static NSButton *PauseOverlayBuildSkipButton(NSString *title, NSString *theme) {
     }];
     PauseOverlayUpdateSkipButtonStyleOnMain(button);
     return button;
+}
+
+static NSButton *PauseOverlayBuildSkipButton(NSString *title, NSString *theme) {
+    NSString *resolvedTitle = (title != nil ? title : @"Emergency Skip");
+    return PauseOverlayBuildActionButton(resolvedTitle, theme, @selector(onSkipButtonClick:));
+}
+
+static NSButton *PauseOverlayBuildPostponeButton(NSString *title, NSString *theme) {
+    NSString *resolvedTitle = (title != nil ? title : @"Rest in 1 min");
+    return PauseOverlayBuildActionButton(resolvedTitle, theme, @selector(onPostponeButtonClick:));
 }
 
 static void PauseOverlayUpdateSkipButtonStyleOnMain(NSButton *button) {
@@ -289,6 +308,20 @@ static void PauseOverlayUpdateSkipButtonStyleOnMain(NSButton *button) {
     [skipButton.layer setOpacity:(pressed ? 0.93 : 1.0)];
     [skipButton.layer setShadowOffset:(pressed ? CGSizeMake(0.0, 1.0) : CGSizeMake(0.0, 2.0))];
     [skipButton.layer setShadowOpacity:(pressed ? 0.08 : (hovered ? 0.26 : 0.18))];
+}
+
+static void PauseOverlayUpdateButtonArrayStyleOnMain(NSMutableArray<NSButton *> *buttons, NSString *title) {
+    if (buttons == nil) {
+        return;
+    }
+    for (NSButton *button in buttons) {
+        if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
+            PauseOverlaySkipButton *actionButton = (PauseOverlaySkipButton *)button;
+            [actionButton setPauseOverlayTitle:title];
+            [actionButton setPauseOverlayTheme:pauseOverlayTheme];
+        }
+        PauseOverlayUpdateSkipButtonStyleOnMain(button);
+    }
 }
 
 static void PauseOverlayUpdateCountdownTextOnMain(NSString *countdownText) {
@@ -337,12 +370,15 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
     NSScreen *screen,
     BOOL allowSkip,
     NSString *skipButtonTitle,
+    BOOL allowPostpone,
+    NSString *postponeButtonTitle,
     NSString *countdownText,
     NSString *messageText,
     NSString *theme,
     NSTextField **outCountdownLabel,
     NSTextField **outMessageLabel,
-    NSButton **outSkipButton
+    NSButton **outSkipButton,
+    NSButton **outPostponeButton
 ) {
     NSRect screenFrame = [screen frame];
     NSRect initialRect = NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height);
@@ -362,6 +398,7 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
     NSTextField *countdownLabel = nil;
     NSTextField *messageLabel = nil;
     NSButton *skipButton = nil;
+    NSButton *postponeButton = nil;
     if (contentView != nil) {
         countdownLabel = [NSTextField labelWithString:(countdownText != nil ? countdownText : @"")];
         [countdownLabel setFont:[NSFont monospacedDigitSystemFontOfSize:30 weight:NSFontWeightMedium]];
@@ -379,8 +416,17 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
         [messageLabel setPreferredMaxLayoutWidth:520.0];
         skipButton = PauseOverlayBuildSkipButton(skipButtonTitle, theme);
         [skipButton setHidden:!allowSkip];
+        postponeButton = PauseOverlayBuildPostponeButton(postponeButtonTitle, theme);
+        [postponeButton setHidden:!allowPostpone];
 
-        NSStackView *stack = [NSStackView stackViewWithViews:@[countdownLabel, messageLabel, skipButton]];
+        NSStackView *actionsStack = [NSStackView stackViewWithViews:@[postponeButton, skipButton]];
+        [actionsStack setOrientation:NSUserInterfaceLayoutOrientationHorizontal];
+        [actionsStack setAlignment:NSLayoutAttributeCenterY];
+        [actionsStack setSpacing:10.0];
+        [actionsStack setTranslatesAutoresizingMaskIntoConstraints:NO];
+        [actionsStack setDetachesHiddenViews:YES];
+
+        NSStackView *stack = [NSStackView stackViewWithViews:@[countdownLabel, messageLabel, actionsStack]];
         [stack setOrientation:NSUserInterfaceLayoutOrientationVertical];
         [stack setAlignment:NSLayoutAttributeCenterX];
         [stack setSpacing:14.0];
@@ -394,6 +440,8 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
             [messageLabel.widthAnchor constraintLessThanOrEqualToConstant:560],
             [skipButton.heightAnchor constraintEqualToConstant:36],
             [skipButton.widthAnchor constraintGreaterThanOrEqualToConstant:170],
+            [postponeButton.heightAnchor constraintEqualToConstant:36],
+            [postponeButton.widthAnchor constraintGreaterThanOrEqualToConstant:170],
         ]];
     }
 
@@ -405,6 +453,9 @@ static NSWindow *PauseOverlayBuildWindowForScreen(
     }
     if (outSkipButton != NULL) {
         *outSkipButton = skipButton;
+    }
+    if (outPostponeButton != NULL) {
+        *outPostponeButton = postponeButton;
     }
     return window;
 }
@@ -432,6 +483,26 @@ static void PauseOverlaySetAllowSkipOnMain(BOOL allowSkip) {
             if (!allowSkip) {
                 skipButton.pauseOverlayHovered = NO;
                 [skipButton setHighlighted:NO];
+            }
+        }
+        PauseOverlayUpdateSkipButtonStyleOnMain(button);
+    }
+}
+
+static void PauseOverlaySetAllowPostponeOnMain(BOOL allowPostpone) {
+    pauseOverlayAllowPostpone = allowPostpone;
+    if (pauseOverlayPostponeButtons == nil) {
+        return;
+    }
+    for (NSButton *button in pauseOverlayPostponeButtons) {
+        [button setHidden:!allowPostpone];
+        if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
+            PauseOverlaySkipButton *postponeButton = (PauseOverlaySkipButton *)button;
+            [postponeButton setPauseOverlayTitle:pauseOverlayPostponeButtonTitle];
+            [postponeButton setPauseOverlayTheme:pauseOverlayTheme];
+            if (!allowPostpone) {
+                postponeButton.pauseOverlayHovered = NO;
+                [postponeButton setHighlighted:NO];
             }
         }
         PauseOverlayUpdateSkipButtonStyleOnMain(button);
@@ -466,14 +537,10 @@ static void PauseOverlayUpdateThemeOnMain(NSString *theme) {
         }
     }
     if (pauseOverlaySkipButtons != nil) {
-        for (NSButton *button in pauseOverlaySkipButtons) {
-            if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
-                PauseOverlaySkipButton *skipButton = (PauseOverlaySkipButton *)button;
-                [skipButton setPauseOverlayTheme:pauseOverlayTheme];
-                [skipButton setPauseOverlayTitle:pauseOverlaySkipButtonTitle];
-            }
-            PauseOverlayUpdateSkipButtonStyleOnMain(button);
-        }
+        PauseOverlayUpdateButtonArrayStyleOnMain(pauseOverlaySkipButtons, pauseOverlaySkipButtonTitle);
+    }
+    if (pauseOverlayPostponeButtons != nil) {
+        PauseOverlayUpdateButtonArrayStyleOnMain(pauseOverlayPostponeButtons, pauseOverlayPostponeButtonTitle);
     }
 }
 
@@ -500,9 +567,25 @@ static void PauseOverlayUpdateSkipButtonTitleOnMain(NSString *title) {
     }
 }
 
-static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle, NSString *countdown, NSString *message, NSString *overlayTheme) {
+static void PauseOverlayUpdatePostponeButtonTitleOnMain(NSString *title) {
+    if (title == nil) {
+        title = @"Rest in 1 min";
+    }
+    if (pauseOverlayPostponeButtonTitle == nil || ![pauseOverlayPostponeButtonTitle isEqualToString:title]) {
+        if (pauseOverlayPostponeButtonTitle != nil) {
+            [pauseOverlayPostponeButtonTitle release];
+        }
+        pauseOverlayPostponeButtonTitle = [title copy];
+    }
+    PauseOverlayUpdateButtonArrayStyleOnMain(pauseOverlayPostponeButtons, pauseOverlayPostponeButtonTitle);
+}
+
+static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle, BOOL allowPostpone, NSString *postponeTitle, NSString *countdown, NSString *message, NSString *overlayTheme) {
     if (skipTitle == nil) {
         skipTitle = @"Emergency Skip";
+    }
+    if (postponeTitle == nil) {
+        postponeTitle = @"Rest in 1 min";
     }
     if (countdown == nil) {
         countdown = @"";
@@ -523,6 +606,7 @@ static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle
     if (screens == nil || [screens count] == 0) {
         pauseOverlayVisible = NO;
         pauseOverlayAllowSkip = NO;
+        pauseOverlayAllowPostpone = NO;
         return;
     }
 
@@ -530,8 +614,11 @@ static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle
     pauseOverlayCountdownLabels = [[NSMutableArray alloc] init];
     pauseOverlayMessageLabels = [[NSMutableArray alloc] init];
     pauseOverlaySkipButtons = [[NSMutableArray alloc] init];
+    pauseOverlayPostponeButtons = [[NSMutableArray alloc] init];
     pauseOverlayAllowSkip = allowSkip;
+    pauseOverlayAllowPostpone = allowPostpone;
     pauseOverlaySkipButtonTitle = [skipTitle copy];
+    pauseOverlayPostponeButtonTitle = [postponeTitle copy];
     pauseOverlayCountdownText = [countdown copy];
     pauseOverlayMessageText = [message copy];
     pauseOverlayTheme = [overlayTheme copy];
@@ -541,7 +628,8 @@ static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle
         NSTextField *countdownLabel = nil;
         NSTextField *messageLabel = nil;
         NSButton *skipButton = nil;
-        NSWindow *window = PauseOverlayBuildWindowForScreen(screen, allowSkip, skipTitle, countdown, message, overlayTheme, &countdownLabel, &messageLabel, &skipButton);
+        NSButton *postponeButton = nil;
+        NSWindow *window = PauseOverlayBuildWindowForScreen(screen, allowSkip, skipTitle, allowPostpone, postponeTitle, countdown, message, overlayTheme, &countdownLabel, &messageLabel, &skipButton, &postponeButton);
         if (window == nil) {
             continue;
         }
@@ -554,6 +642,9 @@ static void PauseOverlayRebuildWindowsOnMain(BOOL allowSkip, NSString *skipTitle
         }
         if (skipButton != nil) {
             [pauseOverlaySkipButtons addObject:skipButton];
+        }
+        if (postponeButton != nil) {
+            [pauseOverlayPostponeButtons addObject:postponeButton];
         }
         [window orderFrontRegardless];
         [window release];
@@ -632,6 +723,10 @@ static void PauseOverlayHideOnMain(void) {
         [pauseOverlaySkipButtonTitle release];
         pauseOverlaySkipButtonTitle = nil;
     }
+    if (pauseOverlayPostponeButtonTitle != nil) {
+        [pauseOverlayPostponeButtonTitle release];
+        pauseOverlayPostponeButtonTitle = nil;
+    }
     if (pauseOverlayCountdownText != nil) {
         [pauseOverlayCountdownText release];
         pauseOverlayCountdownText = nil;
@@ -662,10 +757,21 @@ static void PauseOverlayHideOnMain(void) {
         [pauseOverlaySkipButtons release];
         pauseOverlaySkipButtons = nil;
     }
+    if (pauseOverlayPostponeButtons != nil) {
+        for (NSButton *button in pauseOverlayPostponeButtons) {
+            if ([button isKindOfClass:[PauseOverlaySkipButton class]]) {
+                PauseOverlaySkipButton *postponeButton = (PauseOverlaySkipButton *)button;
+                [postponeButton setHighlighted:NO];
+            }
+        }
+        [pauseOverlayPostponeButtons release];
+        pauseOverlayPostponeButtons = nil;
+    }
 
     if (pauseOverlayWindows == nil || [pauseOverlayWindows count] == 0) {
         pauseOverlayVisible = NO;
         pauseOverlayAllowSkip = NO;
+        pauseOverlayAllowPostpone = NO;
         return;
     }
 
@@ -674,6 +780,7 @@ static void PauseOverlayHideOnMain(void) {
     pauseOverlayWindows = nil;
     pauseOverlayVisible = NO;
     pauseOverlayAllowSkip = NO;
+    pauseOverlayAllowPostpone = NO;
 
     for (NSWindow *window in windows) {
         [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
@@ -695,12 +802,14 @@ void PauseBreakOverlayInit(void) {
     });
 }
 
-int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char *countdownText, const char *messageText, const char *theme) {
+int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, int allowPostpone, const char *postponeButtonTitle, const char *countdownText, const char *messageText, const char *theme) {
     NSString *skipTitle = skipButtonTitle ? [NSString stringWithUTF8String:skipButtonTitle] : @"Emergency Skip";
+    NSString *postponeTitle = postponeButtonTitle ? [NSString stringWithUTF8String:postponeButtonTitle] : @"Rest in 1 min";
     NSString *countdown = countdownText ? [NSString stringWithUTF8String:countdownText] : @"";
     NSString *message = messageText ? [NSString stringWithUTF8String:messageText] : @"";
     NSString *overlayTheme = theme ? [NSString stringWithUTF8String:theme] : @"dark";
     BOOL shouldAllowSkip = allowSkip != 0;
+    BOOL shouldAllowPostpone = allowPostpone != 0;
     __block BOOL didShow = NO;
 
     PauseOverlayRunOnMain(^{
@@ -715,10 +824,12 @@ int PauseBreakOverlayShow(int allowSkip, const char *skipButtonTitle, const char
 
         BOOL needsRebuild = (pauseOverlayVisible == NO || pauseOverlayWindows == nil || [pauseOverlayWindows count] != [screens count]);
         if (needsRebuild) {
-            PauseOverlayRebuildWindowsOnMain(effectiveAllowSkip, skipTitle, countdown, message, overlayTheme);
+            PauseOverlayRebuildWindowsOnMain(effectiveAllowSkip, skipTitle, shouldAllowPostpone, postponeTitle, countdown, message, overlayTheme);
         } else {
             PauseOverlaySetAllowSkipOnMain(effectiveAllowSkip);
+            PauseOverlaySetAllowPostponeOnMain(shouldAllowPostpone);
             PauseOverlayUpdateSkipButtonTitleOnMain(skipTitle);
+            PauseOverlayUpdatePostponeButtonTitleOnMain(postponeTitle);
             PauseOverlayUpdateThemeOnMain(overlayTheme);
             PauseOverlayUpdateCountdownTextOnMain(countdown);
             PauseOverlayUpdateMessageTextOnMain(message);

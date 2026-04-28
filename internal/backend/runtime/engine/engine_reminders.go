@@ -90,6 +90,7 @@ func (e *Engine) applyReminderConfigPatchLocked(prev, next []reminder.Reminder) 
 		}
 		e.scheduler.ResetByID(id)
 		delete(e.pausedReminder, id)
+		delete(e.postponedOnce, id)
 	}
 }
 

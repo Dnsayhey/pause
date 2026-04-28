@@ -4,9 +4,26 @@ import (
 	"errors"
 	"time"
 
+	"pause/internal/backend/domain/reminder"
+	"pause/internal/backend/runtime/session"
 	"pause/internal/backend/runtime/state"
 	"pause/internal/logx"
 )
+
+func (e *Engine) canPostponeBreakLocked(view *state.BreakSessionView) bool {
+	if view == nil || view.Status != string(session.StatusResting) || len(view.Reasons) == 0 {
+		return false
+	}
+	if int(view.EndsAt.Sub(view.StartedAt).Seconds()) <= postponeBreakDelaySec {
+		return false
+	}
+	for _, reason := range view.Reasons {
+		if e.postponedOnce[reason] {
+			return false
+		}
+	}
+	return true
+}
 
 func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error) {
 	e.mu.Lock()
@@ -35,6 +52,7 @@ func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeSt
 	}
 	if view != nil {
 		historyWrite = e.prepareBreakSkippedWriteLocked(now, view)
+		e.clearPostponedOnceForReasonsLocked(view.Reasons)
 		logx.Infof(
 			"break.skipped mode=%s reasons=%s remaining_sec=%d",
 			mode,
@@ -46,6 +64,53 @@ func (e *Engine) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeSt
 	runtimeState := e.runtimeStateLocked(now, settings)
 	e.mu.Unlock()
 	e.commitHistoryWrite(historyWrite)
+	return runtimeState, nil
+}
+
+func (e *Engine) PostponeCurrentBreak(now time.Time) (state.RuntimeState, error) {
+	e.mu.Lock()
+	settings := e.store.Get()
+	view := e.session.CurrentView(now)
+	if view == nil || view.Status != string(session.StatusResting) {
+		e.mu.Unlock()
+		return state.RuntimeState{}, errors.New("no active break")
+	}
+	if !e.canPostponeBreakLocked(view) {
+		e.mu.Unlock()
+		return state.RuntimeState{}, errors.New("break postpone is unavailable")
+	}
+
+	effectiveReminders := e.effectiveReminderConfigsLocked(e.reminders)
+	nextByID := map[int64]reminder.Reminder{}
+	for _, rem := range effectiveReminders {
+		nextByID[rem.ID] = rem
+	}
+	postponed := make([]int64, 0, len(view.Reasons))
+	for _, reason := range view.Reasons {
+		rem, ok := nextByID[reason]
+		if !ok || !rem.Enabled {
+			continue
+		}
+		e.scheduler.PostponeByID(reason, rem.IntervalSec, postponeBreakDelaySec)
+		e.postponedOnce[reason] = true
+		postponed = append(postponed, reason)
+	}
+	if len(postponed) == 0 {
+		e.mu.Unlock()
+		return state.RuntimeState{}, errors.New("no active reminder rules")
+	}
+
+	e.session.Cancel()
+	e.activeHistoryBreak = nil
+	e.lastTick = now
+	e.tickRemainder = 0
+	runtimeState := e.runtimeStateLocked(now, settings)
+	logx.Infof(
+		"break.postponed reasons=%s delay_sec=%d",
+		joinReasons(postponed),
+		postponeBreakDelaySec,
+	)
+	e.mu.Unlock()
 	return runtimeState, nil
 }
 

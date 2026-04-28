@@ -128,10 +128,13 @@ var (
 type windowsBreakOverlayController struct {
 	mu sync.RWMutex
 
-	onSkip func()
+	onSkip     func()
+	onPostpone func()
 
 	allowSkip             bool
+	allowPostpone         bool
 	skipButtonTitle       string
+	postponeButtonTitle   string
 	countdownText         string
 	messageText           string
 	theme                 string
@@ -151,17 +154,21 @@ type windowsBreakOverlayController struct {
 }
 
 type windowsOverlayWindow struct {
-	hwnd          uintptr
-	x             int
-	y             int
-	w             int
-	h             int
-	primary       bool
-	buttonRect    ovlRect
-	buttonHot     bool
-	buttonPressed bool
-	trackingMouse bool
-	shown         bool
+	hwnd            uintptr
+	x               int
+	y               int
+	w               int
+	h               int
+	primary         bool
+	buttonRect      ovlRect
+	postponeRect    ovlRect
+	skipRect        ovlRect
+	buttonHot       bool
+	postponeHot     bool
+	buttonPressed   bool
+	postponePressed bool
+	trackingMouse   bool
+	shown           bool
 }
 
 type ovlWndClassEx struct {
@@ -233,9 +240,10 @@ func NewBreakOverlayController() BreakOverlayController {
 	}
 }
 
-func (c *windowsBreakOverlayController) Init(onSkip func()) {
+func (c *windowsBreakOverlayController) Init(onSkip func(), onPostpone func()) {
 	c.mu.Lock()
 	c.onSkip = onSkip
+	c.onPostpone = onPostpone
 	c.mu.Unlock()
 
 	c.startOnce.Do(func() {
@@ -254,11 +262,13 @@ func (c *windowsBreakOverlayController) Init(onSkip func()) {
 	}
 }
 
-func (c *windowsBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, countdownText string, messageText string, theme string) bool {
+func (c *windowsBreakOverlayController) Show(allowSkip bool, skipButtonTitle string, allowPostpone bool, postponeButtonTitle string, countdownText string, messageText string, theme string) bool {
 	c.mu.Lock()
 	wasVisible := c.visible
 	c.allowSkip = allowSkip
+	c.allowPostpone = allowPostpone
 	c.skipButtonTitle = fallbackOverlay(skipButtonTitle, "Emergency Skip")
+	c.postponeButtonTitle = fallbackOverlay(postponeButtonTitle, "Rest in 1 min")
 	c.countdownText = strings.TrimSpace(countdownText)
 	c.messageText = strings.TrimSpace(messageText)
 	c.theme = normalizeOverlayTheme(theme)
@@ -468,26 +478,60 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 
 	btnW := 260
 	btnH := 58
-	btnX := (w - btnW) / 2
 	contentTop := (h - 286) / 2
 	btnY := contentTop + 228
 	allowSkip := c.allowSkip || c.emergencySkipVisible
+	allowPostpone := c.allowPostpone
+	gap := 18
+	totalW := btnW
+	if allowSkip && allowPostpone {
+		totalW = btnW*2 + gap
+	}
+	startX := (w - totalW) / 2
+	postponeRect := ovlRect{}
+	skipRect := ovlRect{}
+	if allowPostpone {
+		postponeRect = ovlRect{
+			left:   int32(startX),
+			top:    int32(btnY),
+			right:  int32(startX + btnW),
+			bottom: int32(btnY + btnH),
+		}
+	}
+	if allowSkip {
+		skipX := startX
+		if allowPostpone {
+			skipX = startX + btnW + gap
+		}
+		skipRect = ovlRect{
+			left:   int32(skipX),
+			top:    int32(btnY),
+			right:  int32(skipX + btnW),
+			bottom: int32(btnY + btnH),
+		}
+	}
 	releaseCapture := false
 	c.mu.Lock()
 	for i := range c.windows {
 		if c.windows[i].hwnd == hwnd {
-			c.windows[i].buttonRect = ovlRect{
-				left:   int32(btnX),
-				top:    int32(btnY),
-				right:  int32(btnX + btnW),
-				bottom: int32(btnY + btnH),
-			}
+			c.windows[i].buttonRect = skipRect
+			c.windows[i].skipRect = skipRect
+			c.windows[i].postponeRect = postponeRect
 			if !allowSkip {
 				if c.windows[i].buttonPressed {
 					releaseCapture = true
 				}
 				c.windows[i].buttonHot = false
 				c.windows[i].buttonPressed = false
+			}
+			if !allowPostpone {
+				if c.windows[i].postponePressed {
+					releaseCapture = true
+				}
+				c.windows[i].postponeHot = false
+				c.windows[i].postponePressed = false
+			}
+			if !allowSkip && !allowPostpone {
 				c.windows[i].trackingMouse = false
 			}
 			break
@@ -561,6 +605,8 @@ func (c *windowsBreakOverlayController) apply(hwnd uintptr) {
 					c.windows[i].shown = false
 					c.windows[i].buttonHot = false
 					c.windows[i].buttonPressed = false
+					c.windows[i].postponeHot = false
+					c.windows[i].postponePressed = false
 					c.windows[i].trackingMouse = false
 					break
 				}
@@ -596,13 +642,29 @@ func (c *windowsBreakOverlayController) handleSkipClick() {
 	}
 }
 
+func (c *windowsBreakOverlayController) handlePostponeClick() {
+	c.mu.RLock()
+	if !c.allowPostpone {
+		c.mu.RUnlock()
+		return
+	}
+	cb := c.onPostpone
+	c.mu.RUnlock()
+
+	if cb != nil {
+		go cb()
+	}
+}
+
 func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 	c.mu.RLock()
 	text := c.countdownText
 	message := c.messageText
 	theme := c.theme
 	allowSkip := c.allowSkip || c.emergencySkipVisible
+	allowPostpone := c.allowPostpone
 	skipText := fallbackOverlay(c.skipButtonTitle, "Emergency Skip")
+	postponeText := fallbackOverlay(c.postponeButtonTitle, "Rest in 1 min")
 	wnd, _ := c.lookupWindow(hwnd)
 	c.mu.RUnlock()
 	if strings.TrimSpace(text) == "" {
@@ -612,35 +674,12 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 	bg := colorBlack
 	fg := colorWhite
 	messageFg := blendOverlayColor(fg, bg, 170)
-	buttonBg := colorButtonDarkBg
 	buttonFg := colorButtonDarkFg
-	buttonAlpha := byte(alphaButtonBase)
 	if theme == "light" {
 		bg = colorWhite
 		fg = colorBlack
 		messageFg = blendOverlayColor(fg, bg, 150)
-		buttonBg = colorButtonLightBg
 		buttonFg = colorButtonLightFg
-	}
-	if allowSkip {
-		pressed := wnd.buttonPressed && wnd.buttonHot
-		if theme == "light" {
-			if pressed {
-				buttonBg = colorButtonLightBgPressed
-				buttonAlpha = byte(alphaButtonPressed)
-			} else if wnd.buttonHot {
-				buttonBg = colorButtonLightBgHover
-				buttonAlpha = byte(alphaButtonHover)
-			}
-		} else {
-			if pressed {
-				buttonBg = colorButtonDarkBgPressed
-				buttonAlpha = byte(alphaButtonPressed)
-			} else if wnd.buttonHot {
-				buttonBg = colorButtonDarkBgHover
-				buttonAlpha = byte(alphaButtonHover)
-			}
-		}
 	}
 
 	var ps ovlPaintStruct
@@ -734,8 +773,29 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 		_, _, _ = procSetTextColor.Call(hdc, uintptr(fg))
 	}
 
-	if allowSkip {
-		btn := wnd.buttonRect
+	drawButton := func(btn ovlRect, text string, hot bool, pressedState bool) {
+		buttonBg := colorButtonDarkBg
+		buttonAlpha := byte(alphaButtonBase)
+		pressed := pressedState && hot
+		if theme == "light" {
+			if pressed {
+				buttonBg = colorButtonLightBgPressed
+				buttonAlpha = byte(alphaButtonPressed)
+			} else if hot {
+				buttonBg = colorButtonLightBgHover
+				buttonAlpha = byte(alphaButtonHover)
+			} else {
+				buttonBg = colorButtonLightBg
+			}
+		} else {
+			if pressed {
+				buttonBg = colorButtonDarkBgPressed
+				buttonAlpha = byte(alphaButtonPressed)
+			} else if hot {
+				buttonBg = colorButtonDarkBgHover
+				buttonAlpha = byte(alphaButtonHover)
+			}
+		}
 		blendedBg := blendOverlayColor(buttonBg, bg, buttonAlpha)
 		outerBrush, _, _ := procCreateSolidBrush.Call(uintptr(blendedBg))
 		if outerBrush != 0 {
@@ -744,7 +804,7 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 		}
 		_, _, _ = procSetTextColor.Call(hdc, uintptr(buttonFg))
 		_, _, _ = procSetBkMode.Call(hdc, 1)
-		btnText := syscall.StringToUTF16(skipText)
+		btnText := syscall.StringToUTF16(text)
 		if len(btnText) == 0 {
 			btnText = []uint16{0}
 		}
@@ -769,6 +829,12 @@ func (c *windowsBreakOverlayController) paint(hwnd uintptr) {
 				dtCenter|dtVCenter|dtSingleLine|dtNoPrefix,
 			)
 		}
+	}
+	if allowPostpone {
+		drawButton(wnd.postponeRect, postponeText, wnd.postponeHot, wnd.postponePressed)
+	}
+	if allowSkip {
+		drawButton(wnd.skipRect, skipText, wnd.buttonHot, wnd.buttonPressed)
 	}
 	_, _, _ = procEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 }
@@ -830,8 +896,12 @@ func windowsOverlayWndProc(hwnd uintptr, msgID uint32, wParam uintptr, lParam ui
 	case wmLButtonUpLocal:
 		x := int(int16(uint16(lParam & 0xFFFF)))
 		y := int(int16(uint16((lParam >> 16) & 0xFFFF)))
-		if ctrl.handleLButtonUp(hwnd, x, y) {
+		switch ctrl.handleLButtonUp(hwnd, x, y) {
+		case "skip":
 			ctrl.handleSkipClick()
+			return 0
+		case "postpone":
+			ctrl.handlePostponeClick()
 			return 0
 		}
 	case 0x000F: // WM_PAINT
@@ -877,20 +947,6 @@ func createOverlayFont(height int32, weight int32) uintptr {
 func loadArrowCursor() uintptr {
 	cur, _, _ := procLoadCursorW.Call(0, uintptr(idcArrow))
 	return cur
-}
-
-func (c *windowsBreakOverlayController) hitSkipButton(hwnd uintptr, x int, y int) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if !c.allowSkip && !c.emergencySkipVisible {
-		return false
-	}
-	wnd, ok := c.lookupWindow(hwnd)
-	if !ok {
-		return false
-	}
-	r := wnd.buttonRect
-	return pointInOverlayRect(r, x, y)
 }
 
 func pointInOverlayRect(r ovlRect, x int, y int) bool {
@@ -961,13 +1017,19 @@ func (c *windowsBreakOverlayController) handleMouseMove(hwnd uintptr, x int, y i
 
 	c.mu.Lock()
 	allowSkip := c.allowSkip || c.emergencySkipVisible
+	allowPostpone := c.allowPostpone
 	for i := range c.windows {
 		if c.windows[i].hwnd != hwnd {
 			continue
 		}
-		hot := allowSkip && pointInOverlayRect(c.windows[i].buttonRect, x, y)
-		if c.windows[i].buttonHot != hot {
-			c.windows[i].buttonHot = hot
+		skipHot := allowSkip && pointInOverlayRect(c.windows[i].skipRect, x, y)
+		postponeHot := allowPostpone && pointInOverlayRect(c.windows[i].postponeRect, x, y)
+		if c.windows[i].buttonHot != skipHot {
+			c.windows[i].buttonHot = skipHot
+			needsInvalidate = true
+		}
+		if c.windows[i].postponeHot != postponeHot {
+			c.windows[i].postponeHot = postponeHot
 			needsInvalidate = true
 		}
 		if !c.windows[i].trackingMouse {
@@ -999,6 +1061,10 @@ func (c *windowsBreakOverlayController) handleMouseLeave(hwnd uintptr) bool {
 			c.windows[i].buttonHot = false
 			needsInvalidate = true
 		}
+		if c.windows[i].postponeHot {
+			c.windows[i].postponeHot = false
+			needsInvalidate = true
+		}
 		c.windows[i].trackingMouse = false
 		break
 	}
@@ -1017,11 +1083,12 @@ func (c *windowsBreakOverlayController) handleLButtonDown(hwnd uintptr, x int, y
 
 	c.mu.Lock()
 	allowSkip := c.allowSkip || c.emergencySkipVisible
+	allowPostpone := c.allowPostpone
 	for i := range c.windows {
 		if c.windows[i].hwnd != hwnd {
 			continue
 		}
-		if allowSkip && pointInOverlayRect(c.windows[i].buttonRect, x, y) {
+		if allowSkip && pointInOverlayRect(c.windows[i].skipRect, x, y) {
 			handled = true
 			if !c.windows[i].buttonPressed {
 				c.windows[i].buttonPressed = true
@@ -1029,6 +1096,21 @@ func (c *windowsBreakOverlayController) handleLButtonDown(hwnd uintptr, x int, y
 			}
 			if !c.windows[i].buttonHot {
 				c.windows[i].buttonHot = true
+				needsInvalidate = true
+			}
+			if !c.windows[i].trackingMouse {
+				c.windows[i].trackingMouse = true
+				needTrack = true
+			}
+		}
+		if allowPostpone && pointInOverlayRect(c.windows[i].postponeRect, x, y) {
+			handled = true
+			if !c.windows[i].postponePressed {
+				c.windows[i].postponePressed = true
+				needsInvalidate = true
+			}
+			if !c.windows[i].postponeHot {
+				c.windows[i].postponeHot = true
 				needsInvalidate = true
 			}
 			if !c.windows[i].trackingMouse {
@@ -1053,28 +1135,42 @@ func (c *windowsBreakOverlayController) handleLButtonDown(hwnd uintptr, x int, y
 	return true
 }
 
-func (c *windowsBreakOverlayController) handleLButtonUp(hwnd uintptr, x int, y int) bool {
-	trigger := false
+func (c *windowsBreakOverlayController) handleLButtonUp(hwnd uintptr, x int, y int) string {
+	trigger := ""
 	wasPressed := false
 	needsInvalidate := false
 
 	c.mu.Lock()
 	allowSkip := c.allowSkip || c.emergencySkipVisible
+	allowPostpone := c.allowPostpone
 	for i := range c.windows {
 		if c.windows[i].hwnd != hwnd {
 			continue
 		}
-		hot := allowSkip && pointInOverlayRect(c.windows[i].buttonRect, x, y)
-		if c.windows[i].buttonHot != hot {
-			c.windows[i].buttonHot = hot
+		skipHot := allowSkip && pointInOverlayRect(c.windows[i].skipRect, x, y)
+		postponeHot := allowPostpone && pointInOverlayRect(c.windows[i].postponeRect, x, y)
+		if c.windows[i].buttonHot != skipHot {
+			c.windows[i].buttonHot = skipHot
+			needsInvalidate = true
+		}
+		if c.windows[i].postponeHot != postponeHot {
+			c.windows[i].postponeHot = postponeHot
 			needsInvalidate = true
 		}
 		if c.windows[i].buttonPressed {
 			wasPressed = true
 			c.windows[i].buttonPressed = false
 			needsInvalidate = true
-			if hot && allowSkip {
-				trigger = true
+			if skipHot && allowSkip {
+				trigger = "skip"
+			}
+		}
+		if c.windows[i].postponePressed {
+			wasPressed = true
+			c.windows[i].postponePressed = false
+			needsInvalidate = true
+			if postponeHot && allowPostpone && trigger == "" {
+				trigger = "postpone"
 			}
 		}
 		break

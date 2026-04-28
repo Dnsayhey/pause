@@ -58,6 +58,14 @@ func (a *App) skipCurrentBreakWithMode(mode skipMode) (RuntimeState, error) {
 	return a.decorateRuntimeState(runtimeState), nil
 }
 
+func (a *App) PostponeCurrentBreak() (RuntimeState, error) {
+	runtimeState, err := a.engine.PostponeCurrentBreak(time.Now())
+	if err != nil {
+		return RuntimeState{}, err
+	}
+	return a.decorateRuntimeState(runtimeState), nil
+}
+
 func (a *App) StartBreakNow() (RuntimeState, error) {
 	runtimeState, err := a.engine.StartBreakNow(time.Now())
 	if err != nil {

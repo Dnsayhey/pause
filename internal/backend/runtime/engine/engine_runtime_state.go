@@ -17,6 +17,10 @@ func (e *Engine) GetRuntimeState(now time.Time) state.RuntimeState {
 
 func (e *Engine) runtimeStateLocked(now time.Time, settings settings.Settings) state.RuntimeState {
 	effectiveReminders := e.effectiveReminderConfigsLocked(e.reminders)
+	currentSession := e.session.CurrentView(now)
+	if currentSession != nil {
+		currentSession.CanPostpone = e.canPostponeBreakLocked(currentSession)
+	}
 	reminders := make([]state.ReminderRuntime, 0, len(e.reminders))
 	for _, reminder := range e.reminders {
 		paused := e.pausedReminder[reminder.ID]
@@ -35,7 +39,7 @@ func (e *Engine) runtimeStateLocked(now time.Time, settings settings.Settings) s
 	reasons := nextReasons(reminders, e.reminders)
 	return state.RuntimeState{
 		Now:                now,
-		CurrentSession:     e.session.CurrentView(now),
+		CurrentSession:     currentSession,
 		Reminders:          reminders,
 		NextBreakReason:    reasons,
 		GlobalEnabled:      e.globalEnabled,

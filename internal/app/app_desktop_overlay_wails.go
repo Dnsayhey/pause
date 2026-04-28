@@ -24,6 +24,7 @@ func overlaySkipMode(settings settings.Settings) skipMode {
 func (c *wailsDesktopController) syncOverlay(ctx context.Context, state state.RuntimeState, settings settings.Settings) {
 	overlayActive := state.CurrentSession != nil && state.CurrentSession.Status == "resting"
 	overlaySkipAllowed := overlayActive && state.OverlaySkipAllowed && state.CurrentSession != nil && state.CurrentSession.CanSkip
+	overlayPostponeAllowed := overlayActive && state.CurrentSession != nil && state.CurrentSession.CanPostpone
 	language := c.lastLanguage
 	theme := resolveEffectiveTheme(settings.UI.Theme)
 	overlayText := ""
@@ -40,12 +41,12 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state state.Ru
 	}
 
 	if c.overlay.IsNative() {
-		needsUpdate := overlayActive != c.lastOverlayActive || overlaySkipAllowed != c.lastOverlaySkip || language != c.lastOverlayLang || overlayText != c.lastOverlayText || theme != c.lastOverlayTheme
+		needsUpdate := overlayActive != c.lastOverlayActive || overlaySkipAllowed != c.lastOverlaySkip || overlayPostponeAllowed != c.lastOverlayPostpone || language != c.lastOverlayLang || overlayText != c.lastOverlayText || theme != c.lastOverlayTheme
 		if needsUpdate {
 			if overlayActive {
 				// Keep native break overlay isolated from the main window.
 				desktop.HideMainWindowForOverlay(ctx)
-				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayText, overlayMessage, theme) {
+				if !c.overlay.Show(overlaySkipAllowed, overlaySkipButtonTitle(language), overlayPostponeAllowed, overlayPostponeButtonTitle(language), overlayText, overlayMessage, theme) {
 					if !c.overlayFailureLogged {
 						logx.Warnf(
 							"overlay.show_failed native=true reasons=%s remaining_sec=%d",
@@ -61,6 +62,7 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state state.Ru
 		}
 		c.lastOverlayActive = overlayActive
 		c.lastOverlaySkip = overlaySkipAllowed
+		c.lastOverlayPostpone = overlayPostponeAllowed
 		c.lastOverlayLang = language
 		c.lastOverlayText = overlayText
 		c.lastOverlayTheme = theme
@@ -77,6 +79,7 @@ func (c *wailsDesktopController) syncOverlay(ctx context.Context, state state.Ru
 	}
 	c.lastOverlayActive = overlayActive
 	c.lastOverlaySkip = overlaySkipAllowed
+	c.lastOverlayPostpone = overlayPostponeAllowed
 	c.lastOverlayLang = language
 	c.lastOverlayText = overlayText
 	c.lastOverlayTheme = theme

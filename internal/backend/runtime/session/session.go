@@ -74,6 +74,10 @@ func (m *Manager) ClearIfDone() {
 	}
 }
 
+func (m *Manager) Cancel() {
+	m.current = nil
+}
+
 func (m *Manager) Skip() error {
 	if m.current == nil {
 		return errors.New("no active break")

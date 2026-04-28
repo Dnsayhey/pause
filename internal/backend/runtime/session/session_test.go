@@ -41,3 +41,14 @@ func TestManager_SkipHonorsCanSkip(t *testing.T) {
 		t.Fatalf("expected session cleared")
 	}
 }
+
+func TestManager_CancelClearsActiveSession(t *testing.T) {
+	m := NewManager()
+	base := time.Unix(1_700_000_000, 0)
+
+	m.StartBreak(base, &scheduler.Event{Reasons: []scheduler.ReminderType{2}, BreakSec: 60}, true)
+	m.Cancel()
+	if m.CurrentView(base) != nil {
+		t.Fatalf("expected session cleared")
+	}
+}

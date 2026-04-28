@@ -19,6 +19,7 @@ const (
 	SkipModeEmergency SkipMode = "emergency"
 
 	notificationConcurrencyLimit = 4
+	postponeBreakDelaySec        = 60
 )
 
 type SettingsStore interface {
@@ -70,6 +71,7 @@ type Engine struct {
 
 	pausedReminder map[int64]bool
 	globalEnabled  bool
+	postponedOnce  map[int64]bool
 
 	lastTickActive bool
 	currentIdleSec int
@@ -103,17 +105,18 @@ func NewEngine(
 		notifier = noopNotifier{}
 	}
 	return &Engine{
-		store:          store,
-		reminders:      cloneReminderConfigs(nil),
-		scheduler:      scheduler.New(),
-		session:        session.NewManager(),
-		history:        history,
-		idleProvider:   idleProvider,
-		lockProvider:   lockProvider,
-		soundPlayer:    soundPlayer,
-		notifier:       notifier,
-		pausedReminder: map[int64]bool{},
-		globalEnabled:  true,
+		store:             store,
+		reminders:         cloneReminderConfigs(nil),
+		scheduler:         scheduler.New(),
+		session:           session.NewManager(),
+		history:           history,
+		idleProvider:      idleProvider,
+		lockProvider:      lockProvider,
+		soundPlayer:       soundPlayer,
+		notifier:          notifier,
+		pausedReminder:    map[int64]bool{},
+		globalEnabled:     true,
+		postponedOnce:     map[int64]bool{},
 		notificationSlots: make(chan struct{}, notificationConcurrencyLimit),
 	}
 }

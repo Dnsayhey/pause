@@ -316,6 +316,129 @@ func TestEngine_TickCommitsCompletedHistoryBeforeIdleEarlyReturn(t *testing.T) {
 	}
 }
 
+func TestEngine_PostponeCurrentBreakDelaysWithoutHistory(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	history := &historyRecorderStub{}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, nil, history)
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Stand", Enabled: true, IntervalSec: 120, BreakSec: 90, ReminderType: "rest"},
+	})
+
+	base := time.Unix(1_700_000_000, 0)
+	eng.Tick(base)
+	eng.Tick(base.Add(120 * time.Second))
+	active := eng.GetRuntimeState(base.Add(120 * time.Second))
+	if active.CurrentSession == nil || !active.CurrentSession.CanPostpone {
+		t.Fatalf("expected postponable session, got=%#v", active.CurrentSession)
+	}
+
+	rs, err := eng.PostponeCurrentBreak(base.Add(121 * time.Second))
+	if err != nil {
+		t.Fatalf("PostponeCurrentBreak() err=%v", err)
+	}
+	if rs.CurrentSession != nil {
+		t.Fatalf("expected no session after postpone")
+	}
+	if history.calls != 0 {
+		t.Fatalf("history writes=%d want=0", history.calls)
+	}
+	if got := reminderByID(t, rs.Reminders, 1).NextInSec; got != 60 {
+		t.Fatalf("postponed nextIn=%d want=60", got)
+	}
+
+	eng.Tick(base.Add(181 * time.Second))
+	reopened := eng.GetRuntimeState(base.Add(181 * time.Second))
+	if reopened.CurrentSession == nil {
+		t.Fatalf("expected session after postponed delay")
+	}
+	if reopened.CurrentSession.CanPostpone {
+		t.Fatalf("expected repostponed session to disallow postpone")
+	}
+	if _, err := eng.PostponeCurrentBreak(base.Add(182 * time.Second)); err == nil {
+		t.Fatalf("expected second postpone to fail")
+	}
+}
+
+func TestEngine_PostponeCurrentBreakRejectsShortBreak(t *testing.T) {
+	eng := testEngine(t)
+	base := time.Unix(1_700_000_000, 0)
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 120, BreakSec: 60, ReminderType: "rest"},
+	})
+
+	eng.Tick(base)
+	eng.Tick(base.Add(120 * time.Second))
+	rs := eng.GetRuntimeState(base.Add(120 * time.Second))
+	if rs.CurrentSession == nil {
+		t.Fatalf("expected active session")
+	}
+	if rs.CurrentSession.CanPostpone {
+		t.Fatalf("expected short break to disallow postpone")
+	}
+	if _, err := eng.PostponeCurrentBreak(base.Add(121 * time.Second)); err == nil {
+		t.Fatalf("expected postpone to fail for short break")
+	}
+}
+
+func TestEngine_PostponeCurrentBreakHandlesMergedReasons(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, nil, &historyRecorderStub{})
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Stand", Enabled: true, IntervalSec: 120, BreakSec: 90, ReminderType: "rest"},
+		{ID: 2, Name: "Stretch", Enabled: true, IntervalSec: 150, BreakSec: 120, ReminderType: "rest"},
+	})
+
+	base := time.Unix(1_700_000_000, 0)
+	eng.Tick(base)
+	eng.Tick(base.Add(120 * time.Second))
+	rs, err := eng.PostponeCurrentBreak(base.Add(121 * time.Second))
+	if err != nil {
+		t.Fatalf("PostponeCurrentBreak() err=%v", err)
+	}
+	if got := reminderByID(t, rs.Reminders, 1).NextInSec; got != 60 {
+		t.Fatalf("postponed reason 1 nextIn=%d want=60", got)
+	}
+	if got := reminderByID(t, rs.Reminders, 2).NextInSec; got != 60 {
+		t.Fatalf("postponed reason 2 nextIn=%d want=60", got)
+	}
+}
+
+func TestEngine_PostponeCurrentBreakResetsAfterCompletion(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, nil, &historyRecorderStub{})
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Stand", Enabled: true, IntervalSec: 120, BreakSec: 90, ReminderType: "rest"},
+	})
+
+	base := time.Unix(1_700_000_000, 0)
+	eng.Tick(base)
+	eng.Tick(base.Add(120 * time.Second))
+	if _, err := eng.PostponeCurrentBreak(base.Add(121 * time.Second)); err != nil {
+		t.Fatalf("PostponeCurrentBreak() err=%v", err)
+	}
+	eng.Tick(base.Add(181 * time.Second))
+	eng.Tick(base.Add(271 * time.Second))
+	completed := eng.GetRuntimeState(base.Add(271 * time.Second))
+	if completed.CurrentSession != nil {
+		t.Fatalf("expected postponed session completed")
+	}
+
+	eng.Tick(base.Add(391 * time.Second))
+	next := eng.GetRuntimeState(base.Add(391 * time.Second))
+	if next.CurrentSession == nil || !next.CurrentSession.CanPostpone {
+		t.Fatalf("expected next cycle to allow postpone, got=%#v", next.CurrentSession)
+	}
+}
+
 func TestEngine_StopWaitsForNotificationTasks(t *testing.T) {
 	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
 	if err != nil {

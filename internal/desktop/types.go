@@ -46,8 +46,8 @@ type StatusBarController interface {
 }
 
 type BreakOverlayController interface {
-	Init(onSkip func())
-	Show(allowSkip bool, skipButtonTitle string, countdownText string, messageText string, theme string) bool
+	Init(onSkip func(), onPostpone func())
+	Show(allowSkip bool, skipButtonTitle string, allowPostpone bool, postponeButtonTitle string, countdownText string, messageText string, theme string) bool
 	Hide()
 	Destroy()
 	IsNative() bool

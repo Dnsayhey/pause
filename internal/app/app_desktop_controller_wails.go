@@ -17,6 +17,7 @@ import (
 type wailsDesktopController struct {
 	lastOverlayActive       bool
 	lastOverlaySkip         bool
+	lastOverlayPostpone     bool
 	lastOverlayLang         string
 	lastOverlayText         string
 	lastOverlayTheme        string
@@ -73,11 +74,17 @@ func (c *wailsDesktopController) OnStartup(ctx context.Context, app *App) {
 		c.statusBar.Init(func(event desktop.StatusBarEvent) {
 			c.handleStatusBarEvent(ctx, app, event)
 		})
-		c.overlay.Init(func() {
-			skipMode := overlaySkipMode(app.engine.GetSettings())
-			_, err := app.skipCurrentBreakWithMode(skipMode)
-			c.logErr(ctx, err)
-		})
+		c.overlay.Init(
+			func() {
+				skipMode := overlaySkipMode(app.engine.GetSettings())
+				_, err := app.skipCurrentBreakWithMode(skipMode)
+				c.logErr(ctx, err)
+			},
+			func() {
+				_, err := app.PostponeCurrentBreak()
+				c.logErr(ctx, err)
+			},
+		)
 		settings := app.engine.GetSettings()
 		c.lastLanguage = resolveEffectiveLanguage(settings.UI.Language)
 		c.statusBar.SetLocale(buildStatusBarLocaleStrings(c.lastLanguage))

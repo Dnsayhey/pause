@@ -57,6 +57,7 @@ export type RuntimeState = {
     reasons: number[];
     remainingSec: number;
     canSkip: boolean;
+    canPostpone: boolean;
   };
   reminders: ReminderRuntime[];
   nextBreakReason: number[];

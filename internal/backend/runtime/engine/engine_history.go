@@ -114,6 +114,15 @@ func (e *Engine) prepareBreakSkippedWriteLocked(now time.Time, view *state.Break
 	}
 }
 
+func (e *Engine) clearPostponedOnceForReasonsLocked(reasons []int64) {
+	if len(reasons) == 0 || len(e.postponedOnce) == 0 {
+		return
+	}
+	for _, reason := range reasons {
+		delete(e.postponedOnce, reason)
+	}
+}
+
 func (e *Engine) commitHistoryWrite(write *historyWrite) {
 	if e == nil || e.history == nil || write == nil {
 		return

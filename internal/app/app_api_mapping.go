@@ -89,6 +89,7 @@ func runtimeStateFromDomain(source runtimestate.RuntimeState) RuntimeState {
 			EndsAt:       source.CurrentSession.EndsAt,
 			RemainingSec: source.CurrentSession.RemainingSec,
 			CanSkip:      source.CurrentSession.CanSkip,
+			CanPostpone:  source.CurrentSession.CanPostpone,
 		}
 	}
 

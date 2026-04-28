@@ -26,6 +26,7 @@ type RuntimeEngine interface {
 	PauseReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
 	ResumeReminder(reminderID int64, now time.Time) (state.RuntimeState, error)
 	SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error)
+	PostponeCurrentBreak(now time.Time) (state.RuntimeState, error)
 	StartBreakNow(now time.Time) (state.RuntimeState, error)
 	StartBreakNowForReason(reason int64, now time.Time) (state.RuntimeState, error)
 }
@@ -75,6 +76,10 @@ func (a *runtimeEngineAdapter) ResumeReminder(reminderID int64, now time.Time) (
 
 func (a *runtimeEngineAdapter) SkipCurrentBreak(now time.Time, mode SkipMode) (state.RuntimeState, error) {
 	return a.engine.SkipCurrentBreak(now, mode)
+}
+
+func (a *runtimeEngineAdapter) PostponeCurrentBreak(now time.Time) (state.RuntimeState, error) {
+	return a.engine.PostponeCurrentBreak(now)
 }
 
 func (a *runtimeEngineAdapter) StartBreakNow(now time.Time) (state.RuntimeState, error) {

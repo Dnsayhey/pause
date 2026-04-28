@@ -8,8 +8,8 @@ func NewBreakOverlayController() BreakOverlayController {
 	return noopBreakOverlayController{}
 }
 
-func (noopBreakOverlayController) Init(func()) {}
-func (noopBreakOverlayController) Show(bool, string, string, string, string) bool {
+func (noopBreakOverlayController) Init(func(), func()) {}
+func (noopBreakOverlayController) Show(bool, string, bool, string, string, string, string) bool {
 	return false
 }
 func (noopBreakOverlayController) Hide()          {}

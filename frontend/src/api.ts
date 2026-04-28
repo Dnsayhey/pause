@@ -32,6 +32,7 @@ type Backend = {
   Pause: () => Promise<RuntimeState>;
   Resume: () => Promise<RuntimeState>;
   SkipCurrentBreak: () => Promise<RuntimeState>;
+  PostponeCurrentBreak: () => Promise<RuntimeState>;
   GetNotificationCapability: () => Promise<NotificationCapability>;
   RequestNotificationPermission: () => Promise<NotificationCapability>;
   OpenNotificationSettings: () => Promise<void>;
@@ -115,6 +116,10 @@ export async function getAnalyticsBreakTypeDistribution(fromSec: number, toSec: 
 
 export async function skipCurrentBreak(): Promise<RuntimeState> {
   return requireBackend().SkipCurrentBreak();
+}
+
+export async function postponeCurrentBreak(): Promise<RuntimeState> {
+  return requireBackend().PostponeCurrentBreak();
 }
 
 export async function getNotificationCapability(): Promise<NotificationCapability> {
