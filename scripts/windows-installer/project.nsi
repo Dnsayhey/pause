@@ -58,6 +58,8 @@ ManifestDPIAware true
 !define MUI_UNICON "..\icon.ico"
 # !define MUI_WELCOMEFINISHPAGE_BITMAP "resources\leftimage.bmp" #Include this to add a bitmap on the left side of the Welcome Page. Must be a size of 164x314
 !define MUI_FINISHPAGE_NOAUTOCLOSE # Wait on the INSTFILES page so the user can take a look into the details of the installation steps
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}"
+!define MUI_FINISHPAGE_RUN_TEXT "$(LaunchPause)"
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
@@ -73,6 +75,8 @@ ManifestDPIAware true
 
 LangString CloseRunningApp ${LANG_ENGLISH} "Pause is currently running.$\r$\n$\r$\nPlease choose Quit from the Pause system tray menu, then click Retry to continue. Click Cancel to exit this installer."
 LangString CloseRunningApp ${LANG_SIMPCHINESE} "Pause 正在运行。$\r$\n$\r$\n请先从系统托盘菜单选择“退出”，然后点击“重试”继续。点击“取消”将退出安装程序。"
+LangString LaunchPause ${LANG_ENGLISH} "Launch Pause"
+LangString LaunchPause ${LANG_SIMPCHINESE} "启动 Pause"
 
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
 #!uninstfinalize 'signtool --file "%1"'
