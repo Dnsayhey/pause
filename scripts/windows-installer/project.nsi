@@ -33,8 +33,10 @@ Unicode true
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"
+!include "FileFunc.nsh"
 !define APP_USER_MODEL_ID "com.pause.app"
 !define APP_USER_MODEL_REG_PATH "Software\Classes\AppUserModelId\${APP_USER_MODEL_ID}"
+!define APP_PROCESS_NAME "Pause"
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -66,7 +68,11 @@ ManifestDPIAware true
 
 !insertmacro MUI_UNPAGE_INSTFILES # Uinstalling page
 
-!insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
+!insertmacro MUI_LANGUAGE "English" # Default/fallback installer language.
+!insertmacro MUI_LANGUAGE "SimpChinese" # Match Simplified Chinese Windows UI language.
+
+LangString CloseRunningApp ${LANG_ENGLISH} "Pause is currently running.$\r$\n$\r$\nPlease choose Quit from the Pause system tray menu, then click Retry to continue. Click Cancel to exit this installer."
+LangString CloseRunningApp ${LANG_SIMPCHINESE} "Pause 正在运行。$\r$\n$\r$\n请先从系统托盘菜单选择“退出”，然后点击“重试”继续。点击“取消”将退出安装程序。"
 
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
 #!uninstfinalize 'signtool --file "%1"'
@@ -74,11 +80,88 @@ ManifestDPIAware true
 
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
-InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
+InstallDir "$PROGRAMFILES64\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
+InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation" # Reuse the previous install path on upgrades.
 ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+   Call UseLegacyInstallDirIfNeeded
+   Call EnsureAppNotRunning
+FunctionEnd
+
+Function un.onInit
+   Call un.EnsureAppNotRunning
+FunctionEnd
+
+Function UseLegacyInstallDirIfNeeded
+    SetRegView 64
+    ReadRegStr $0 HKLM "${UNINST_KEY}" "InstallLocation"
+    ${If} $0 != ""
+        StrCpy $INSTDIR "$0"
+        Return
+    ${EndIf}
+
+    # TODO(installer): Added in 0.9.3 for upgrades from installers that did not
+    # write InstallLocation. Remove after enough public versions have shipped
+    # with InstallLocation and legacy upgrades are no longer supported.
+    ReadRegStr $0 HKLM "${UNINST_KEY}" "UninstallString"
+    ${If} $0 == ""
+        Return
+    ${EndIf}
+
+    StrCpy $0 "$0" "" 1
+    StrCpy $0 "$0" -1
+    ${GetParent} "$0" $1
+    ${If} $1 != ""
+        StrCpy $INSTDIR "$1"
+    ${EndIf}
+FunctionEnd
+
+Function IsAppRunning
+    nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "if (Get-Process -Name '${APP_PROCESS_NAME}' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"`
+    Pop $0
+    Pop $1
+    ${If} $0 == "0"
+        Push "1"
+    ${Else}
+        Push "0"
+    ${EndIf}
+FunctionEnd
+
+Function EnsureAppNotRunning
+    check:
+        Call IsAppRunning
+        Pop $0
+        ${If} $0 == "0"
+            Return
+        ${EndIf}
+
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(CloseRunningApp)" IDRETRY check
+        Abort
+FunctionEnd
+
+Function un.IsAppRunning
+    nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "if (Get-Process -Name '${APP_PROCESS_NAME}' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"`
+    Pop $0
+    Pop $1
+    ${If} $0 == "0"
+        Push "1"
+    ${Else}
+        Push "0"
+    ${EndIf}
+FunctionEnd
+
+Function un.EnsureAppNotRunning
+    check:
+        Call un.IsAppRunning
+        Pop $0
+        ${If} $0 == "0"
+            Return
+        ${EndIf}
+
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(CloseRunningApp)" IDRETRY check
+        Abort
 FunctionEnd
 
 Section
@@ -102,6 +185,8 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
+    SetRegView 64
+    WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
 SectionEnd
 
 Section "uninstall"

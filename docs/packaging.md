@@ -109,6 +109,19 @@
 - 默认从 `scripts/windows-installer/project.nsi` 同步 NSIS 模板到 `build/windows/installer/project.nsi`
 - 优先使用本机 `wails`，缺失时回退到 `go run github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`
 
+安装器体验：
+
+- 安装器内置英文和简体中文，英文为默认/兜底语言，简体中文 Windows 会显示中文。
+- 首次安装默认路径为 `C:\Program Files\Pause`；用户可在安装过程中自定义目录。
+- 安装器会写入 `InstallLocation`，后续升级优先沿用上次安装路径；老版本升级时会从卸载器路径推断旧安装目录。
+- 安装或卸载前如果检测到 `Pause.exe` 正在运行，会提示用户先从系统托盘退出 Pause，然后点击“重试”继续。
+
+临时兼容项：
+
+- `0.9.3` 起 Windows 安装器开始写入 `InstallLocation`。
+- `UseLegacyInstallDirIfNeeded` 中从 `UninstallString` 推断旧安装目录的逻辑只用于兼容未写入 `InstallLocation` 的老版本。
+- 后续已有足够公开版本写入 `InstallLocation`，且不再需要支持这些老版本直接升级时，可以删除该兼容逻辑。
+
 ## 发布清单规范
 
 命令：
