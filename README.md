@@ -18,7 +18,7 @@ Pause 是一个跨平台休息提醒应用（macOS / Windows / Linux）。
 |:---:|:---:|:---:|:---:|
 | ![提醒](.github/assets/main_reminder.png) | ![分析](.github/assets/main_analysis.png) | ![设置](.github/assets/main_settings.png) | ![休息](.github/assets/break_overlay.png) |
 
-https://github.com/user-attachments/assets/pause_recording.mp4
+https://github.com/user-attachments/assets/3ac20ceb-b286-4bf2-ad21-6a534e1dcf9a
 
 ## 文档索引
 
