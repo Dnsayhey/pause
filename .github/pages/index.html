@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pause — Break Reminder for macOS, Windows & Linux</title>
+    <meta name="description" content="A cross-platform break reminder app. Pause yourself, have a rest." />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        --bg: #f7f8fa;
+        --surface: #ffffff;
+        --border: #e5e7eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #2f7a66;
+        --accent-strong: #255f4f;
+        --accent-bg: #ecfdf5;
+        --radius: 14px;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: var(--accent); text-decoration: none; font-weight: 600; }
+      a:hover { color: var(--accent-strong); }
+
+      /* Hero */
+      .hero {
+        text-align: center;
+        padding: 80px 24px 60px;
+        max-width: 680px;
+        margin: 0 auto;
+      }
+      .hero h1 {
+        font-size: clamp(36px, 6vw, 56px);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+      }
+      .hero p {
+        margin-top: 16px;
+        font-size: 18px;
+        color: var(--muted);
+        max-width: 480px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .hero .actions {
+        margin-top: 32px;
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 28px;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+      }
+      .btn:active { transform: scale(0.97); }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover { background: var(--accent-strong); color: #fff; }
+      .btn-secondary {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .btn-secondary:hover { background: #f3f4f6; color: var(--text); }
+
+      /* Features */
+      .features {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 24px 60px;
+      }
+      .features h2 {
+        text-align: center;
+        font-size: 28px;
+        margin-bottom: 36px;
+      }
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+      .feature-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        transition: box-shadow 0.2s;
+      }
+      .feature-card:hover {
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+      }
+      .feature-card .icon {
+        font-size: 24px;
+        margin-bottom: 8px;
+      }
+      .feature-card h3 {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .feature-card p {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      /* Screenshots */
+      .screenshots {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 40px 24px 60px;
+      }
+      .screenshots h2 {
+        text-align: center;
+        font-size: 28px;
+        margin-bottom: 36px;
+      }
+      .screenshot-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+      }
+      .screenshot-grid img {
+        width: 100%;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .screenshot-grid img:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+      }
+
+      /* Footer */
+      footer {
+        text-align: center;
+        padding: 40px 24px;
+        color: var(--muted);
+        font-size: 13px;
+        border-top: 1px solid var(--border);
+        max-width: 680px;
+        margin: 0 auto;
+      }
+      footer a { font-weight: 500; }
+      footer .links {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-bottom: 12px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <section class="hero">
+      <h1>Pause</h1>
+      <p>Pause yourself, have a rest. A cross-platform break reminder for macOS, Windows & Linux.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/Dnsayhey/pause/releases/latest">Download</a>
+        <a class="btn btn-secondary" href="https://github.com/Dnsayhey/pause">View on GitHub</a>
+      </div>
+    </section>
+
+    <section class="features">
+      <h2>Features</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="icon">&#9200;</div>
+          <h3>Timed Reminders</h3>
+          <p>Customizable break intervals and durations to fit your workflow.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128065;</div>
+          <h3>Fullscreen Overlay</h3>
+          <p>A gentle (or firm) fullscreen reminder that you deserve a break.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128274;</div>
+          <h3>Force Mode</h3>
+          <p>Optional strict mode that prevents skipping or postponing breaks.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128200;</div>
+          <h3>Analytics</h3>
+          <p>Track your break patterns and see trends over time.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128276;</div>
+          <h3>Sound Alerts</h3>
+          <p>Audio notifications to signal break time.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#9889;</div>
+          <h3>Auto Start</h3>
+          <p>Launch automatically when you log in to your computer.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#127760;</div>
+          <h3>Bilingual</h3>
+          <p>Full support for English and Chinese.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">&#128421;</div>
+          <h3>Cross-Platform</h3>
+          <p>Works on macOS, Windows, and Linux.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="screenshots">
+      <h2>Preview</h2>
+      <div class="screenshot-grid">
+        <img src="https://raw.githubusercontent.com/Dnsayhey/pause/main/.github/assets/main_reminder.png" alt="Reminder view" loading="lazy" />
+        <img src="https://raw.githubusercontent.com/Dnsayhey/pause/main/.github/assets/main_analysis.png" alt="Analytics view" loading="lazy" />
+        <img src="https://raw.githubusercontent.com/Dnsayhey/pause/main/.github/assets/main_settings.png" alt="Settings view" loading="lazy" />
+        <img src="https://raw.githubusercontent.com/Dnsayhey/pause/main/.github/assets/break_overlay.png" alt="Break overlay" loading="lazy" />
+      </div>
+    </section>
+
+    <footer>
+      <div class="links">
+        <a href="https://github.com/Dnsayhey/pause">GitHub</a>
+        <a href="https://github.com/Dnsayhey/pause/releases">Releases</a>
+        <a href="https://github.com/Dnsayhey/pause/blob/main/LICENSE">MIT License</a>
+      </div>
+      <p>Built with Go + Wails &middot; React + TypeScript &middot; Version ${VERSION}</p>
+    </footer>
+
+  </body>
+</html>
