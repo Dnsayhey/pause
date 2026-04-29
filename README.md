@@ -20,6 +20,23 @@ Pause 是一个跨平台休息提醒应用（macOS / Windows / Linux）。
 
 https://github.com/user-attachments/assets/3ac20ceb-b286-4bf2-ad21-6a534e1dcf9a
 
+## 下载安装
+
+前往 [GitHub Releases](https://github.com/Dnsayhey/pause/releases/latest) 下载对应平台的安装包：
+
+| 平台 | 文件 |
+|---|---|
+| macOS | `.dmg` |
+| Windows | `.exe` 安装器 |
+| Linux | 适配层可用，桌面体验持续补齐中 |
+
+## 技术栈
+
+- **后端** — Go + [Wails v2](https://wails.io/)
+- **前端** — React 18 + TypeScript + Vite + Tailwind CSS v4
+- **存储** — SQLite（[modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite)）+ JSON 配置文件
+- **图表** — [ECharts](https://echarts.apache.org/)
+
 ## 文档索引
 
 - [文档总索引](./docs/README.md)
@@ -136,3 +153,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\cleanup\windows\cleanup-pause
 
 - macOS / Windows：主流程可用（提醒、休息会话、通知、开机启动、桌面壳交互）。
 - Linux：提供适配层，桌面体验持续补齐。
+
+## License
+
+[MIT](./LICENSE)
