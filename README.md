@@ -2,6 +2,12 @@
 
 Pause 是一个跨平台休息提醒应用（macOS / Windows / Linux）。
 
+## 应用预览
+
+| 主界面 — 提醒 | 主界面 — 分析 | 主界面 — 设置 | 休息遮罩 |
+|:---:|:---:|:---:|:---:|
+| ![提醒](.github/assets/main_reminder.png) | ![分析](.github/assets/main_analysis.png) | ![设置](.github/assets/main_settings.png) | ![休息](.github/assets/break_overlay.png) |
+
 ## 文档索引
 
 - [文档总索引](./docs/README.md)
