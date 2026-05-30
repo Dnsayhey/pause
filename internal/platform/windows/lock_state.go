@@ -9,7 +9,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
+
+	"pause/internal/backend/ports"
 
 	xwindows "golang.org/x/sys/windows"
 )
@@ -51,6 +54,7 @@ type windowsLockStateProvider struct {
 type windowsLockSessionState struct {
 	startOnce sync.Once
 	locked    atomic.Bool
+	subs      lockEventSubscribers
 }
 
 type lockStateWindowClassEx struct {
@@ -94,6 +98,50 @@ func (p windowsLockStateProvider) IsScreenLocked() bool {
 	}
 	p.state.start()
 	return p.state.locked.Load()
+}
+
+func (p windowsLockStateProvider) SubscribeLockEvents(handler ports.LockEventHandler) ports.CloseFunc {
+	if p.state == nil {
+		return func() {}
+	}
+	p.state.start()
+	return p.state.subs.add(handler)
+}
+
+type lockEventSubscribers struct {
+	nextID atomic.Uint64
+	mu     sync.Mutex
+	items  map[uint64]ports.LockEventHandler
+}
+
+func (s *lockEventSubscribers) add(handler ports.LockEventHandler) ports.CloseFunc {
+	if handler == nil {
+		return func() {}
+	}
+	id := s.nextID.Add(1)
+	s.mu.Lock()
+	if s.items == nil {
+		s.items = map[uint64]ports.LockEventHandler{}
+	}
+	s.items[id] = handler
+	s.mu.Unlock()
+	return func() {
+		s.mu.Lock()
+		delete(s.items, id)
+		s.mu.Unlock()
+	}
+}
+
+func (s *lockEventSubscribers) emit(evt ports.LockEvent) {
+	s.mu.Lock()
+	handlers := make([]ports.LockEventHandler, 0, len(s.items))
+	for _, handler := range s.items {
+		handlers = append(handlers, handler)
+	}
+	s.mu.Unlock()
+	for _, handler := range handlers {
+		handler(evt)
+	}
 }
 
 func (s *windowsLockSessionState) start() {
@@ -179,8 +227,10 @@ func windowsLockStateWindowProc(hwnd uintptr, msg uint32, wParam uintptr, lParam
 		switch uint32(wParam) {
 		case xwindows.WTS_SESSION_LOCK:
 			state.locked.Store(true)
+			state.subs.emit(ports.LockEvent{Kind: ports.LockEventLocked, At: time.Now()})
 		case xwindows.WTS_SESSION_UNLOCK:
 			state.locked.Store(false)
+			state.subs.emit(ports.LockEvent{Kind: ports.LockEventUnlocked, At: time.Now()})
 		}
 		return 0
 	case wmDestroyLockStateWindow:

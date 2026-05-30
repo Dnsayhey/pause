@@ -19,6 +19,7 @@ const (
 	SkipModeEmergency SkipMode = "emergency"
 
 	notificationConcurrencyLimit = 4
+	lockEventBufferSize          = 8
 	postponeBreakDelaySec        = 60
 )
 
@@ -34,6 +35,9 @@ func (noopIdleProvider) CurrentIdleSeconds() int { return 0 }
 type noopLockStateProvider struct{}
 
 func (noopLockStateProvider) IsScreenLocked() bool { return false }
+func (noopLockStateProvider) SubscribeLockEvents(ports.LockEventHandler) ports.CloseFunc {
+	return func() {}
+}
 
 type noopSoundPlayer struct{}
 
@@ -66,9 +70,9 @@ type Engine struct {
 	soundPlayer  ports.SoundPlayer
 	notifier     ports.Notifier
 
-	lastTick      time.Time
-	tickRemainder time.Duration
-	lockedSince   time.Time
+	lastTick       time.Time
+	tickRemainder  time.Duration
+	screenLockedAt time.Time
 
 	pausedReminder map[int64]bool
 	globalEnabled  bool
@@ -81,8 +85,10 @@ type Engine struct {
 	activeHistoryBreak *pendingHistoryBreak
 	runCtx             context.Context
 	cancelRun          context.CancelFunc
+	closeLockEvents    ports.CloseFunc
 	backgroundTasks    sync.WaitGroup
 	notificationSlots  chan struct{}
+	lockEvents         chan ports.LockEvent
 }
 
 func NewEngine(
@@ -119,5 +125,6 @@ func NewEngine(
 		globalEnabled:     true,
 		postponedOnce:     map[int64]bool{},
 		notificationSlots: make(chan struct{}, notificationConcurrencyLimit),
+		lockEvents:        make(chan ports.LockEvent, lockEventBufferSize),
 	}
 }

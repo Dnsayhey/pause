@@ -22,6 +22,11 @@ type fakeLockProvider struct{ locked bool }
 
 func (f *fakeLockProvider) IsScreenLocked() bool { return f.locked }
 
+func (f *fakeLockProvider) SubscribeLockEvents(handler ports.LockEventHandler) ports.CloseFunc {
+	_ = handler
+	return func() {}
+}
+
 type historyRecorderStub struct{ calls int }
 
 func (s *historyRecorderStub) RecordBreak(_ context.Context, _ ports.BreakRecordInput) error {
@@ -117,7 +122,7 @@ func testEngine(t *testing.T) *Engine {
 	return eng
 }
 
-func testEngineWithProviders(t *testing.T, idle *fakeIdleProvider, lock *fakeLockProvider, reminders []reminder.Reminder) *Engine {
+func testEngineWithProviders(t *testing.T, idle *fakeIdleProvider, lock ports.LockStateProvider, reminders []reminder.Reminder) *Engine {
 	t.Helper()
 	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
 	if err != nil {
@@ -137,6 +142,10 @@ func reminderByID(t *testing.T, rs []state.ReminderRuntime, id int64) state.Remi
 	}
 	t.Fatalf("missing reminder id=%d", id)
 	return state.ReminderRuntime{}
+}
+
+func ptrString(value string) *string {
+	return &value
 }
 
 func TestEngine_StartBreakNowAndSkip(t *testing.T) {
@@ -230,9 +239,9 @@ func TestEngine_ShortScreenLockKeepsSchedulerProgress(t *testing.T) {
 		t.Fatalf("expected nextIn=70 before lock, got=%d", got)
 	}
 
-	lock.locked = true
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventLocked, At: base.Add(51 * time.Second)})
 	eng.Tick(base.Add(51 * time.Second))
-	lock.locked = false
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventUnlocked, At: base.Add(110 * time.Second)})
 	eng.Tick(base.Add(110 * time.Second))
 
 	afterUnlock := eng.GetRuntimeState(base.Add(110 * time.Second))
@@ -251,9 +260,9 @@ func TestEngine_LongScreenLockResetsRestReminderProgress(t *testing.T) {
 
 	eng.Tick(base)
 	eng.Tick(base.Add(50 * time.Second))
-	lock.locked = true
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventLocked, At: base.Add(51 * time.Second)})
 	eng.Tick(base.Add(51 * time.Second))
-	lock.locked = false
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventUnlocked, At: base.Add(111 * time.Second)})
 	eng.Tick(base.Add(111 * time.Second))
 
 	afterUnlock := eng.GetRuntimeState(base.Add(111 * time.Second))
@@ -279,9 +288,9 @@ func TestEngine_LongScreenLockDoesNotResetNotifyReminderProgress(t *testing.T) {
 
 	eng.Tick(base)
 	eng.Tick(base.Add(50 * time.Second))
-	lock.locked = true
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventLocked, At: base.Add(51 * time.Second)})
 	eng.Tick(base.Add(51 * time.Second))
-	lock.locked = false
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventUnlocked, At: base.Add(111 * time.Second)})
 	eng.Tick(base.Add(111 * time.Second))
 
 	afterUnlock := eng.GetRuntimeState(base.Add(111 * time.Second))
@@ -290,6 +299,59 @@ func TestEngine_LongScreenLockDoesNotResetNotifyReminderProgress(t *testing.T) {
 	}
 	if got := reminderByID(t, afterUnlock.Reminders, 2).NextInSec; got != 130 {
 		t.Fatalf("expected notify reminder progress to be preserved, got nextIn=%d", got)
+	}
+}
+
+func TestEngine_DrainsLockEventsMissedBetweenTicks(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	lock := &fakeLockProvider{}
+	eng := testEngineWithProviders(t, idle, lock, []reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 120, BreakSec: 20, ReminderType: "rest"},
+	})
+	base := time.Unix(1_700_000_000, 0)
+
+	eng.Tick(base)
+	eng.Tick(base.Add(50 * time.Second))
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventLocked, At: base.Add(51 * time.Second)})
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventUnlocked, At: base.Add(111 * time.Second)})
+	eng.Tick(base.Add(112 * time.Second))
+
+	afterUnlock := eng.GetRuntimeState(base.Add(112 * time.Second))
+	if got := reminderByID(t, afterUnlock.Reminders, 1).NextInSec; got != 119 {
+		t.Fatalf("expected missed lock events to reset and resume after unlock, got nextIn=%d", got)
+	}
+}
+
+func TestEngine_LongScreenLockDoesNotReplayAwayDeltaInRealTimeMode(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	if _, err := store.Update(settingsdomain.SettingsPatch{
+		Timer: &settingsdomain.TimerSettingsPatch{Mode: ptrString(settingsdomain.TimerModeRealTime)},
+	}); err != nil {
+		t.Fatalf("Update() err=%v", err)
+	}
+	idle := &fakeIdleProvider{}
+	lock := &fakeLockProvider{}
+	eng := NewEngine(store, idle, lock, nil, nil, &historyRecorderStub{})
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 120, BreakSec: 20, ReminderType: "rest"},
+	})
+	base := time.Unix(1_700_000_000, 0)
+
+	eng.Tick(base)
+	eng.Tick(base.Add(110 * time.Second))
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventLocked, At: base.Add(111 * time.Second)})
+	eng.enqueueLockEvent(ports.LockEvent{Kind: ports.LockEventUnlocked, At: base.Add(171 * time.Second)})
+	eng.Tick(base.Add(172 * time.Second))
+
+	afterUnlock := eng.GetRuntimeState(base.Add(172 * time.Second))
+	if afterUnlock.CurrentSession != nil {
+		t.Fatalf("expected no immediate break after away reset in real-time mode")
+	}
+	if got := reminderByID(t, afterUnlock.Reminders, 1).NextInSec; got != 119 {
+		t.Fatalf("expected real-time mode to resume after unlock without replaying away delta, got nextIn=%d", got)
 	}
 }
 

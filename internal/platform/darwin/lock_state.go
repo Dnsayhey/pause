@@ -25,11 +25,18 @@ static void pauseDarwinEnsureLockStateQueue(void) {
 	});
 }
 
+extern void pauseDarwinEmitLockEvent(int locked);
+
 static void pauseDarwinSetSessionLocked(BOOL locked) {
 	pauseDarwinEnsureLockStateQueue();
+	__block BOOL changed = NO;
 	dispatch_sync(pauseDarwinLockStateQueue, ^{
+		changed = pauseDarwinSessionLocked != locked;
 		pauseDarwinSessionLocked = locked;
 	});
+	if (changed) {
+		pauseDarwinEmitLockEvent(locked ? 1 : 0);
+	}
 }
 
 static BOOL pauseDarwinGetSessionLocked(void) {
@@ -120,9 +127,70 @@ static int pauseDarwinSessionIsLocked(void) {
 }
 */
 import "C"
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"pause/internal/backend/ports"
+)
 
 type darwinLockStateProvider struct{}
 
 func (darwinLockStateProvider) IsScreenLocked() bool {
 	return C.pauseDarwinSessionIsLocked() != 0
+}
+
+func (darwinLockStateProvider) SubscribeLockEvents(handler ports.LockEventHandler) ports.CloseFunc {
+	return darwinLockSubscribers.add(handler)
+}
+
+var darwinLockSubscribers = &darwinLockEventSubscribers{}
+
+type darwinLockEventSubscribers struct {
+	nextID atomic.Uint64
+	mu     sync.Mutex
+	items  map[uint64]ports.LockEventHandler
+}
+
+func (s *darwinLockEventSubscribers) add(handler ports.LockEventHandler) ports.CloseFunc {
+	if handler == nil {
+		return func() {}
+	}
+	id := s.nextID.Add(1)
+	s.mu.Lock()
+	if s.items == nil {
+		s.items = map[uint64]ports.LockEventHandler{}
+	}
+	s.items[id] = handler
+	s.mu.Unlock()
+	return func() {
+		s.mu.Lock()
+		delete(s.items, id)
+		s.mu.Unlock()
+	}
+}
+
+func (s *darwinLockEventSubscribers) emit(evt ports.LockEvent) {
+	s.mu.Lock()
+	handlers := make([]ports.LockEventHandler, 0, len(s.items))
+	for _, handler := range s.items {
+		handlers = append(handlers, handler)
+	}
+	s.mu.Unlock()
+	for _, handler := range handlers {
+		handler(evt)
+	}
+}
+
+//export pauseDarwinEmitLockEvent
+func pauseDarwinEmitLockEvent(locked C.int) {
+	kind := ports.LockEventUnlocked
+	if locked != 0 {
+		kind = ports.LockEventLocked
+	}
+	darwinLockSubscribers.emit(ports.LockEvent{
+		Kind: kind,
+		At:   time.Now(),
+	})
 }

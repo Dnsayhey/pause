@@ -49,6 +49,9 @@ func (NoopIdleProvider) CurrentIdleSeconds() int { return 0 }
 type NoopLockStateProvider struct{}
 
 func (NoopLockStateProvider) IsScreenLocked() bool { return false }
+func (NoopLockStateProvider) SubscribeLockEvents(ports.LockEventHandler) ports.CloseFunc {
+	return func() {}
+}
 
 type NoopNotifier struct{}
 

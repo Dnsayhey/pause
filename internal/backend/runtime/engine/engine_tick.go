@@ -6,6 +6,7 @@ import (
 
 	"pause/internal/backend/domain/reminder"
 	"pause/internal/backend/domain/settings"
+	"pause/internal/backend/ports"
 	"pause/internal/backend/runtime/scheduler"
 	"pause/internal/backend/runtime/session"
 	"pause/internal/logx"
@@ -31,6 +32,14 @@ func (e *Engine) Start(ctx context.Context) {
 		e.mu.Lock()
 		e.runCtx = runCtx
 		e.cancelRun = cancel
+		e.currentLocked = e.lockProvider.IsScreenLocked()
+		if e.currentLocked {
+			e.screenLockedAt = e.lastTick
+			if e.screenLockedAt.IsZero() {
+				e.screenLockedAt = time.Now()
+			}
+		}
+		e.closeLockEvents = e.lockProvider.SubscribeLockEvents(e.enqueueLockEvent)
 		if e.lastTick.IsZero() {
 			// Seed the baseline once at startup so the first scheduler tick accounts
 			// for the first elapsed second instead of waiting an extra cycle.
@@ -58,10 +67,15 @@ func (e *Engine) Stop() {
 	e.stopOnce.Do(func() {
 		e.mu.Lock()
 		cancel := e.cancelRun
+		closeLockEvents := e.closeLockEvents
 		e.cancelRun = nil
 		e.runCtx = nil
+		e.closeLockEvents = nil
 		e.mu.Unlock()
 
+		if closeLockEvents != nil {
+			closeLockEvents()
+		}
 		if cancel != nil {
 			cancel()
 		}
@@ -71,7 +85,6 @@ func (e *Engine) Stop() {
 
 func (e *Engine) Tick(now time.Time) {
 	idleSec := e.idleProvider.CurrentIdleSeconds()
-	locked := e.lockProvider.IsScreenLocked()
 	var historyWrite *historyWrite
 
 	e.mu.Lock()
@@ -85,7 +98,9 @@ func (e *Engine) Tick(now time.Time) {
 		settings:  e.store.Get(),
 		reminders: e.effectiveReminderConfigsLocked(e.reminders),
 	}
-	e.updateTickActivityLocked(now, tick.settings, tick.reminders, idleSec, locked)
+	e.currentIdleSec = idleSec
+	e.drainLockEventsLocked(tick.settings, tick.reminders)
+	e.lastTickActive = e.isTickActive(tick.settings)
 	tick.rawDeltaSec = int(now.Sub(e.lastTick).Seconds())
 	tick.appliedDeltaSec = tick.rawDeltaSec
 	if firstTick {
@@ -123,6 +138,17 @@ func (e *Engine) Tick(now time.Time) {
 	e.commitHistoryWrite(historyWrite)
 }
 
+func (e *Engine) enqueueLockEvent(evt ports.LockEvent) {
+	if evt.At.IsZero() {
+		evt.At = time.Now()
+	}
+	select {
+	case e.lockEvents <- evt:
+	default:
+		logx.Warnf("engine.lock_event_dropped kind=%s", evt.Kind)
+	}
+}
+
 func (e *Engine) isTickActive(cfg settings.Settings) bool {
 	if cfg.Timer.Mode == settings.TimerModeRealTime {
 		return true
@@ -133,34 +159,57 @@ func (e *Engine) isTickActive(cfg settings.Settings) bool {
 	return e.currentIdleSec < cfg.Timer.IdlePauseThresholdSec
 }
 
-func (e *Engine) updateTickActivityLocked(now time.Time, cfg settings.Settings, reminders []reminder.Reminder, idleSec int, locked bool) {
-	wasLocked := e.currentLocked
-	e.currentIdleSec = idleSec
-	e.currentLocked = locked
-	if !wasLocked && locked {
-		e.lockedSince = now
+func (e *Engine) drainLockEventsLocked(cfg settings.Settings, reminders []reminder.Reminder) {
+	for {
+		select {
+		case evt := <-e.lockEvents:
+			e.applyLockEventLocked(evt, cfg, reminders)
+		default:
+			return
+		}
+	}
+}
+
+func (e *Engine) applyLockEventLocked(evt ports.LockEvent, cfg settings.Settings, reminders []reminder.Reminder) {
+	if evt.At.IsZero() {
+		evt.At = time.Now()
+	}
+	switch evt.Kind {
+	case ports.LockEventLocked:
+		if e.currentLocked {
+			return
+		}
+		e.currentLocked = true
+		e.screenLockedAt = evt.At
 		logx.Infof(
 			"engine.screen_locked timer_mode=%s idle_sec=%d threshold_sec=%d",
 			cfg.Timer.Mode,
-			idleSec,
+			e.currentIdleSec,
 			cfg.Timer.IdlePauseThresholdSec,
 		)
-	} else if wasLocked && !locked {
-		awayDuration := time.Duration(0)
-		if !e.lockedSince.IsZero() {
-			awayDuration = now.Sub(e.lockedSince)
+	case ports.LockEventUnlocked:
+		if !e.currentLocked {
+			return
 		}
-		if cfg.Timer.Mode != settings.TimerModeRealTime {
-			e.lastTick = now
-			e.tickRemainder = 0
+		awayDuration := evt.At.Sub(e.screenLockedAt)
+		if awayDuration < 0 {
+			logx.Warnf("engine.lock_event_out_of_order kind=%s", evt.Kind)
+			awayDuration = 0
 		}
-		e.lockedSince = time.Time{}
+		e.currentLocked = false
+		e.screenLockedAt = time.Time{}
 		logx.Infof(
 			"engine.screen_unlocked timer_mode=%s idle_sec=%d threshold_sec=%d",
 			cfg.Timer.Mode,
-			idleSec,
+			e.currentIdleSec,
 			cfg.Timer.IdlePauseThresholdSec,
 		)
+		if cfg.Timer.Mode != settings.TimerModeRealTime || awayDuration >= awayRestThreshold {
+			if evt.At.After(e.lastTick) {
+				e.lastTick = evt.At
+				e.tickRemainder = 0
+			}
+		}
 		if awayDuration >= awayRestThreshold {
 			resetRestReminderProgress(e.scheduler, reminders)
 			logx.Infof(
@@ -169,8 +218,11 @@ func (e *Engine) updateTickActivityLocked(now time.Time, cfg settings.Settings, 
 				int(awayRestThreshold/time.Second),
 			)
 		}
+	case "":
+		return
+	default:
+		logx.Warnf("engine.lock_event_unknown kind=%s", evt.Kind)
 	}
-	e.lastTickActive = e.isTickActive(cfg)
 }
 
 func (e *Engine) completeFinishedSessionLocked(now time.Time, cfg settings.Settings) *historyWrite {

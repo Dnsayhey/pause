@@ -25,8 +25,24 @@ type IdleProvider interface {
 	CurrentIdleSeconds() int
 }
 
+type LockEventKind string
+
+const (
+	LockEventLocked   LockEventKind = "locked"
+	LockEventUnlocked LockEventKind = "unlocked"
+)
+
+type LockEvent struct {
+	Kind LockEventKind
+	At   time.Time
+}
+
+type LockEventHandler func(LockEvent)
+type CloseFunc func()
+
 type LockStateProvider interface {
 	IsScreenLocked() bool
+	SubscribeLockEvents(handler LockEventHandler) CloseFunc
 }
 
 type Notifier interface {
