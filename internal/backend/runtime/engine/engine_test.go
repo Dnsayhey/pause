@@ -117,6 +117,17 @@ func testEngine(t *testing.T) *Engine {
 	return eng
 }
 
+func testEngineWithProviders(t *testing.T, idle *fakeIdleProvider, lock *fakeLockProvider, reminders []reminder.Reminder) *Engine {
+	t.Helper()
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	eng := NewEngine(store, idle, lock, nil, nil, &historyRecorderStub{})
+	eng.SetReminderConfigs(reminders)
+	return eng
+}
+
 func reminderByID(t *testing.T, rs []state.ReminderRuntime, id int64) state.ReminderRuntime {
 	t.Helper()
 	for _, r := range rs {
@@ -202,6 +213,83 @@ func TestEngine_PauseResumeFreezesAndContinuesSchedulerProgress(t *testing.T) {
 	afterResume := eng.GetRuntimeState(base.Add(101 * time.Second))
 	if afterResume.CurrentSession == nil {
 		t.Fatalf("expected break to trigger after resume with continued progress")
+	}
+}
+
+func TestEngine_ShortScreenLockKeepsSchedulerProgress(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	lock := &fakeLockProvider{}
+	eng := testEngineWithProviders(t, idle, lock, []reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 120, BreakSec: 20, ReminderType: "rest"},
+	})
+	base := time.Unix(1_700_000_000, 0)
+
+	eng.Tick(base)
+	eng.Tick(base.Add(50 * time.Second))
+	if got := reminderByID(t, eng.GetRuntimeState(base.Add(50*time.Second)).Reminders, 1).NextInSec; got != 70 {
+		t.Fatalf("expected nextIn=70 before lock, got=%d", got)
+	}
+
+	lock.locked = true
+	eng.Tick(base.Add(51 * time.Second))
+	lock.locked = false
+	eng.Tick(base.Add(110 * time.Second))
+
+	afterUnlock := eng.GetRuntimeState(base.Add(110 * time.Second))
+	if got := reminderByID(t, afterUnlock.Reminders, 1).NextInSec; got != 70 {
+		t.Fatalf("expected short lock to preserve progress, got nextIn=%d", got)
+	}
+}
+
+func TestEngine_LongScreenLockResetsRestReminderProgress(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	lock := &fakeLockProvider{}
+	eng := testEngineWithProviders(t, idle, lock, []reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 120, BreakSec: 20, ReminderType: "rest"},
+	})
+	base := time.Unix(1_700_000_000, 0)
+
+	eng.Tick(base)
+	eng.Tick(base.Add(50 * time.Second))
+	lock.locked = true
+	eng.Tick(base.Add(51 * time.Second))
+	lock.locked = false
+	eng.Tick(base.Add(111 * time.Second))
+
+	afterUnlock := eng.GetRuntimeState(base.Add(111 * time.Second))
+	if got := reminderByID(t, afterUnlock.Reminders, 1).NextInSec; got != 120 {
+		t.Fatalf("expected long lock to reset rest reminder progress, got nextIn=%d", got)
+	}
+
+	eng.Tick(base.Add(112 * time.Second))
+	afterResume := eng.GetRuntimeState(base.Add(112 * time.Second))
+	if got := reminderByID(t, afterResume.Reminders, 1).NextInSec; got != 119 {
+		t.Fatalf("expected rest reminder to resume from reset baseline, got nextIn=%d", got)
+	}
+}
+
+func TestEngine_LongScreenLockDoesNotResetNotifyReminderProgress(t *testing.T) {
+	idle := &fakeIdleProvider{}
+	lock := &fakeLockProvider{}
+	eng := testEngineWithProviders(t, idle, lock, []reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 120, BreakSec: 20, ReminderType: "rest"},
+		{ID: 2, Name: "Hydrate", Enabled: true, IntervalSec: 180, BreakSec: 1, ReminderType: "notify"},
+	})
+	base := time.Unix(1_700_000_000, 0)
+
+	eng.Tick(base)
+	eng.Tick(base.Add(50 * time.Second))
+	lock.locked = true
+	eng.Tick(base.Add(51 * time.Second))
+	lock.locked = false
+	eng.Tick(base.Add(111 * time.Second))
+
+	afterUnlock := eng.GetRuntimeState(base.Add(111 * time.Second))
+	if got := reminderByID(t, afterUnlock.Reminders, 1).NextInSec; got != 120 {
+		t.Fatalf("expected long lock to reset rest reminder progress, got nextIn=%d", got)
+	}
+	if got := reminderByID(t, afterUnlock.Reminders, 2).NextInSec; got != 130 {
+		t.Fatalf("expected notify reminder progress to be preserved, got nextIn=%d", got)
 	}
 }
 

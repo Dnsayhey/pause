@@ -78,6 +78,17 @@ func resetSchedulerByReasons(s *scheduler.Scheduler, reasons []scheduler.Reminde
 	}
 }
 
+func resetRestReminderProgress(s *scheduler.Scheduler, reminders []reminder.Reminder) {
+	if s == nil {
+		return
+	}
+	for _, reminder := range reminders {
+		if isRestReminderType(reminder.ReminderType) {
+			s.ResetByID(reminder.ID)
+		}
+	}
+}
+
 func joinInt64Like[T ~int64](values []T) string {
 	if len(values) == 0 {
 		return "none"

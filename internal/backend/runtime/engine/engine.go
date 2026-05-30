@@ -68,6 +68,7 @@ type Engine struct {
 
 	lastTick      time.Time
 	tickRemainder time.Duration
+	lockedSince   time.Time
 
 	pausedReminder map[int64]bool
 	globalEnabled  bool

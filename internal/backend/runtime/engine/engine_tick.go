@@ -11,6 +11,8 @@ import (
 	"pause/internal/logx"
 )
 
+const awayRestThreshold = time.Minute
+
 type tickState struct {
 	settings        settings.Settings
 	reminders       []reminder.Reminder
@@ -83,7 +85,7 @@ func (e *Engine) Tick(now time.Time) {
 		settings:  e.store.Get(),
 		reminders: e.effectiveReminderConfigsLocked(e.reminders),
 	}
-	e.updateTickActivityLocked(tick.settings, idleSec, locked)
+	e.updateTickActivityLocked(now, tick.settings, tick.reminders, idleSec, locked)
 	tick.rawDeltaSec = int(now.Sub(e.lastTick).Seconds())
 	tick.appliedDeltaSec = tick.rawDeltaSec
 	if firstTick {
@@ -131,11 +133,12 @@ func (e *Engine) isTickActive(cfg settings.Settings) bool {
 	return e.currentIdleSec < cfg.Timer.IdlePauseThresholdSec
 }
 
-func (e *Engine) updateTickActivityLocked(cfg settings.Settings, idleSec int, locked bool) {
+func (e *Engine) updateTickActivityLocked(now time.Time, cfg settings.Settings, reminders []reminder.Reminder, idleSec int, locked bool) {
 	wasLocked := e.currentLocked
 	e.currentIdleSec = idleSec
 	e.currentLocked = locked
 	if !wasLocked && locked {
+		e.lockedSince = now
 		logx.Infof(
 			"engine.screen_locked timer_mode=%s idle_sec=%d threshold_sec=%d",
 			cfg.Timer.Mode,
@@ -143,12 +146,29 @@ func (e *Engine) updateTickActivityLocked(cfg settings.Settings, idleSec int, lo
 			cfg.Timer.IdlePauseThresholdSec,
 		)
 	} else if wasLocked && !locked {
+		awayDuration := time.Duration(0)
+		if !e.lockedSince.IsZero() {
+			awayDuration = now.Sub(e.lockedSince)
+		}
+		if cfg.Timer.Mode != settings.TimerModeRealTime {
+			e.lastTick = now
+			e.tickRemainder = 0
+		}
+		e.lockedSince = time.Time{}
 		logx.Infof(
 			"engine.screen_unlocked timer_mode=%s idle_sec=%d threshold_sec=%d",
 			cfg.Timer.Mode,
 			idleSec,
 			cfg.Timer.IdlePauseThresholdSec,
 		)
+		if awayDuration >= awayRestThreshold {
+			resetRestReminderProgress(e.scheduler, reminders)
+			logx.Infof(
+				"engine.screen_away_rest_applied away_sec=%d threshold_sec=%d",
+				int(awayDuration/time.Second),
+				int(awayRestThreshold/time.Second),
+			)
+		}
 	}
 	e.lastTickActive = e.isTickActive(cfg)
 }
