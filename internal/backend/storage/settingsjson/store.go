@@ -50,11 +50,13 @@ func (s *Store) Get() settingsdomain.Settings {
 func (s *Store) Update(patch settingsdomain.SettingsPatch) (settingsdomain.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.settings = s.settings.ApplyPatch(patch)
-	if err := s.saveLocked(); err != nil {
+
+	next := s.settings.ApplyPatch(patch)
+	if err := s.saveLocked(next); err != nil {
 		return settingsdomain.Settings{}, err
 	}
-	return s.settings, nil
+	s.settings = next
+	return next, nil
 }
 
 func (s *Store) load() error {
@@ -69,7 +71,7 @@ func (s *Store) load() error {
 			}
 			s.settings = settingsdomain.DefaultSettings()
 			s.created = true
-			return s.saveLocked()
+			return s.saveLocked(s.settings)
 		}
 		return err
 	}
@@ -81,7 +83,7 @@ func (s *Store) load() error {
 				return errors.Join(err, backupErr)
 			}
 			s.settings = settingsdomain.DefaultSettings()
-			return s.saveLocked()
+			return s.saveLocked(s.settings)
 		}
 	}
 
@@ -97,12 +99,12 @@ func (s *Store) backupCorruptedConfigLocked(data []byte) error {
 	return os.WriteFile(backupPath, data, 0o644)
 }
 
-func (s *Store) saveLocked() error {
+func (s *Store) saveLocked(settings settingsdomain.Settings) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
 
-	payload, err := json.MarshalIndent(s.settings, "", "  ")
+	payload, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}

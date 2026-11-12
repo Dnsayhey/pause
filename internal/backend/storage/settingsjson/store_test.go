@@ -59,6 +59,31 @@ func TestStore_UpdatePersists(t *testing.T) {
 	}
 }
 
+func TestStore_UpdateKeepsPreviousValueWhenSaveFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	store, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	before := store.Get()
+
+	// Occupy the atomic-write temp path so persisting fails deterministically.
+	if err := os.Mkdir(path+".tmp", 0o755); err != nil {
+		t.Fatalf("Mkdir(temp path) err=%v", err)
+	}
+
+	off := false
+	if _, err := store.Update(settingsdomain.SettingsPatch{
+		Enforcement: &settingsdomain.EnforcementSettingsPatch{OverlaySkipAllowed: &off},
+	}); err == nil {
+		t.Fatalf("expected Update() to fail when the config cannot be persisted")
+	}
+
+	if got := store.Get(); got != before {
+		t.Fatalf("in-memory settings changed after a failed save: got=%#v want=%#v", got, before)
+	}
+}
+
 func TestOpenStore_CorruptedConfigBackedUpAndRecovered(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")
