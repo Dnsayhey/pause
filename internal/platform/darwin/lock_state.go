@@ -125,6 +125,12 @@ static int pauseDarwinSessionIsLocked(void) {
 
 	return locked ? 1 : 0;
 }
+
+static void pauseDarwinStartLockObservation(void) {
+	pauseDarwinRunOnMain(^{
+		pauseDarwinEnsureLockObserverOnMain();
+	});
+}
 */
 import "C"
 import (
@@ -142,7 +148,11 @@ func (darwinLockStateProvider) IsScreenLocked() bool {
 }
 
 func (darwinLockStateProvider) SubscribeLockEvents(handler ports.LockEventHandler) ports.CloseFunc {
-	return darwinLockSubscribers.add(handler)
+	closeEvents := darwinLockSubscribers.add(handler)
+	// Register the handler before installing the observers so the initial state
+	// probe is delivered instead of silently dropped.
+	C.pauseDarwinStartLockObservation()
+	return closeEvents
 }
 
 var darwinLockSubscribers = &darwinLockEventSubscribers{}
