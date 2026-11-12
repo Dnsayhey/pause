@@ -20,4 +20,3 @@ func TestIsHResultNotFound(t *testing.T) {
 		t.Fatalf("unexpected match for plain error")
 	}
 }
-

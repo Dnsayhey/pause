@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	sourceScheduled    = "scheduled"
-	sourceManual       = "manual"
-	statusCompleted    = "completed"
-	statusSkipped      = "skipped"
+	sourceScheduled = "scheduled"
+	sourceManual    = "manual"
+	statusCompleted = "completed"
+	statusSkipped   = "skipped"
 )
 
 var (

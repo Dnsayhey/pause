@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Check version sync
+        run: ./scripts/check-version-sync.sh
+
+      - name: Check Go formatting
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "${unformatted}" ]; then
+            echo "gofmt required:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+      - name: Vet
+        run: |
+          go vet ./internal/... .
+          go vet -tags wails ./internal/... .
+
+      - name: Test
+        run: |
+          go test -race -count=1 ./internal/... .
+          go test -race -count=1 -tags wails ./internal/... .
+
+      - name: Lint frontend
+        run: npm --prefix frontend run lint
+
+      - name: Typecheck frontend
+        run: npm --prefix frontend run typecheck
+
+      - name: Test frontend
+        run: npm --prefix frontend run test -- --run
+
+      - name: Build frontend
+        run: npm --prefix frontend run build
