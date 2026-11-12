@@ -5,7 +5,7 @@ Pause 是一个跨平台休息提醒应用（macOS / Windows，Linux 计划中�
 ## 功能
 
 - 定时休息提醒，可自定义间隔与时长
-- 全屏休息遮罩，支持强制模式（不可跳过/延迟）
+- 全屏休息遮罩，支持跳过、顺延与强制模式
 - 休息数据统计与趋势分析
 - 声音提示
 - 开机自启动
@@ -85,12 +85,18 @@ go run -tags wails,dev .
 go run .
 ```
 
-### 5) 运行测试
+### 5) 运行检查与测试
 
 ```bash
-go test ./...
-go test -tags wails ./...
+npm --prefix frontend run lint
+npm --prefix frontend run typecheck
+npm --prefix frontend run test -- --run
+
+go test ./internal/... .
+go test -tags wails ./internal/... .
 ```
+
+Go 使用显式包范围而不是 `./...`，避免扫描 `frontend/node_modules` 中的 Go 文件。
 
 ## 版本管理
 

@@ -1,6 +1,6 @@
 # Pause 架构说明
 
-最后更新：2026-04-24
+最后更新：2026-11-12
 
 本文档只描述当前实现。
 
@@ -159,16 +159,22 @@ storage 层保留防御式校验，但领域规则以 domain 为准。
 - 管理 break session
 - 记录 break history
 - 发送通知
+- 消费锁屏 / 解锁事件
 
 当前实现约束：
 
 - break session 结束态只有 `completed` 和 `skipped`
 - break history 在锁内完成状态收口与写入参数快照，在锁外提交到 `history.db`
+- 锁屏事件先进入带缓冲的事件通道，由下一次 tick 统一消费，不在回调里直接改运行时状态
+- 锁屏时长 ≥ 1 分钟视为一次休息：解锁时重置 rest 提醒进度；短时锁屏保留原进度
+- `real_time` 模式下，长时锁屏不会把离开期间的时间补记为活跃时间
+- 休息支持顺延：每个提醒每个周期最多顺延一次，固定顺延 60 秒，顺延不写入 history
 
 runtime 生命周期：
 
-- `Engine.Start(ctx)` 启动 tick 循环
-- `Engine.Stop()` 取消运行时上下文并等待后台任务收敛
+- `Engine.Start(ctx)` 启动 tick 循环，并订阅锁屏事件
+- `Engine.Stop()` 取消运行时上下文，等待 tick 循环退出与已发起通知任务结束
+- 已开始的 break history 写入会在关闭 `history.db` 前完成
 - `Runtime.Close()` 会先 `Engine.Stop()` 再关闭 `history.db`
 - `app.Shutdown()` 统一走 `Runtime.Close()`
 
@@ -220,6 +226,7 @@ main / main_wails
 - 不保存 reminder
 - 不保存 `globalEnabled`
 - 不保存开机启动状态
+- 更新采用先落盘再提交内存：写入失败时内存状态保持原值
 
 ### `history.db`
 
@@ -251,6 +258,7 @@ analytics 查询也全部基于 `history.db`。
 - `PauseReminder(reminderID) -> RuntimeState`
 - `ResumeReminder(reminderID) -> RuntimeState`
 - `SkipCurrentBreak() -> RuntimeState`
+- `PostponeCurrentBreak() -> RuntimeState`
 - `StartBreakNow() -> RuntimeState`
 - `StartBreakNowForReason(reminderID) -> RuntimeState`
 - `GetLaunchAtLogin() -> bool`
