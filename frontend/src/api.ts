@@ -290,23 +290,3 @@ export function openExternalURL(url: string): void {
   }
   requireBrowserBridge().BrowserOpenURL(target);
 }
-
-type RuntimeBridge = {
-  EventsOn: (eventName: string, callback: (payload: unknown) => void) => () => void;
-};
-
-function requireRuntimeBridge(): RuntimeBridge {
-  const bridge = (window as unknown as { runtime?: RuntimeBridge }).runtime;
-  if (!bridge?.EventsOn) {
-    throw new Error('Pause runtime bridge unavailable (window.runtime.EventsOn is missing).');
-  }
-  return bridge;
-}
-
-export function onRuntimeTick(callback: (state: RuntimeState) => void): () => void {
-  const bridge = requireRuntimeBridge();
-  return bridge.EventsOn('runtime:tick', (payload) => {
-    const normalized = Array.isArray(payload) ? payload[0] : payload;
-    callback(normalized as RuntimeState);
-  });
-}

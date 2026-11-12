@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { closeWindow, createReminder, getReminders, onRuntimeTick, quitApp } from './api';
-import type { ReminderConfig, RuntimeState } from './types';
+import { closeWindow, createReminder, getReminders, quitApp } from './api';
+import type { ReminderConfig } from './types';
 
 type TestBackend = {
   GetReminders?: () => Promise<ReminderConfig[] | null | undefined>;
@@ -16,9 +16,6 @@ type TestWindow = Window &
         App?: TestBackend;
       };
     };
-    runtime?: {
-      EventsOn?: (eventName: string, callback: (payload: unknown) => void) => () => void;
-    };
   };
 
 function setTestWindow(partial: Partial<TestWindow>) {
@@ -29,7 +26,6 @@ function setTestWindow(partial: Partial<TestWindow>) {
 function clearTestWindow() {
   Object.assign(globalThis, { window: {} });
   delete (window as TestWindow).go;
-  delete (window as TestWindow).runtime;
 }
 
 afterEach(() => {
@@ -73,24 +69,4 @@ describe('api bridge', () => {
     await expect(closeWindow()).rejects.toThrow('window.go.app.App.CloseWindow is missing');
   });
 
-  it('subscribes to runtime ticks and unwraps array payloads', () => {
-    const unsubscribe = vi.fn();
-    const eventsOn = vi.fn((_eventName: string, callback: (payload: unknown) => void) => {
-      callback([{ globalEnabled: true } satisfies Partial<RuntimeState>]);
-      return unsubscribe;
-    });
-
-    setTestWindow({
-      runtime: {
-        EventsOn: eventsOn
-      }
-    });
-
-    const callback = vi.fn();
-    const returnedUnsubscribe = onRuntimeTick(callback);
-
-    expect(eventsOn).toHaveBeenCalledWith('runtime:tick', expect.any(Function));
-    expect(callback).toHaveBeenCalledWith({ globalEnabled: true });
-    expect(returnedUnsubscribe).toBe(unsubscribe);
-  });
 });
