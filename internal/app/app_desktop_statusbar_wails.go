@@ -111,8 +111,7 @@ func (c *wailsDesktopController) handleStatusBarAction(ctx context.Context, app 
 		_, err := app.StartBreakNowForReason(choice.reason)
 		c.logErr(ctx, err)
 	case desktop.StatusBarActionPause:
-		_, err := app.Pause()
-		c.logErr(ctx, err)
+		app.Pause()
 	case desktop.StatusBarActionResume:
 		_ = app.Resume()
 	case desktop.StatusBarActionOpenWindow:

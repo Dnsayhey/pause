@@ -12,8 +12,8 @@ func (a *App) GetRuntimeState() RuntimeState {
 	return a.decorateRuntimeState(runtimeState)
 }
 
-func (a *App) Pause() (RuntimeState, error) {
-	return a.decorateRuntimeState(a.engine.Pause(time.Now())), nil
+func (a *App) Pause() RuntimeState {
+	return a.decorateRuntimeState(a.engine.Pause(time.Now()))
 }
 
 func (a *App) Resume() RuntimeState {
