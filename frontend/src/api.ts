@@ -184,17 +184,26 @@ function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-function selectBestAsset(assets: UpdateAsset[] | undefined, os: string, arch: string) {
-  const rows = Array.isArray(assets) ? assets.filter(Boolean) : [];
-  const exact = rows.find((asset) => asset.os === os && asset.arch === arch && typeof asset.url === 'string');
-  if (exact) {
-    return exact;
+function hasExternalDownloadURL(asset: UpdateAsset): boolean {
+  const url = asset.url;
+  if (typeof url !== 'string') {
+    return false;
   }
-  const osOnly = rows.find((asset) => asset.os === os && typeof asset.url === 'string');
-  if (osOnly) {
-    return osOnly;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
   }
-  return rows.find((asset) => typeof asset.url === 'string') ?? null;
+}
+
+function selectBestAsset(assets: UpdateAsset[] | undefined, os: string, arch: string): UpdateAsset | null {
+  const rows = (Array.isArray(assets) ? assets : []).filter(hasExternalDownloadURL);
+  return (
+    rows.find((asset) => asset.os === os && asset.arch === arch) ??
+    rows.find((asset) => asset.os === os) ??
+    null
+  );
 }
 
 type UpdatesFeed = {
