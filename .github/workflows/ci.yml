@@ -37,6 +37,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
+      # Wails builds embed frontend/dist, so it must exist before the
+      # -tags wails vet and test steps compile the root package.
+      - name: Build frontend
+        run: npm --prefix frontend run build
+
       - name: Check version sync
         run: ./scripts/check-version-sync.sh
 
@@ -67,6 +72,3 @@ jobs:
 
       - name: Test frontend
         run: npm --prefix frontend run test -- --run
-
-      - name: Build frontend
-        run: npm --prefix frontend run build
