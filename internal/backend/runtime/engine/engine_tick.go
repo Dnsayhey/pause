@@ -50,6 +50,7 @@ func (e *Engine) Start(ctx context.Context) {
 
 		ticker := time.NewTicker(time.Second)
 		go func() {
+			defer close(e.tickLoopDone)
 			defer ticker.Stop()
 			for {
 				select {
@@ -67,6 +68,7 @@ func (e *Engine) Stop() {
 	e.stopOnce.Do(func() {
 		e.mu.Lock()
 		cancel := e.cancelRun
+		started := cancel != nil
 		closeLockEvents := e.closeLockEvents
 		e.cancelRun = nil
 		e.runCtx = nil
@@ -78,6 +80,11 @@ func (e *Engine) Stop() {
 		}
 		if cancel != nil {
 			cancel()
+		}
+		if started {
+			// Wait for the tick loop to exit so an in-flight Tick can finish its
+			// history write before the caller closes history.db.
+			<-e.tickLoopDone
 		}
 		e.backgroundTasks.Wait()
 	})

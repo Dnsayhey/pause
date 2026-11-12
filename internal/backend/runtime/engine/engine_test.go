@@ -631,6 +631,52 @@ func TestEngine_StopWaitsForNotificationTasks(t *testing.T) {
 	}
 }
 
+func TestEngine_StopWaitsForInFlightHistoryWrite(t *testing.T) {
+	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatalf("OpenStore() err=%v", err)
+	}
+	history := &blockingHistoryRecorderStub{
+		started: make(chan struct{}, 1),
+		block:   make(chan struct{}),
+	}
+	eng := NewEngine(store, &fakeIdleProvider{}, &fakeLockProvider{}, nil, nil, history)
+	eng.SetReminderConfigs([]reminder.Reminder{
+		{ID: 1, Name: "Eye", Enabled: true, IntervalSec: 60, BreakSec: 1, ReminderType: "rest"},
+	})
+
+	eng.Start(context.Background())
+	if _, err := eng.StartBreakNow(time.Now()); err != nil {
+		t.Fatalf("StartBreakNow() err=%v", err)
+	}
+
+	select {
+	case <-history.started:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("expected tick loop to complete the break and start the history write")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		eng.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		t.Fatalf("Stop() returned before the in-flight history write finished")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(history.block)
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatalf("expected Stop() to return after the history write finished")
+	}
+}
+
 func TestEngine_StopAfterCanceledStartContext(t *testing.T) {
 	store, err := settingsjson.OpenStore(filepath.Join(t.TempDir(), "settings.json"))
 	if err != nil {

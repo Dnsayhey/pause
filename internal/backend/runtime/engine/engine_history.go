@@ -12,7 +12,6 @@ import (
 )
 
 type historyWrite struct {
-	ctx    context.Context
 	input  ports.BreakRecordInput
 	logKey string
 }
@@ -64,13 +63,8 @@ func (e *Engine) prepareBreakCompletedWriteLocked(view *state.BreakSessionView) 
 		actualBreakSec = 0
 	}
 	record := *e.activeHistoryBreak
-	ctx := e.runCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	e.activeHistoryBreak = nil
 	return &historyWrite{
-		ctx: ctx,
 		input: ports.BreakRecordInput{
 			StartedAt:       record.StartedAt,
 			EndedAt:         view.EndsAt,
@@ -94,13 +88,8 @@ func (e *Engine) prepareBreakSkippedWriteLocked(now time.Time, view *state.Break
 		actualBreakSec = 0
 	}
 	record := *e.activeHistoryBreak
-	ctx := e.runCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	e.activeHistoryBreak = nil
 	return &historyWrite{
-		ctx: ctx,
 		input: ports.BreakRecordInput{
 			StartedAt:       record.StartedAt,
 			EndedAt:         now,
@@ -127,7 +116,10 @@ func (e *Engine) commitHistoryWrite(write *historyWrite) {
 	if e == nil || e.history == nil || write == nil {
 		return
 	}
-	if err := e.history.RecordBreak(write.ctx, write.input); err != nil {
+	// Already-decided history writes must not be aborted by runtime shutdown:
+	// Engine.Stop waits for the tick loop, and therefore for this write, before
+	// the store is closed.
+	if err := e.history.RecordBreak(context.Background(), write.input); err != nil {
 		logx.Warnf("%s source=%s err=%v", write.logKey, write.input.Source, err)
 	}
 }

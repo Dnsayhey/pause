@@ -86,6 +86,7 @@ type Engine struct {
 	runCtx             context.Context
 	cancelRun          context.CancelFunc
 	closeLockEvents    ports.CloseFunc
+	tickLoopDone       chan struct{}
 	backgroundTasks    sync.WaitGroup
 	notificationSlots  chan struct{}
 	lockEvents         chan ports.LockEvent
@@ -124,6 +125,7 @@ func NewEngine(
 		pausedReminder:    map[int64]bool{},
 		globalEnabled:     true,
 		postponedOnce:     map[int64]bool{},
+		tickLoopDone:      make(chan struct{}),
 		notificationSlots: make(chan struct{}, notificationConcurrencyLimit),
 		lockEvents:        make(chan ports.LockEvent, lockEventBufferSize),
 	}
