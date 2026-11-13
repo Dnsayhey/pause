@@ -40,7 +40,8 @@
 图标按平台维护，两个系统的显示逻辑不同：
 
 - macOS：`assets/branding/app-icon-1024.png`
-  - 1024×1024 PNG，带 alpha；母版保持全出血，重要内容留在中央安全区。
+  - 1024×1024 PNG，母版必须是 100% 不透明、全出血，重要内容留在中央安全区。
+  - 透明角会被 macOS 26+ 判定为不合规图标并加灰色底（icon jail），不要直接使用带透明圆角的源图。
   - macOS 从 Big Sur 起会把图标裁进系统 squircle，并会裁掉/放大透明留白，因此不要靠母版留白控制显示大小。
   - 构建时由 `build-dmg.sh` 复制为 `build/appicon.png`，再由 Wails 生成 `.icns`。
 - Windows：`assets/branding/icon.ico`
