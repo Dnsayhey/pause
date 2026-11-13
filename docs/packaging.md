@@ -1,6 +1,6 @@
 # Pause 打包、发版与更新源
 
-最后更新：2026-04-02
+最后更新：2026-11-13
 
 本文档定义 Pause 当前桌面端的打包规范、GitHub Release 流程以及稳定更新源（stable feed）约定。
 
@@ -34,6 +34,21 @@
   - `wails.json` 的 `info.productVersion`
   - `frontend/package.json` 的 `version`
   - `frontend/package-lock.json` 的 `version` 与 `packages[""].version`
+
+## 应用图标
+
+图标按平台维护，两个系统的显示逻辑不同：
+
+- macOS：`assets/branding/app-icon-1024.png`
+  - 1024×1024 PNG，带 alpha；母版保持全出血，重要内容留在中央安全区。
+  - macOS 从 Big Sur 起会把图标裁进系统 squircle，并会裁掉/放大透明留白，因此不要靠母版留白控制显示大小。
+  - 构建时由 `build-dmg.sh` 复制为 `build/appicon.png`，再由 Wails 生成 `.icns`。
+- Windows：`assets/branding/icon.ico`
+  - 多尺寸：16 / 20 / 24 / 32 / 40 / 48 / 64 / 128 / 256，32bpp PNG 条目。
+  - Windows 不会给图标加遮罩或圆角，所以圆角和透明边距必须直接烘进 ico（当前约 2% 透明边距）。
+  - 构建时由 `build-windows-installer.sh` 复制为 `build/windows/icon.ico`，Wails 直接使用。
+
+修改图标时两个文件都要更新，并分别按上述规则导出。
 
 ## 产物目录规范
 
